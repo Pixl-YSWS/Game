@@ -1,0 +1,14 @@
+{ "columns":1,
+ "image":"..\/..\/..\/Downloads\/Screenshot_20260527_171441-removebg-preview(1).png",
+ "imageheight":50,
+ "imagewidth":28,
+ "margin":0,
+ "name":"sadasdasdsad",
+ "spacing":0,
+ "tilecount":3,
+ "tiledversion":"1.12.1",
+ "tileheight":16,
+ "tilewidth":28,
+ "type":"tileset",
+ "version":"1.10"
+}

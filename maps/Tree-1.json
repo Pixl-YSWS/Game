@@ -1,0 +1,14 @@
+{ "columns":6,
+ "image":"..\/public\/assets\/custom\/tree-1.png",
+ "imageheight":309,
+ "imagewidth":211,
+ "margin":0,
+ "name":"Tree-1",
+ "spacing":0,
+ "tilecount":54,
+ "tiledversion":"1.12.1",
+ "tileheight":32,
+ "tilewidth":32,
+ "type":"tileset",
+ "version":"1.10"
+}

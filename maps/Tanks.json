@@ -1,0 +1,14 @@
+{ "columns":35,
+ "image":"..\/public\/assets\/kenny_top-down-tanks-remastered\/Spritesheet\/allSprites_default.png",
+ "imageheight":565,
+ "imagewidth":561,
+ "margin":0,
+ "name":"tans",
+ "spacing":0,
+ "tilecount":1225,
+ "tiledversion":"1.12.1",
+ "tileheight":16,
+ "tilewidth":16,
+ "type":"tileset",
+ "version":"1.10"
+}

@@ -1,0 +1,14 @@
+{ "columns":1,
+ "image":"..\/public\/assets\/kenney_tiny-town\/Tiles\/tile_0000.png",
+ "imageheight":16,
+ "imagewidth":16,
+ "margin":0,
+ "name":"Base",
+ "spacing":0,
+ "tilecount":1,
+ "tiledversion":"1.12.1",
+ "tileheight":16,
+ "tilewidth":16,
+ "type":"tileset",
+ "version":"1.10"
+}

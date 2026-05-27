@@ -1,0 +1,14 @@
+{ "columns":12,
+ "image":"..\/public\/assets\/kenney_tiny-town\/Tilemap\/tilemap_packed.png",
+ "imageheight":176,
+ "imagewidth":192,
+ "margin":0,
+ "name":"MiniTown",
+ "spacing":0,
+ "tilecount":132,
+ "tiledversion":"1.12.1",
+ "tileheight":16,
+ "tilewidth":16,
+ "type":"tileset",
+ "version":"1.10"
+}

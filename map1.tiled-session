@@ -1,0 +1,129 @@
+{
+    "activeFile": "maps/map1.json",
+    "expandedProjectPaths": [
+        "public/assets/kenney_tiny-ski/Tiled",
+        "public/assets/kenney_ui-pack-adventure/Spritesheet",
+        "maps",
+        "public",
+        ".",
+        "public/assets",
+        "public/assets/kenney_ui-pack-adventure"
+    ],
+    "file.lastUsedOpenFilter": "All Files (*)",
+    "fileStates": {
+        "maps/Base.json": {
+            "scaleInDock": 1,
+            "scaleInEditor": 32
+        },
+        "maps/Grass.tsx": {
+            "scaleInDock": 2,
+            "scaleInEditor": 4
+        },
+        "maps/House-1.tsj": {
+            "scaleInDock": 1,
+            "scaleInEditor": 1
+        },
+        "maps/House-2.tsj": {
+            "scaleInDock": 2,
+            "scaleInEditor": 1
+        },
+        "maps/House-3.tsj": {
+            "scaleInDock": 2,
+            "scaleInEditor": 1
+        },
+        "maps/MiniTown.json": {
+            "scaleInDock": 2,
+            "scaleInEditor": 5.5
+        },
+        "maps/Tanks.json": {
+            "scaleInDock": 2,
+            "scaleInEditor": 1
+        },
+        "maps/Tree-1.json": {
+            "scaleInDock": 1,
+            "scaleInEditor": 1
+        },
+        "maps/Tree.json": {
+            "scaleInDock": 1,
+            "scaleInEditor": 45
+        },
+        "maps/house-asdasdas.tsj": {
+            "scaleInDock": 2,
+            "scaleInEditor": 1
+        },
+        "maps/map1.json": {
+            "scale": 2,
+            "selectedLayer": 3,
+            "viewCenter": {
+                "x": 239.75,
+                "y": 167.5
+            }
+        },
+        "maps/sadasdasdsad.tsj": {
+            "scaleInDock": 2,
+            "scaleInEditor": 1
+        },
+        "maps/treee2.tsj": {
+            "scaleInDock": 2,
+            "scaleInEditor": 1
+        },
+        "maps/treee5.tsj": {
+            "scaleInDock": 2,
+            "scaleInEditor": 1
+        },
+        "maps/treeee5.tsj": {
+            "scaleInDock": 2,
+            "scaleInEditor": 1
+        },
+        "maps/treeeeeee.tsj": {
+            "scaleInDock": 2,
+            "scaleInEditor": 1
+        },
+        "maps/treeeeeee2.tsj": {
+            "scaleInDock": 1,
+            "scaleInEditor": 1
+        },
+        "maps/treeeeeee4.tsj": {
+            "scaleInDock": 2,
+            "scaleInEditor": 1
+        },
+        "maps/treeeeeeeee3.tsj": {
+            "scaleInDock": 2,
+            "scaleInEditor": 1
+        }
+    },
+    "last.imagePath": "/home/ridit/Downloads",
+    "map.lastUsedFormat": "json",
+    "map.tileWidth": 16,
+    "openFiles": [
+        "maps/map1.json",
+        "maps/treee2.tsj",
+        "maps/treeeeeeeee3.tsj",
+        "maps/treeeeeee4.tsj",
+        "maps/treeee5.tsj",
+        "maps/treeee5.tsj",
+        "maps/treee5.tsj",
+        "maps/sadasdasdsad.tsj",
+        "maps/house-asdasdas.tsj"
+    ],
+    "project": "map1.tiled-project",
+    "recentFiles": [
+        "maps/house-asdasdas.tsj",
+        "maps/sadasdasdsad.tsj",
+        "maps/treee5.tsj",
+        "maps/treeee5.tsj",
+        "maps/treeeeeee4.tsj",
+        "maps/treeeeeeeee3.tsj",
+        "maps/treee2.tsj",
+        "maps/map1.json",
+        "maps/Grass.tsx",
+        "maps/MiniTown.json",
+        "maps/Tanks.json",
+        "maps/Tree-1.json"
+    ],
+    "tileset.lastUsedFormat": "json",
+    "tileset.tileSize": {
+        "height": 16,
+        "width": 16
+    }
+}

@@ -1,0 +1,14 @@
+{ "columns":5,
+ "image":"..\/..\/..\/Downloads\/Screenshot_20260527_162205-removebg-preview(1).png",
+ "imageheight":100,
+ "imagewidth":83,
+ "margin":0,
+ "name":"house-asdasdas",
+ "spacing":0,
+ "tilecount":30,
+ "tiledversion":"1.12.1",
+ "tileheight":16,
+ "tilewidth":16,
+ "type":"tileset",
+ "version":"1.10"
+}
