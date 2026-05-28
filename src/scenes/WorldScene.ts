@@ -1,11 +1,10 @@
 import Phaser from "phaser";
 import { IsoMap } from "../world/IsoMap";
 import { Player } from "../entities/Player";
-import type { PlayerState } from "../entities/Player";
-import { cartToIso } from "../utils/IsoUtils";
+import type { PlayerState } from "../types/network";
 import { gameSocket } from "../network/socket";
-
-const PLAYER_START = { cx: 16, cy: 15 }; // town square
+import { TILE_H } from "../utils/IsoUtils";
+import { TOWN_MAP } from "../data/MapData";
 
 export class WorldScene extends Phaser.Scene {
   private isoMap!: IsoMap;
@@ -20,7 +19,6 @@ export class WorldScene extends Phaser.Scene {
     D: Phaser.Input.Keyboard.Key;
   };
 
-  // Drag-to-pan state
   private isDragging = false;
   private dragStart = { x: 0, y: 0 };
   private camStart = { x: 0, y: 0 };
@@ -30,26 +28,15 @@ export class WorldScene extends Phaser.Scene {
   }
 
   create() {
-    // ── Build isometric world ──────────────────────────────────────
-    this.isoMap = new IsoMap(this);
+    this.isoMap = new IsoMap(this, TOWN_MAP);
     this.isoMap.build();
 
-    // ── Camera setup ───────────────────────────────────────────────
     const cam = this.cameras.main;
     const centre = this.isoMap.centre;
     cam.centerOn(centre.x, centre.y);
-    cam.setZoom(3); // 3× zoom: 16px tiles render at 48px — crisp top-down
+    cam.setZoom(3);
+    cam.setBounds(this.isoMap.boundsX, this.isoMap.boundsY, this.isoMap.boundsW, this.isoMap.boundsH);
 
-    // Allow camera to scroll freely over the world bounds
-    // tight bounds — no empty space outside the map
-    cam.setBounds(
-      this.isoMap.boundsX,
-      this.isoMap.boundsY,
-      this.isoMap.boundsW,
-      this.isoMap.boundsH,
-    );
-
-    // ── Input ──────────────────────────────────────────────────────
     this.cursors = this.input.keyboard!.createCursorKeys();
     this.wasd = {
       W: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.W),
@@ -58,7 +45,6 @@ export class WorldScene extends Phaser.Scene {
       D: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.D),
     };
 
-    // Drag to pan (mouse / touch)
     this.input.on("pointerdown", (p: Phaser.Input.Pointer) => {
       this.isDragging = true;
       this.dragStart.x = p.x;
@@ -72,55 +58,46 @@ export class WorldScene extends Phaser.Scene {
       const dy = (this.dragStart.y - p.y) / cam.zoom;
       cam.setScroll(this.camStart.x + dx, this.camStart.y + dy);
     });
-    this.input.on("pointerup", () => {
-      this.isDragging = false;
+    this.input.on("pointerup", () => { this.isDragging = false; });
+
+    this.input.on("wheel", (_: unknown, __: unknown, ___: unknown, deltaY: number) => {
+      cam.setZoom(Phaser.Math.Clamp(cam.zoom - deltaY * 0.001, 1, 4));
     });
 
-    // Scroll-wheel zoom
-    this.input.on("wheel", (_: any, __: any, ___: any, deltaY: number) => {
-      const newZoom = Phaser.Math.Clamp(cam.zoom - deltaY * 0.001, 1, 4);
-      cam.setZoom(newZoom);
-    });
+    const { cx, cy } = TOWN_MAP.spawnPoint;
+    this.localPlayer = new Player(
+      this,
+      { id: "local", cx, cy, name: "You" },
+      true,
+      TOWN_MAP,
+    );
 
-    // ── Spawn local player (offline placeholder id) ────────────────
-    const offlineState: PlayerState = {
-      id: "local",
-      cx: PLAYER_START.cx,
-      cy: PLAYER_START.cy,
-      name: "You",
-    };
-    this.localPlayer = new Player(this, offlineState, true);
-
-    // Camera follow local player
     this.cameras.main.startFollow(this.localPlayer, true, 0.08, 0.08);
-
-    // ── Multiplayer ────────────────────────────────────────────────
     this.connectMultiplayer();
-
-    // ── Launch the HUD on top (parallel scene) ─────────────────────
     this.scene.launch("UIScene", { worldScene: this });
+  }
+
+  private syncDepth(player: Player) {
+    player.setDepth(player.y / TILE_H + 1);
   }
 
   update(_time: number, delta: number) {
     if (!this.localPlayer) return;
 
-    const moved = this.localPlayer.handleInput(this.cursors, this.wasd, delta);
+    this.syncDepth(this.localPlayer);
+    for (const p of this.remotePlayers.values()) this.syncDepth(p);
 
+    const moved = this.localPlayer.handleInput(this.cursors, this.wasd, delta);
     if (moved && gameSocket.connected) {
       gameSocket.sendMove(this.localPlayer.cx, this.localPlayer.cy);
     }
   }
 
-  // ── Multiplayer helpers ──────────────────────────────────────────
-
   private connectMultiplayer() {
     gameSocket.connect();
 
     gameSocket.on("init", ({ id, players }) => {
-      // Re-assign the local player's id from the server
-      (this.localPlayer as any).playerId = id;
-
-      // Spawn all existing remote players
+      this.localPlayer.assignId(id);
       for (const state of players) {
         if (state.id !== id) this.spawnRemote(state);
       }
@@ -146,11 +123,10 @@ export class WorldScene extends Phaser.Scene {
 
   private spawnRemote(state: PlayerState) {
     if (this.remotePlayers.has(state.id)) return;
-    const player = new Player(this, state, false);
+    const player = new Player(this, state, false, TOWN_MAP);
     this.remotePlayers.set(state.id, player);
   }
 
-  /** Expose for UIScene */
   getLocalPlayer() {
     return this.localPlayer;
   }

@@ -31,6 +31,6 @@ export function isoToCart(wx: number, wy: number): { cx: number; cy: number } {
  * Depth for top-down: row index is enough.
  * Higher row = drawn on top (south = in front).
  */
-export function isoDepth(cx: number, cy: number): number {
+export function isoDepth(_cx: number, cy: number): number {
   return cy;
 }

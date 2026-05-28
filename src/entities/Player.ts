@@ -1,37 +1,42 @@
 import Phaser from "phaser";
 import { cartToIso, TILE_W, TILE_H } from "../utils/IsoUtils";
-import {
-  WALKABLE_GROUND,
-  SOLID_DECO,
-  GROUND_LAYER,
-  DECO_LAYER,
-  MAP_COLS,
-  MAP_ROWS,
-} from "../data/MapData";
+import type { PlayerState } from "../types/network";
+import type { MapDef } from "../types/map";
 
-export interface PlayerState {
-  id: string;
-  cx: number; // tile column
-  cy: number; // tile row
-  name: string;
+export type { PlayerState };
+
+const MOVE_COOLDOWN = 150;
+
+// tiny-battle sheet: 18 cols × 11 rows, 16×16 px tiles
+// Character sprites begin at col 10; one colour group per row.
+const CHAR_SHEET  = "tiles-battle";
+const CHAR_COLS   = 18;
+const CHAR_LOCAL  = 136; // row 7 col 10 — blue warrior
+const CHAR_REMOTE = 64;  // row 3 col 10 — red warrior
+
+function charFrame(scene: Phaser.Scene, idx: number): string {
+  const key = `${CHAR_SHEET}_f${idx}`;
+  const tex = scene.textures.get(CHAR_SHEET);
+  if (!tex.has(key)) {
+    tex.add(key, 0, (idx % CHAR_COLS) * 16, Math.floor(idx / CHAR_COLS) * 16, 16, 16);
+  }
+  return key;
 }
 
-const MOVE_COOLDOWN = 150; // ms between steps — feels snappier top-down
-
 export class Player extends Phaser.GameObjects.Container {
-  private sprite: Phaser.GameObjects.Rectangle;
+  private sprite: Phaser.GameObjects.Image;
   private nameTag: Phaser.GameObjects.Text;
   private shadow: Phaser.GameObjects.Ellipse;
+  private mapDef: MapDef;
 
   public cx: number;
   public cy: number;
-  public readonly playerId: string;
+  public playerId: string;
   public isLocal: boolean;
 
   private moveCooldown = 0;
 
-  constructor(scene: Phaser.Scene, state: PlayerState, isLocal = false) {
-    // Position at tile centre
+  constructor(scene: Phaser.Scene, state: PlayerState, isLocal: boolean, mapDef: MapDef) {
     const { x, y } = cartToIso(state.cx, state.cy);
     super(scene, x + TILE_W / 2, y + TILE_H / 2);
 
@@ -39,26 +44,17 @@ export class Player extends Phaser.GameObjects.Container {
     this.cx = state.cx;
     this.cy = state.cy;
     this.isLocal = isLocal;
+    this.mapDef = mapDef;
 
-    // Shadow — flat ellipse at feet
-    this.shadow = scene.add.ellipse(
-      0,
-      4,
-      TILE_W * 0.7,
-      TILE_H * 0.4,
-      0x000000,
-      0.25,
-    );
+    this.shadow = scene.add.ellipse(0, 4, TILE_W * 0.7, TILE_H * 0.4, 0x000000, 0.25);
 
-    // Body — slightly smaller than the tile so you can see the grid
-    const colour = isLocal ? 0x4fc3f7 : 0xef9a9a;
-    this.sprite = scene.add.rectangle(0, 0, TILE_W - 2, TILE_H - 2, colour);
+    const tileIdx = isLocal ? CHAR_LOCAL : CHAR_REMOTE;
+    this.sprite = scene.add.image(0, 0, CHAR_SHEET, charFrame(scene, tileIdx));
 
-    // Name tag above
     this.nameTag = scene.add
       .text(0, -(TILE_H / 2) - 4, state.name, {
-        fontSize: "6px",
-        fontFamily: "monospace",
+        fontSize: "5px",
+        fontFamily: '"Press Start 2P"',
         color: "#ffffff",
         stroke: "#000000",
         strokeThickness: 2,
@@ -67,9 +63,15 @@ export class Player extends Phaser.GameObjects.Container {
 
     this.add([this.shadow, this.sprite, this.nameTag]);
     scene.add.existing(this);
-
-    // Depth = row so player appears behind objects on rows below them
     this.setDepth(state.cy + 1);
+  }
+
+  assignId(id: string) {
+    this.playerId = id;
+  }
+
+  setMap(mapDef: MapDef) {
+    this.mapDef = mapDef;
   }
 
   moveToTile(cx: number, cy: number): boolean {
@@ -79,27 +81,24 @@ export class Player extends Phaser.GameObjects.Container {
     this.cy = cy;
 
     const { x, y } = cartToIso(cx, cy);
-
     this.scene.tweens.add({
       targets: this,
       x: x + TILE_W / 2,
       y: y + TILE_H / 2,
       duration: MOVE_COOLDOWN - 10,
-      ease: "Linear", // linear feels right for grid-stepped top-down
+      ease: "Linear",
     });
 
-    this.setDepth(cy + 1);
     return true;
   }
 
   private canMoveToTile(cx: number, cy: number): boolean {
-    if (cx < 0 || cy < 0 || cx >= MAP_COLS || cy >= MAP_ROWS) return false;
-    const groundIdx = GROUND_LAYER[cy]?.[cx];
-    if (groundIdx === undefined || !WALKABLE_GROUND.has(groundIdx))
-      return false;
-    const decoIdx = DECO_LAYER[cy]?.[cx];
-    if (decoIdx !== undefined && decoIdx >= 0 && SOLID_DECO.has(decoIdx))
-      return false;
+    const { cols, rows, groundLayer, decoLayer, walkableGround, solidDeco } = this.mapDef;
+    if (cx < 0 || cy < 0 || cx >= cols || cy >= rows) return false;
+    const groundIdx = groundLayer[cy]?.[cx];
+    if (groundIdx === undefined || !walkableGround.has(groundIdx)) return false;
+    const decoIdx = decoLayer[cy]?.[cx];
+    if (decoIdx !== undefined && decoIdx >= 0 && solidDeco.has(decoIdx)) return false;
     return true;
   }
 
@@ -116,35 +115,24 @@ export class Player extends Phaser.GameObjects.Container {
     this.moveCooldown -= delta;
     if (this.moveCooldown > 0) return false;
 
-    let dx = 0,
-      dy = 0;
+    let dx = 0, dy = 0;
 
-    // Check each axis independently so diagonals (W+A, W+D, S+A, S+D) work
-    if (cursors.up!.isDown || wasd.W.isDown) {
-      dy -= 1;
-    }
-    if (cursors.down!.isDown || wasd.S.isDown) {
-      dy += 1;
-    }
-    if (cursors.left!.isDown || wasd.A.isDown) {
-      dx -= 1;
-    }
-    if (cursors.right!.isDown || wasd.D.isDown) {
-      dx += 1;
-    }
+    if (cursors.up!.isDown || wasd.W.isDown) dy -= 1;
+    if (cursors.down!.isDown || wasd.S.isDown) dy += 1;
+    if (cursors.left!.isDown || wasd.A.isDown) dx -= 1;
+    if (cursors.right!.isDown || wasd.D.isDown) dx += 1;
 
     if (dx === 0 && dy === 0) return false;
 
-    // For diagonals try the combined move first; if blocked try each axis alone
-    // so the player slides along walls instead of getting stuck.
     let moved = false;
     if (dx !== 0 && dy !== 0) {
       moved = this.moveToTile(this.cx + dx, this.cy + dy);
-      if (!moved) moved = this.moveToTile(this.cx + dx, this.cy); // try horizontal
-      if (!moved) moved = this.moveToTile(this.cx, this.cy + dy); // try vertical
+      if (!moved) moved = this.moveToTile(this.cx + dx, this.cy);
+      if (!moved) moved = this.moveToTile(this.cx, this.cy + dy);
     } else {
       moved = this.moveToTile(this.cx + dx, this.cy + dy);
     }
+
     if (moved) this.moveCooldown = MOVE_COOLDOWN;
     return moved;
   }

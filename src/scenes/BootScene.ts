@@ -18,8 +18,8 @@ export class BootScene extends Phaser.Scene {
 
     const label = this.add
       .text(W / 2, H / 2 - 36, "LOADING...", {
-        fontFamily: "monospace",
-        fontSize: "12px",
+        fontFamily: '"Press Start 2P"',
+        fontSize: "8px",
         color: "#f0a500",
       })
       .setOrigin(0.5, 1);
