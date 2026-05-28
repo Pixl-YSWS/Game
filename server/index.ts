@@ -4,9 +4,12 @@ import { Server } from "socket.io";
 import cors from "cors";
 import type { PlayerState, ServerToClientEvents, ClientToServerEvents } from "../src/types/network.ts";
 
+const SPAWN_CX = 20;
+const SPAWN_CY = 17;
 const MAP_COLS = 30;
 const MAP_ROWS = 20;
 
+// ── HTTP / Socket.IO ─────────────────────────────────────────────
 const app = express();
 app.use(cors());
 
@@ -18,17 +21,20 @@ const io = new Server<ClientToServerEvents, ServerToClientEvents>(httpServer, {
 const players = new Map<string, PlayerState>();
 
 io.on("connection", (socket) => {
-  console.log(`[+] Player connected: ${socket.id}`);
+  console.log(`[+] ${socket.id}`);
 
   const state: PlayerState = {
     id: socket.id,
-    cx: 9,
-    cy: 9,
+    cx: SPAWN_CX,
+    cy: SPAWN_CY,
     name: `Player_${socket.id.slice(0, 4)}`,
   };
   players.set(socket.id, state);
 
-  socket.emit("init", { id: socket.id, players: Array.from(players.values()) });
+  socket.emit("init", {
+    id: socket.id,
+    players: Array.from(players.values()),
+  });
   socket.broadcast.emit("player:join", state);
 
   socket.on("player:move", ({ cx, cy }) => {
@@ -43,11 +49,11 @@ io.on("connection", (socket) => {
   socket.on("disconnect", () => {
     players.delete(socket.id);
     io.emit("player:leave", socket.id);
-    console.log(`[-] Player disconnected: ${socket.id}`);
+    console.log(`[-] ${socket.id}`);
   });
 });
 
 const PORT = process.env.PORT ?? 3001;
 httpServer.listen(PORT, () => {
-  console.log(`Game server running on http://localhost:${PORT}`);
+  console.log(`Game server on http://localhost:${PORT}`);
 });

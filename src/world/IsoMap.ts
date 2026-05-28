@@ -19,7 +19,7 @@ export class IsoMap {
   }
 
   build() {
-    const { cols, rows, tilesetKey, tilesetCols, groundLayer, decoLayer } = this.mapDef;
+    const { cols, rows, tilesetKey, tilesetCols, groundLayer, decoLayer, flatDeco } = this.mapDef;
 
     for (let row = 0; row < rows; row++) {
       for (let col = 0; col < cols; col++) {
@@ -32,7 +32,11 @@ export class IsoMap {
 
         const dIdx = decoLayer[row]?.[col] ?? -1;
         if (dIdx >= 0) {
-          this.stamp(tilesetKey, dIdx, tilesetCols, x, y, row + 1);
+          // Flat decos sit just above the ground (depth 0.5) so the player
+          // — whose depth is always >= 1.5 — always renders on top of them.
+          // Tall decos use row-based depth for 2.5D layering.
+          const depth = flatDeco.has(dIdx) ? 0.5 : row + 1;
+          this.stamp(tilesetKey, dIdx, tilesetCols, x, y, depth);
         }
       }
     }

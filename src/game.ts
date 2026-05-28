@@ -14,7 +14,7 @@ const config: Phaser.Types.Core.GameConfig = {
   roundPixels: true,
   scene: [BootScene, WorldScene, UIScene],
   scale: {
-    mode: Phaser.Scale.FIT,
+    mode: Phaser.Scale.NONE,
     autoCenter: Phaser.Scale.CENTER_BOTH,
   },
 };

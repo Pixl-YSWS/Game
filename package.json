@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "sync-map": "bun scripts/sync-map.ts"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",

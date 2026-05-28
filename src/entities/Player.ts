@@ -5,7 +5,7 @@ import type { MapDef } from "../types/map";
 
 export type { PlayerState };
 
-const MOVE_COOLDOWN = 150;
+const STEP_MS = 120; // ms per tile — one step every 120 ms (~8 tiles/sec)
 
 // tiny-battle sheet: 18 cols × 11 rows, 16×16 px tiles
 // Character sprites begin at col 10; one colour group per row.
@@ -34,7 +34,10 @@ export class Player extends Phaser.GameObjects.Container {
   public playerId: string;
   public isLocal: boolean;
 
-  private moveCooldown = 0;
+  // True while the step tween is playing; blocks new local moves.
+  private isMoving = false;
+  // Direction held at the end of the current step — drives auto-continuation.
+  private inputDir = { dx: 0, dy: 0 };
 
   constructor(scene: Phaser.Scene, state: PlayerState, isLocal: boolean, mapDef: MapDef) {
     const { x, y } = cartToIso(state.cx, state.cy);
@@ -53,17 +56,19 @@ export class Player extends Phaser.GameObjects.Container {
 
     this.nameTag = scene.add
       .text(0, -(TILE_H / 2) - 4, state.name, {
-        fontSize: "5px",
+        fontSize: "8px",
         fontFamily: '"Press Start 2P"',
         color: "#ffffff",
         stroke: "#000000",
-        strokeThickness: 2,
+        strokeThickness: 4,
       })
-      .setOrigin(0.5, 1);
+      .setOrigin(0.5, 1)
+      .setResolution(4)
+      .setScale(0.5);
 
     this.add([this.shadow, this.sprite, this.nameTag]);
     scene.add.existing(this);
-    this.setDepth(state.cy + 1);
+    this.setDepth(state.cy + 1.5);
   }
 
   assignId(id: string) {
@@ -75,18 +80,30 @@ export class Player extends Phaser.GameObjects.Container {
   }
 
   moveToTile(cx: number, cy: number): boolean {
+    if (this.isMoving) return false;
     if (!this.canMoveToTile(cx, cy)) return false;
 
     this.cx = cx;
     this.cy = cy;
+    this.isMoving = true;
 
     const { x, y } = cartToIso(cx, cy);
+
     this.scene.tweens.add({
       targets: this,
       x: x + TILE_W / 2,
       y: y + TILE_H / 2,
-      duration: MOVE_COOLDOWN - 10,
+      duration: STEP_MS,
       ease: "Linear",
+      onComplete: () => {
+        this.isMoving = false;
+        // If the player is still holding a direction, chain the next step
+        // immediately — no gap between tiles, classic retro feel.
+        const { dx, dy } = this.inputDir;
+        if (dx !== 0 || dy !== 0) {
+          this.moveToTile(this.cx + dx, this.cy + dy);
+        }
+      },
     });
 
     return true;
@@ -110,34 +127,34 @@ export class Player extends Phaser.GameObjects.Container {
       S: Phaser.Input.Keyboard.Key;
       D: Phaser.Input.Keyboard.Key;
     },
-    delta: number,
+    _delta: number,
   ): boolean {
-    this.moveCooldown -= delta;
-    if (this.moveCooldown > 0) return false;
-
+    // Cardinal only — one direction at a time, matching classic retro games.
     let dx = 0, dy = 0;
+    if      (cursors.left!.isDown  || wasd.A.isDown) dx = -1;
+    else if (cursors.right!.isDown || wasd.D.isDown) dx =  1;
+    else if (cursors.up!.isDown    || wasd.W.isDown) dy = -1;
+    else if (cursors.down!.isDown  || wasd.S.isDown) dy =  1;
 
-    if (cursors.up!.isDown || wasd.W.isDown) dy -= 1;
-    if (cursors.down!.isDown || wasd.S.isDown) dy += 1;
-    if (cursors.left!.isDown || wasd.A.isDown) dx -= 1;
-    if (cursors.right!.isDown || wasd.D.isDown) dx += 1;
+    // Always record so onComplete can chain the next step.
+    this.inputDir = { dx, dy };
 
-    if (dx === 0 && dy === 0) return false;
+    if (this.isMoving || (dx === 0 && dy === 0)) return false;
 
-    let moved = false;
-    if (dx !== 0 && dy !== 0) {
-      moved = this.moveToTile(this.cx + dx, this.cy + dy);
-      if (!moved) moved = this.moveToTile(this.cx + dx, this.cy);
-      if (!moved) moved = this.moveToTile(this.cx, this.cy + dy);
-    } else {
-      moved = this.moveToTile(this.cx + dx, this.cy + dy);
-    }
-
-    if (moved) this.moveCooldown = MOVE_COOLDOWN;
-    return moved;
+    return this.moveToTile(this.cx + dx, this.cy + dy);
   }
 
   applyServerState(state: PlayerState) {
-    this.moveToTile(state.cx, state.cy);
+    this.cx = state.cx;
+    this.cy = state.cy;
+    const { x, y } = cartToIso(state.cx, state.cy);
+    this.scene.tweens.killTweensOf(this);
+    this.scene.tweens.add({
+      targets: this,
+      x: x + TILE_W / 2,
+      y: y + TILE_H / 2,
+      duration: STEP_MS,
+      ease: "Linear",
+    });
   }
 }
