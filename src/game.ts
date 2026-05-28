@@ -2,8 +2,6 @@ import Phaser from "phaser";
 import { BootScene } from "./scenes/BootScene";
 import { WorldScene } from "./scenes/WorldScene";
 import { InteriorScene } from "./scenes/InteriorScene";
-import { UIScene } from "./scenes/UIScene";
-
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
   width: 1280,
@@ -13,7 +11,7 @@ const config: Phaser.Types.Core.GameConfig = {
   pixelArt: true, // crisp pixel rendering — essential for pixel art
   antialias: false,
   roundPixels: true,
-  scene: [BootScene, WorldScene, InteriorScene, UIScene],
+  scene: [BootScene, WorldScene, InteriorScene],
   scale: {
     mode: Phaser.Scale.NONE,
     autoCenter: Phaser.Scale.CENTER_BOTH,

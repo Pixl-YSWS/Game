@@ -131,8 +131,6 @@ export class WorldScene extends Phaser.Scene {
 
     this.loadingText?.destroy();
     this.loadingText = undefined;
-
-    this.scene.launch("UIScene", { worldScene: this });
   }
 
   // ── Multiplayer ───────────────────────────────────────────────────

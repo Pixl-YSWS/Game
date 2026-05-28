@@ -133,8 +133,6 @@ export class InteriorScene extends Phaser.Scene {
       true,
       this.mapDef,
     );
-    cam.startFollow(this.localPlayer, true, 0.08, 0.08);
-
     this.exitTile = { cx: DOOR_COL, cy: DOOR_ROW };
   }
 
