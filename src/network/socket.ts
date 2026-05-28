@@ -1,5 +1,6 @@
 import { io, Socket } from "socket.io-client";
 import type { ServerToClientEvents, ClientToServerEvents, MovePayload } from "../types/network";
+import { getOrCreatePlayerId } from "./playerIdentity";
 
 export type { MovePayload };
 
@@ -16,6 +17,7 @@ class GameSocket {
       transports: ["websocket"],
       reconnection: true,
       reconnectionAttempts: 5,
+      auth: { playerId: getOrCreatePlayerId() },
     });
 
     this.socket.on("connect", () => {

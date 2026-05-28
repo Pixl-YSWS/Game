@@ -2,16 +2,24 @@ import Phaser from "phaser";
 import { IsoMap } from "../world/IsoMap";
 import { Player } from "../entities/Player";
 import type { PlayerState } from "../types/network";
-import { TOWN_MAP } from "../data/MapData";
+import type { MapDef } from "../types/map";
+import { generateMap } from "../world/MapGen";
 import { gameSocket } from "../network/socket";
 import { TILE_H } from "../utils/IsoUtils";
 
 export class WorldScene extends Phaser.Scene {
   private isoMap?: IsoMap;
   private localPlayer?: Player;
+  private mapDef?: MapDef;
+  private loadingText?: Phaser.GameObjects.Text;
   private remotePlayers = new Map<string, Player>();
   private lastSentCx = -1;
   private lastSentCy = -1;
+  // Track previous tile to detect a *transition* onto a door tile, so
+  // returning from an interior doesn't immediately re-trigger entry.
+  private lastTileCx = -1;
+  private lastTileCy = -1;
+  private doorTiles = new Set<string>();
 
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private wasd!: {
@@ -40,7 +48,16 @@ export class WorldScene extends Phaser.Scene {
       cam.setZoom(Phaser.Math.Clamp(cam.zoom - deltaY * 0.001, 1, 6));
     });
 
-    this.buildWorld();
+    // World build is deferred until the server hands us our seed (init event).
+    this.loadingText = this.add
+      .text(this.scale.width / 2, this.scale.height / 2, "Loading village...", {
+        fontFamily: '"Press Start 2P"',
+        fontSize: "12px",
+        color: "#ffffff",
+      })
+      .setOrigin(0.5)
+      .setScrollFactor(0);
+
     this.connectMultiplayer();
   }
 
@@ -56,10 +73,25 @@ export class WorldScene extends Phaser.Scene {
       this.lastSentCy = cy;
     }
 
+    // Door check fires only on the frame we *moved* onto a door tile,
+    // so re-entry on resume doesn't recursively launch the interior.
+    if (cx !== this.lastTileCx || cy !== this.lastTileCy) {
+      if (this.doorTiles.has(`${cx},${cy}`)) {
+        this.enterHouse(cx, cy);
+      }
+      this.lastTileCx = cx;
+      this.lastTileCy = cy;
+    }
+
     this.syncDepth(this.localPlayer);
     for (const remote of this.remotePlayers.values()) {
       this.syncDepth(remote);
     }
+  }
+
+  private enterHouse(doorCx: number, doorCy: number) {
+    this.scene.pause();
+    this.scene.launch("InteriorScene", { returnTo: { cx: doorCx, cy: doorCy } });
   }
 
   private syncDepth(player: Player) {
@@ -68,8 +100,9 @@ export class WorldScene extends Phaser.Scene {
 
   // ── World construction ────────────────────────────────────────────
 
-  private buildWorld() {
-    this.isoMap = new IsoMap(this, TOWN_MAP);
+  private buildWorld(seed: number) {
+    this.mapDef = generateMap(seed);
+    this.isoMap = new IsoMap(this, this.mapDef);
     this.isoMap.build();
 
     const cam = this.cameras.main;
@@ -80,14 +113,24 @@ export class WorldScene extends Phaser.Scene {
       this.isoMap.boundsW, this.isoMap.boundsH,
     );
 
-    const { cx, cy } = TOWN_MAP.spawnPoint;
+    this.doorTiles.clear();
+    for (const d of this.mapDef.doors) {
+      this.doorTiles.add(`${d.cx},${d.cy}`);
+    }
+
+    const { cx, cy } = this.mapDef.spawnPoint;
     this.localPlayer = new Player(
       this,
       { id: "local", cx, cy, name: "You" },
       true,
-      TOWN_MAP,
+      this.mapDef,
     );
+    this.lastTileCx = cx;
+    this.lastTileCy = cy;
     cam.startFollow(this.localPlayer, true, 0.08, 0.08);
+
+    this.loadingText?.destroy();
+    this.loadingText = undefined;
 
     this.scene.launch("UIScene", { worldScene: this });
   }
@@ -97,7 +140,8 @@ export class WorldScene extends Phaser.Scene {
   private connectMultiplayer() {
     gameSocket.connect();
 
-    gameSocket.on("init", ({ id, players }) => {
+    gameSocket.on("init", ({ id, players, seed }) => {
+      this.buildWorld(seed);
       this.localPlayer?.assignId(id);
       for (const state of players) {
         if (state.id !== id) this.spawnRemote(state);
@@ -124,7 +168,8 @@ export class WorldScene extends Phaser.Scene {
 
   private spawnRemote(state: PlayerState) {
     if (this.remotePlayers.has(state.id)) return;
-    const player = new Player(this, state, false, TOWN_MAP);
+    if (!this.mapDef) return;
+    const player = new Player(this, state, false, this.mapDef);
     this.remotePlayers.set(state.id, player);
   }
 

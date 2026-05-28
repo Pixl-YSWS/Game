@@ -12,4 +12,6 @@ export interface MapDef {
   // is treated as a tall object and sorted by tile row.
   flatDeco: ReadonlySet<number>;
   spawnPoint: { cx: number; cy: number };
+  // Tile positions where walking triggers entering a house interior.
+  doors: Array<{ cx: number; cy: number }>;
 }

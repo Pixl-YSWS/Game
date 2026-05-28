@@ -85,4 +85,5 @@ export const TOWN_MAP: MapDef = {
   solidDeco: SOLID_DECO,
   flatDeco: FLAT_DECO,
   spawnPoint: { cx: 20, cy: 17 },
+  doors: [], // hand-authored map has no door triggers; generator adds them
 };

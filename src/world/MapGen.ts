@@ -1,4 +1,5 @@
 import type { MapDef } from "../types/map";
+import { PRESETS } from "./presets";
 
 // Mulberry32 — fast, good-quality seeded PRNG
 function seededRng(seed: number): () => number {
@@ -15,131 +16,189 @@ function ri(rng: () => number, n: number): number {
   return Math.floor(rng() * n);
 }
 
-const COLS = 30;
-const ROWS = 20;
+// House templates lifted from the original hand-authored map. Index 43 is
+// a walkable archway tile (not in SOLID_DECO); everything else is wall.
+const HOUSE_TEMPLATES: number[][][] = [
+  // 3×3 small cottage
+  [
+    [96,  97,  98],
+    [108, 109, 110],
+    [120, 121, 122],
+  ],
+  // 4×3 medium house with vertical archway
+  [
+    [44, 45, 45, 45],
+    [56, 94, 43, 94],
+    [68, 82, 43, 80],
+  ],
+  // 5×4 multi-floor building
+  [
+    [48, 51, 49, 49, 50],
+    [60, 61, 61, 63, 62],
+    [72, 84, 73, 73, 75],
+    [72, 73, 86, 87, 75],
+  ],
+  // 3×4 tall chimney house (top-right cluster A1 in the original)
+  [
+    [52, 53, 54],
+    [64, 65, 66],
+    [76, 88, 79],
+    [76, 89, 79],
+  ],
+  // 3×3 short chimney house (top-right cluster A2 in the original)
+  [
+    [52, 53, 54],
+    [64, 67, 66],
+    [76, 89, 79],
+  ],
+];
 
-const WALKABLE_GROUND: ReadonlySet<number> = new Set([0, 1]);
+// Door cell relative to each template's top-left, ALWAYS one tile south
+// of the house's bottom edge (i.e., outside the footprint). Walking onto
+// this tile in the world triggers entering the interior. The cell is
+// stamped as a 43 stone path so it visually reads as a doorstep.
+const TEMPLATE_DOORS: { dc: number; dr: number }[] = [
+  { dc: 1, dr: 3 }, // small cottage  (3×3) → row baseY+3
+  { dc: 2, dr: 3 }, // medium house   (4×3) → row baseY+3, under archway exit
+  { dc: 2, dr: 4 }, // big building   (5×4) → row baseY+4
+  { dc: 1, dr: 4 }, // tall chimney   (3×4) → row baseY+4
+  { dc: 1, dr: 3 }, // short chimney  (3×3) → row baseY+3
+];
 
-const SOLID_DECO: ReadonlySet<number> = new Set([
-  // Small ground clutter — flat, but blocks movement
-  3, 4, 15, 16, 27, 28,
-  // Lamp posts / signs
-  7, 18, 19, 20, 31,
-  // Building walls
-  33, 34, 35, 36, 37, 38, 39, 40, 41, 42,
-  44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56,
-  // Building facade
-  60, 61, 62, 63, 64, 65, 66, 67, 68,
-  72, 73, 75, 76, 79, 80, 82, 84, 86, 87, 88, 89, 94,
-  // Houses (3×3 sprite)
-  96, 97, 98, 108, 109, 110, 120, 121, 122,
-]);
-
-const FLAT_DECO: ReadonlySet<number> = new Set([
-  3, 4, 15, 16, 27, 28, // small stones / grass tufts
-  43,                   // stone path
-]);
-
-export function generateMap(seed: number): MapDef {
-  const rng = seededRng(seed);
-
-  const ground: number[][] = Array.from({ length: ROWS }, () => new Array(COLS).fill(0));
-  const deco: number[][] = Array.from({ length: ROWS }, () => new Array(COLS).fill(-1));
-
-  // ── Roads ───────────────────────────────────────────────────────
-  // Main horizontal road, full width
-  const hRoad = 5 + ri(rng, 9);          // row 5-13
-  for (let c = 0; c < COLS; c++) ground[hRoad][c] = 1;
-
-  // Main vertical road, full height
-  const vRoad = 7 + ri(rng, 15);         // col 7-21
-  for (let r = 0; r < ROWS; r++) ground[r][vRoad] = 1;
-
-  // Optional branch road (70% chance), either above or below main road
-  if (rng() < 0.7) {
-    const offset = (hRoad > 10) ? -(3 + ri(rng, 4)) : (3 + ri(rng, 4));
-    const branchRow = Phaser_clamp(hRoad + offset, 1, ROWS - 2);
-    const start = ri(rng, 8);
-    const len = 10 + ri(rng, 10);
-    for (let c = start; c < Math.min(start + len, COLS); c++) {
-      ground[branchRow][c] = 1;
-    }
-  }
-
-  // ── Helpers ──────────────────────────────────────────────────────
-  // True if every cell in radius `buf` around (c, r) is empty grass
-  const isClear = (c: number, r: number, buf = 1): boolean => {
-    for (let dc = -buf; dc <= buf; dc++) {
-      for (let dr = -buf; dr <= buf; dr++) {
-        const nc = c + dc, nr = r + dr;
-        if (nc < 0 || nr < 0 || nc >= COLS || nr >= ROWS) return false;
-        if (ground[nr][nc] !== 0) return false;
-        if (deco[nr][nc] !== -1) return false;
-      }
-    }
-    return true;
-  };
-
-  // ── Trees ────────────────────────────────────────────────────────
-  const numTrees = 8 + ri(rng, 10);
-  let treesPlaced = 0;
-  for (let attempt = 0; attempt < numTrees * 8; attempt++) {
-    if (treesPlaced >= numTrees) break;
-    const tc = 1 + ri(rng, COLS - 2);
-    const tr = 1 + ri(rng, ROWS - 3);
-    if (isClear(tc, tr) && isClear(tc, tr + 1)) {
-      deco[tr][tc] = 4;       // tree top
-      deco[tr + 1][tc] = 16;  // tree trunk
-      treesPlaced++;
-    }
-  }
-
-  // ── Houses ───────────────────────────────────────────────────────
-  const numHouses = 2 + ri(rng, 3);
-  let housesPlaced = 0;
-  for (let attempt = 0; attempt < numHouses * 30; attempt++) {
-    if (housesPlaced >= numHouses) break;
-    const hc = 1 + ri(rng, COLS - 5);
-    const hr = 1 + ri(rng, ROWS - 5);
-
-    // Needs a clean 3×3 footprint plus 1-tile border (5×5 total)
-    let ok = true;
-    outer: for (let dc = -1; dc <= 3; dc++) {
-      for (let dr = -1; dr <= 3; dr++) {
-        const nc = hc + dc, nr = hr + dr;
-        if (nc < 0 || nr < 0 || nc >= COLS || nr >= ROWS) { ok = false; break outer; }
-        if (ground[nr][nc] !== 0 || deco[nr][nc] !== -1) { ok = false; break outer; }
-      }
-    }
-    if (!ok) continue;
-
-    deco[hr    ][hc] = 96;  deco[hr    ][hc + 1] = 97;  deco[hr    ][hc + 2] = 98;
-    deco[hr + 1][hc] = 108; deco[hr + 1][hc + 1] = 109; deco[hr + 1][hc + 2] = 110;
-    deco[hr + 2][hc] = 120; deco[hr + 2][hc + 1] = 121; deco[hr + 2][hc + 2] = 122;
-    housesPlaced++;
-  }
-
-  // ── Spawn point ──────────────────────────────────────────────────
-  // Road intersection — always on a path tile
-  const spawnCx = vRoad;
-  const spawnCy = hRoad;
-
-  return {
-    key: `world_${seed}`,
-    cols: COLS,
-    rows: ROWS,
-    tilesetKey: "tiles-town",
-    tilesetCols: 12,
-    groundLayer: ground,
-    decoLayer: deco,
-    walkableGround: WALKABLE_GROUND,
-    solidDeco: SOLID_DECO,
-    flatDeco: FLAT_DECO,
-    spawnPoint: { cx: spawnCx, cy: spawnCy },
-  };
+function clone(layer: number[][]): number[][] {
+  return layer.map(row => [...row]);
 }
 
-// Inline clamp so this module stays dependency-free (usable from server too)
-function Phaser_clamp(v: number, min: number, max: number): number {
-  return Math.min(Math.max(v, min), max);
+// Build a MapDef from a preset. The preset supplies the village backdrop
+// (roads, paths, scenery); this function decides what house goes in each
+// slot and where inside that slot it sits, giving every seed a different
+// arrangement while keeping the overall village layout coherent.
+export function generateMap(seed: number): MapDef {
+  const rng = seededRng(seed);
+  const preset = PRESETS[ri(rng, PRESETS.length)];
+
+  const ground = clone(preset.ground);
+  const deco = clone(preset.deco);
+
+  // Track which templates we've already used so the same house isn't
+  // stamped twice when there are unused alternatives that fit.
+  const used = new Set<number>();
+  const placed: { baseX: number; baseY: number; w: number; h: number }[] = [];
+  const doors: { cx: number; cy: number }[] = [];
+  for (const slot of preset.houseSlots) {
+    const fits: { tpl: number[][]; idx: number }[] = [];
+    HOUSE_TEMPLATES.forEach((tpl, idx) => {
+      if (tpl[0].length <= slot.width && tpl.length <= slot.height) {
+        fits.push({ tpl, idx });
+      }
+    });
+    if (fits.length === 0) continue;
+
+    let pool = fits.filter(f => !used.has(f.idx));
+    if (pool.length === 0) pool = fits; // out of unused options, allow repeats
+
+    const pick = pool[ri(rng, pool.length)];
+    used.add(pick.idx);
+    const tpl = pick.tpl;
+    const w = tpl[0].length;
+    const h = tpl.length;
+
+    // Horizontal offset is random; vertical is bottom-aligned so houses
+    // never leave an awkward empty strip below them and so their south
+    // edge sits next to the existing path network.
+    const ox = ri(rng, slot.width - w + 1);
+    const oy = slot.height - h;
+    const baseX = slot.x + ox;
+    const baseY = slot.y + oy;
+
+    for (let dr = 0; dr < h; dr++) {
+      for (let dc = 0; dc < w; dc++) {
+        deco[baseY + dr][baseX + dc] = tpl[dr][dc];
+      }
+    }
+    placed.push({ baseX, baseY, w, h });
+    const door = TEMPLATE_DOORS[pick.idx];
+    doors.push({ cx: baseX + door.dc, cy: baseY + door.dr });
+  }
+
+  // ── Connect each house to the existing path network ──────────────
+  // Some seeds will offset houses away from the original path endpoints,
+  // leaving them stranded. For each placed house, find the nearest stone
+  // path (43) or road (ground tile 1) and snake a path from the house's
+  // closest-facing side until we hit it.
+  // True if (c, r) is inside any house footprint — those tiles can be
+  // 43 (the archway through a medium house), but they should NOT count
+  // as a target for the connector since the house is the thing we want
+  // to connect TO, not from.
+  const insideAnyHouse = (c: number, r: number) =>
+    placed.some(p => c >= p.baseX && c < p.baseX + p.w && r >= p.baseY && r < p.baseY + p.h);
+
+  for (const { baseX, baseY, w, h } of placed) {
+    const hcx = baseX + (w - 1) / 2;
+    const hcy = baseY + (h - 1) / 2;
+
+    // Prefer connecting to an existing 43 stone path. Only fall back to a
+    // road tile if no path exists anywhere on the map — roads alone don't
+    // give the visible stone-trail look we're after.
+    const findClosest = (predicate: (c: number, r: number) => boolean) => {
+      let best: { c: number; r: number } | null = null;
+      let bestDist = Infinity;
+      for (let r = 0; r < preset.rows; r++) {
+        for (let c = 0; c < preset.cols; c++) {
+          if (insideAnyHouse(c, r)) continue;
+          if (!predicate(c, r)) continue;
+          const d = Math.abs(c - hcx) + Math.abs(r - hcy);
+          if (d < bestDist) { bestDist = d; best = { c, r }; }
+        }
+      }
+      return best;
+    };
+
+    const target =
+      findClosest((c, r) => deco[r][c] === 43) ??
+      findClosest((c, r) => ground[r][c] === 1);
+    if (!target) continue;
+
+    // Step out of the house in the direction of the target
+    const dx = target.c - hcx;
+    const dy = target.r - hcy;
+    let startC: number, startR: number;
+    if (Math.abs(dx) > Math.abs(dy)) {
+      startR = baseY + Math.floor(h / 2);
+      startC = dx > 0 ? baseX + w : baseX - 1;
+    } else {
+      startC = baseX + Math.floor(w / 2);
+      startR = dy > 0 ? baseY + h : baseY - 1;
+    }
+
+    let c = startC, r = startR;
+    for (let step = 0; step < 15; step++) {
+      if (c < 0 || r < 0 || c >= preset.cols || r >= preset.rows) break;
+      if (ground[r][c] === 1 || deco[r][c] === 43) break;
+      if (deco[r][c] !== -1) break;
+      deco[r][c] = 43;
+
+      const tx = target.c - c;
+      const ty = target.r - r;
+      if (tx === 0 && ty === 0) break;
+      if (Math.abs(tx) > Math.abs(ty)) c += Math.sign(tx);
+      else if (ty !== 0) r += Math.sign(ty);
+      else c += Math.sign(tx);
+    }
+  }
+
+  return {
+    doors,
+    key: `world_${seed}`,
+    cols: preset.cols,
+    rows: preset.rows,
+    tilesetKey: preset.tilesetKey,
+    tilesetCols: preset.tilesetCols,
+    groundLayer: ground,
+    decoLayer: deco,
+    walkableGround: preset.walkableGround,
+    solidDeco: preset.solidDeco,
+    flatDeco: preset.flatDeco,
+    spawnPoint: preset.spawn,
+  };
 }

@@ -6,7 +6,7 @@ export interface PlayerState {
 }
 
 export interface ServerToClientEvents {
-  init: (data: { id: string; players: PlayerState[] }) => void;
+  init: (data: { id: string; players: PlayerState[]; seed: number }) => void;
   "player:join": (state: PlayerState) => void;
   "player:move": (data: { id: string; cx: number; cy: number }) => void;
   "player:leave": (id: string) => void;
