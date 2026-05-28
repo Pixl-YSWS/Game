@@ -4,28 +4,64 @@ import { Player } from "../entities/Player";
 import { TILE_H } from "../utils/IsoUtils";
 import type { MapDef } from "../types/map";
 
-// Placeholder interior: a 10×8 room with walls and a single exit tile at
-// the south-middle. The real interior maps will replace this later; the
-// scene just needs to exist so the door transition works end-to-end.
-const COLS = 10;
-const ROWS = 8;
+const ROOM_COLS = 10;
+const ROOM_ROWS = 8;
+const COLS = 32;
+const ROWS = 18;
+const ROOM_X = 11;
+const ROOM_Y = 4;
+const DOOR_COL = ROOM_X + Math.floor(ROOM_COLS / 2);
+const DOOR_ROW = ROOM_Y + ROOM_ROWS - 1;
 
 function makeInteriorMap(): MapDef {
-  // Floor: cobblestone (ground tile 1) inside the room.
-  const ground = Array.from({ length: ROWS }, () => new Array(COLS).fill(1));
+  const ground = Array.from({ length: ROWS }, () => new Array(COLS).fill(0));
   const deco = Array.from({ length: ROWS }, () => new Array(COLS).fill(-1));
 
-  // Walls around the perimeter; door (43, walkable) at south-middle.
-  const doorCol = Math.floor(COLS / 2);
-  for (let c = 0; c < COLS; c++) {
-    deco[0][c] = 45;              // top wall
-    if (c !== doorCol) deco[ROWS - 1][c] = 68; // bottom wall
+  // Room floor: cobblestone
+  for (let r = ROOM_Y; r <= ROOM_Y + ROOM_ROWS - 1; r++) {
+    for (let c = ROOM_X; c <= ROOM_X + ROOM_COLS - 1; c++) {
+      ground[r][c] = 1;
+    }
   }
-  for (let r = 1; r < ROWS - 1; r++) {
-    deco[r][0] = 56;              // left wall
-    deco[r][COLS - 1] = 80;       // right wall
+
+  // Walls around the room
+  for (let c = ROOM_X; c < ROOM_X + ROOM_COLS; c++) {
+    deco[ROOM_Y][c] = 45;
+    if (c !== DOOR_COL) deco[DOOR_ROW][c] = 68;
   }
-  deco[ROWS - 1][doorCol] = 43;   // exit tile
+  for (let r = ROOM_Y + 1; r < DOOR_ROW; r++) {
+    deco[r][ROOM_X] = 56;
+    deco[r][ROOM_X + ROOM_COLS - 1] = 80;
+  }
+  deco[DOOR_ROW][DOOR_COL] = 43; // door
+
+  // Stone path leading south from the door
+  for (let r = DOOR_ROW + 1; r < ROWS; r++) {
+    deco[r][DOOR_COL] = 43;
+  }
+
+  // Garden decorations around the building
+  // Top
+  deco[1][5] = 4; deco[2][5] = 16;
+  deco[1][15] = 15;
+  deco[2][20] = 3;
+  deco[1][26] = 4; deco[2][26] = 16;
+  deco[3][28] = 27;
+
+  // Left
+  deco[8][2] = 4; deco[9][2] = 16;
+  deco[10][3] = 7;
+  deco[12][4] = 28;
+
+  // Right
+  deco[8][29] = 4; deco[9][29] = 16;
+  deco[10][28] = 7;
+
+  // Bottom (besides the path)
+  deco[14][4] = 3;
+  deco[15][28] = 15;
+  deco[16][8] = 4; deco[17][8] = 16;
+  deco[16][25] = 27;
 
   return {
     key: "interior_default",
@@ -36,9 +72,9 @@ function makeInteriorMap(): MapDef {
     groundLayer: ground,
     decoLayer: deco,
     walkableGround: new Set([0, 1, 2]),
-    solidDeco: new Set([44, 45, 56, 68, 80, 82, 94]),
-    flatDeco: new Set([43]),
-    spawnPoint: { cx: doorCol, cy: ROWS - 2 }, // just inside the door
+    solidDeco: new Set([44, 45, 56, 68, 80, 82, 94, 4, 16, 7, 3, 15, 27, 28]),
+    flatDeco: new Set([43, 3, 15, 27, 28]),
+    spawnPoint: { cx: DOOR_COL, cy: DOOR_ROW - 1 },
     doors: [],
   };
 }
@@ -84,12 +120,11 @@ export class InteriorScene extends Phaser.Scene {
     isoMap.build();
 
     const cam = this.cameras.main;
+    cam.setZoom(Math.min(
+      this.scale.width / isoMap.boundsW,
+      this.scale.height / isoMap.boundsH,
+    ));
     cam.centerOn(isoMap.centre.x, isoMap.centre.y);
-    cam.setZoom(4);
-    cam.setBounds(
-      isoMap.boundsX, isoMap.boundsY,
-      isoMap.boundsW, isoMap.boundsH,
-    );
 
     const { cx, cy } = this.mapDef.spawnPoint;
     this.localPlayer = new Player(
@@ -100,7 +135,7 @@ export class InteriorScene extends Phaser.Scene {
     );
     cam.startFollow(this.localPlayer, true, 0.08, 0.08);
 
-    this.exitTile = { cx: Math.floor(COLS / 2), cy: ROWS - 1 };
+    this.exitTile = { cx: DOOR_COL, cy: DOOR_ROW };
   }
 
   update(_time: number, delta: number) {
