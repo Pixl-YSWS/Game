@@ -2,15 +2,31 @@ import Phaser from "phaser";
 import { makeMenuButton, type MenuButton } from "../utils/MenuButton";
 import { loadSettings, saveSettings, ZOOM_OPTIONS } from "../data/Settings";
 
+interface SettingsInit {
+  from?: string;
+}
+
 export class SettingsScene extends Phaser.Scene {
   private zoomBtn?: MenuButton;
   private soundBtn?: MenuButton;
+  private fromKey?: string;
 
   constructor() {
     super({ key: "SettingsScene" });
   }
 
+  init(data: SettingsInit) {
+    this.fromKey = data?.from;
+  }
+
   create() {
+    // Pause the launching scene so its buttons don't keep receiving hover
+    // events while Settings is on top of them.
+    if (this.fromKey) this.scene.pause(this.fromKey);
+    this.events.once("shutdown", () => {
+      if (this.fromKey) this.scene.resume(this.fromKey);
+    });
+
     const W = this.scale.width;
     const H = this.scale.height;
 

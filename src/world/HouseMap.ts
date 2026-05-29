@@ -3,8 +3,9 @@ import type { MapDef } from "../types/map";
 // 16:9 so the interior fills the 1280×720 canvas at the auto-fit zoom.
 const COLS = 32;
 const ROWS = 18;
-const ROOM_COLS = 10;
-const ROOM_ROWS = 8;
+// Room takes up most of the map now — only a thin grass border around it.
+const ROOM_COLS = 24;
+const ROOM_ROWS = 14;
 const ROOM_X = Math.floor((COLS - ROOM_COLS) / 2);
 const ROOM_Y = Math.floor((ROWS - ROOM_ROWS) / 2);
 const DOOR_COL = ROOM_X + Math.floor(ROOM_COLS / 2);
@@ -51,5 +52,20 @@ export function makeHouseInterior(): MapDef {
     flatDeco: new Set([43]),
     spawnPoint: { cx: DOOR_COL, cy: DOOR_ROW - 1 },
     doors: [{ cx: DOOR_COL, cy: DOOR_ROW }],
+    npcs: [
+      {
+        id: "house_innkeeper",
+        cx: ROOM_X + 1,
+        cy: ROOM_Y + 2,
+        name: "Innkeeper",
+        sprite: 154, // tiles-battle row 8 col 10 — green
+        dialogue: [
+          "Welcome to the shared house.",
+          "Other players you meet here are real — wave at them.",
+          "Here's some pixels to get you started.",
+        ],
+        reward: 10,
+      },
+    ],
   };
 }

@@ -43,6 +43,13 @@ class GameSocket {
     this.handlers.get(event)!.push(handler as Function);
   }
 
+  off<K extends keyof ServerToClientEvents>(event: K, handler: ServerToClientEvents[K]) {
+    const list = this.handlers.get(event);
+    if (!list) return;
+    const i = list.indexOf(handler as Function);
+    if (i >= 0) list.splice(i, 1);
+  }
+
   clearHandlers() {
     this.handlers.clear();
   }
@@ -53,6 +60,14 @@ class GameSocket {
 
   enterWorld(world: WorldRef) {
     this.socket?.emit("world:enter", world);
+  }
+
+  npcInteract(npcId: string) {
+    this.socket?.emit("npc:interact", { npcId });
+  }
+
+  shopBuy(itemId: string) {
+    this.socket?.emit("shop:buy", { itemId });
   }
 
   sendInvite(toSocketId: string) {

@@ -51,6 +51,7 @@ function makeInteriorMap(): MapDef {
     flatDeco: new Set([43]),
     spawnPoint: { cx: DOOR_COL, cy: DOOR_ROW - 1 },
     doors: [],
+    npcs: [],
   };
 }
 

@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { IsoMap } from "../world/IsoMap";
 import { Player } from "../entities/Player";
+import { Npc } from "../entities/Npc";
 import type { PlayerState, WorldRef, WorldState, InviteInfo } from "../types/network";
 import type { MapDef } from "../types/map";
 import { generateMap } from "../world/MapGen";
@@ -9,6 +10,7 @@ import { gameSocket } from "../network/socket";
 import { TILE_H, TILE_W, cartToIso } from "../utils/IsoUtils";
 import { getOrCreatePlayerId } from "../network/playerIdentity";
 import { loadSettings } from "../data/Settings";
+import { UIScene } from "./UIScene";
 
 export class WorldScene extends Phaser.Scene {
   private isoMap?: IsoMap;
@@ -50,6 +52,19 @@ export class WorldScene extends Phaser.Scene {
     bobTween: Phaser.Tweens.Tween;
   }[] = [];
 
+  private npcs: Npc[] = [];
+  // Same shape as door indicators, but anchored above each NPC and shown
+  // when the player is on an adjacent tile.
+  private npcIndicators: {
+    cx: number;
+    cy: number;
+    label: Phaser.GameObjects.Text;
+    bobTween: Phaser.Tweens.Tween;
+  }[] = [];
+  // HUD + dialogue both live in a separate UI scene running on top of this
+  // one so they aren't subject to the world camera's zoom.
+  private ui?: UIScene;
+
   // Currently displayed world (set by server).
   private world: WorldRef = { kind: "village", ownerPlayerId: getOrCreatePlayerId() };
   // Optional world to request right after connecting, set from the main menu.
@@ -58,13 +73,6 @@ export class WorldScene extends Phaser.Scene {
   // Pending invites awaiting our Y/N answer.
   private inviteQueue: InviteInfo[] = [];
   private invitePromptText?: Phaser.GameObjects.Text;
-  private statusText?: Phaser.GameObjects.Text;
-
-  // ── HUD state ─────────────────────────────────────────────────────
-  private hp = 10;
-  private hpMax = 10;
-  private heartIcons: Phaser.GameObjects.Graphics[] = [];
-  private coordText?: Phaser.GameObjects.Text;
 
   constructor() {
     super({ key: "WorldScene" });
@@ -104,24 +112,27 @@ export class WorldScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setScrollFactor(0);
 
-    this.statusText = this.add
-      .text(8, 8, "", {
-        fontFamily: '"Press Start 2P"',
-        fontSize: "8px",
-        color: "#ffffff",
-        stroke: "#000000",
-        strokeThickness: 3,
-      })
-      .setScrollFactor(0);
-
-    this.buildHud();
+    if (!this.scene.isActive("UIScene")) {
+      this.scene.launch("UIScene");
+    }
+    this.ui = this.scene.get("UIScene") as UIScene;
     this.bindKeyHandlers();
     this.connectMultiplayer();
 
-    this.input.keyboard!.on("keydown-ESC", () => this.openPause());
+    this.input.keyboard!.on("keydown-ESC", () => {
+      if (this.ui?.isDialogueOpen) {
+        this.ui.closeDialogue();
+        return;
+      }
+      this.openPause();
+    });
 
     this.events.once("shutdown", () => {
       this.clearDoorIndicators();
+      this.clearNpcs();
+      this.ui?.closeDialogue();
+      this.scene.stop("UIScene");
+      this.ui = undefined;
       gameSocket.clearHandlers();
     });
   }
@@ -132,58 +143,14 @@ export class WorldScene extends Phaser.Scene {
     this.scene.launch("PauseScene", { pausedSceneKey: "WorldScene" });
   }
 
-  // ── HUD ───────────────────────────────────────────────────────────
-
-  private buildHud() {
-    // Stack the HUD under the status text in the top-left so it survives
-    // narrow viewports (the body uses overflow:hidden, so anything past
-    // the visible viewport edge gets clipped).
-    const baseX = 8;
-
-    // Hearts row, just under the status text.
-    const heartsY = 24;
-    for (let i = 0; i < this.hpMax; i++) {
-      const g = this.add.graphics().setScrollFactor(0).setDepth(10000);
-      g.x = baseX + i * 14;
-      g.y = heartsY;
-      this.heartIcons.push(g);
-    }
-    this.refreshHearts();
-
-    // Coords below the hearts.
-    this.coordText = this.add
-      .text(baseX, heartsY + 22, "", {
-        fontFamily: '"Press Start 2P"',
-        fontSize: "8px",
-        color: "#ffffff",
-        stroke: "#000000",
-        strokeThickness: 3,
-      })
-      .setOrigin(0, 0)
-      .setScrollFactor(0)
-      .setDepth(10000);
-  }
-
-  private refreshHearts() {
-    for (let i = 0; i < this.heartIcons.length; i++) {
-      const g = this.heartIcons[i];
-      g.clear();
-      const filled = i < this.hp;
-      drawHeart(g, filled);
-    }
-  }
-
-  private updateHud() {
-    if (!this.coordText) return;
-    const p = this.localPlayer;
-    if (p) this.coordText.setText(`X ${p.cx}  Y ${p.cy}`);
-    else this.coordText.setText("");
-  }
-
   update(_time: number, delta: number) {
     if (!this.localPlayer) return;
 
-    this.localPlayer.handleInput(this.cursors, this.wasd, delta);
+    // Movement is locked while a dialogue line is on screen — feeds inputs
+    // into a no-op so any held key gets cleared rather than queued.
+    if (!this.ui?.isDialogueOpen) {
+      this.localPlayer.handleInput(this.cursors, this.wasd, delta);
+    }
 
     const { cx, cy } = this.localPlayer;
     if (gameSocket.connected && (cx !== this.lastSentCx || cy !== this.lastSentCy)) {
@@ -193,9 +160,15 @@ export class WorldScene extends Phaser.Scene {
     }
 
     this.refreshDoorPrompt();
+    this.refreshNpcPrompt();
     if (cx !== this.lastTileCx || cy !== this.lastTileCy) {
       this.lastTileCx = cx;
       this.lastTileCy = cy;
+      // Inside the shared house, stepping onto the doorway exits to the
+      // open world automatically — no E press needed.
+      if (this.world.kind === "house" && this.doorTiles.has(`${cx},${cy}`)) {
+        gameSocket.enterWorld({ kind: "openworld" });
+      }
     }
 
     this.syncDepth(this.localPlayer);
@@ -203,7 +176,7 @@ export class WorldScene extends Phaser.Scene {
       this.syncDepth(remote);
     }
 
-    this.updateHud();
+    this.ui?.setCoords(cx, cy);
   }
 
   private bindKeyHandlers() {
@@ -221,17 +194,49 @@ export class WorldScene extends Phaser.Scene {
     // Y / N — respond to the front of the invite queue.
     this.hotkeys.Y.on("down", () => this.respondToInvite(true));
     this.hotkeys.N.on("down", () => this.respondToInvite(false));
-    // E — enter the house if standing on a door tile.
+    // E — advance dialogue, talk to an adjacent NPC, or enter a house door.
     this.hotkeys.E.on("down", () => {
       if (!this.localPlayer) return;
+      if (this.ui?.isDialogueOpen) {
+        this.ui.advanceDialogue();
+        return;
+      }
+      const npc = this.adjacentNpc();
+      if (npc) {
+        // Merchant short-circuits dialogue: opens the shop overlay directly.
+        if (npc.def.shopId) {
+          this.scene.launch("ShopScene", { from: "WorldScene" });
+          return;
+        }
+        this.ui?.openDialogue(npc.def.name, npc.def.dialogue);
+        // Server handles one-shot enforcement, validates adjacency, and
+        // emits wallet:update if a reward is due.
+        gameSocket.npcInteract(npc.def.id);
+        return;
+      }
       const { cx, cy } = this.localPlayer;
       if (this.doorTiles.has(`${cx},${cy}`)) this.enterHouse(cx, cy);
     });
   }
 
+  private adjacentNpc(): Npc | undefined {
+    if (!this.localPlayer) return undefined;
+    const { cx, cy } = this.localPlayer;
+    for (const npc of this.npcs) {
+      const dx = Math.abs(npc.def.cx - cx);
+      const dy = Math.abs(npc.def.cy - cy);
+      // 4-connected adjacency, including standing on the same tile.
+      if (dx + dy <= 1) return npc;
+    }
+    return undefined;
+  }
+
   private rebuildDoorIndicators() {
     this.clearDoorIndicators();
     if (!this.mapDef) return;
+    // Inside the shared house, exit is automatic on stepping through the
+    // doorway — no "E" prompt needed.
+    if (this.world.kind === "house") return;
     for (const d of this.mapDef.doors) {
       const { x, y } = cartToIso(d.cx, d.cy);
       const label = this.add
@@ -263,6 +268,60 @@ export class WorldScene extends Phaser.Scene {
       ind.label.destroy();
     }
     this.doorIndicators.length = 0;
+  }
+
+  private rebuildNpcs() {
+    this.clearNpcs();
+    if (!this.mapDef) return;
+    for (const def of this.mapDef.npcs) {
+      const npc = new Npc(this, def);
+      this.npcs.push(npc);
+      const { x, y } = cartToIso(def.cx, def.cy);
+      const label = this.add
+        .text(x + TILE_W / 2, y - TILE_H, "E", {
+          fontFamily: '"Press Start 2P"',
+          fontSize: "8px",
+          color: "#ffff66",
+          stroke: "#000000",
+          strokeThickness: 3,
+        })
+        .setOrigin(0.5, 1)
+        .setDepth(9999)
+        .setVisible(false);
+      const bobTween = this.tweens.add({
+        targets: label,
+        y: y - TILE_H - 4,
+        duration: 450,
+        ease: "Sine.easeInOut",
+        yoyo: true,
+        repeat: -1,
+      });
+      this.npcIndicators.push({ cx: def.cx, cy: def.cy, label, bobTween });
+    }
+  }
+
+  private clearNpcs() {
+    for (const ind of this.npcIndicators) {
+      ind.bobTween.stop();
+      ind.label.destroy();
+    }
+    this.npcIndicators.length = 0;
+    for (const n of this.npcs) n.destroy();
+    this.npcs.length = 0;
+  }
+
+  private refreshNpcPrompt() {
+    if (!this.localPlayer) return;
+    if (this.ui?.isDialogueOpen) {
+      for (const ind of this.npcIndicators) ind.label.setVisible(false);
+      return;
+    }
+    const { cx, cy } = this.localPlayer;
+    for (const ind of this.npcIndicators) {
+      const dx = Math.abs(ind.cx - cx);
+      const dy = Math.abs(ind.cy - cy);
+      ind.label.setVisible(dx + dy <= 1);
+    }
   }
 
   private refreshDoorPrompt() {
@@ -313,6 +372,8 @@ export class WorldScene extends Phaser.Scene {
     this.isoMap = new IsoMap(this, this.mapDef);
     this.isoMap.build();
     this.rebuildDoorIndicators();
+    this.rebuildNpcs();
+    this.ui?.closeDialogue();
 
     const cam = this.cameras.main;
     cam.stopFollow();
@@ -351,18 +412,18 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private refreshStatus() {
-    if (!this.statusText) return;
+    if (!this.ui) return;
     let label: string;
     if (this.world.kind === "openworld") {
       label = "Open World  [O] village  [I] invite";
     } else if (this.world.kind === "house") {
-      label = "Shared House  [E] on door to exit";
+      label = "Shared House  walk through the doorway to exit";
     } else if (this.world.ownerPlayerId === getOrCreatePlayerId()) {
       label = "Your Village  [O] open world";
     } else {
       label = "Visiting Village  [O] open world";
     }
-    this.statusText.setText(label);
+    this.ui.setStatus(label);
   }
 
   // ── Multiplayer ───────────────────────────────────────────────────
@@ -370,7 +431,9 @@ export class WorldScene extends Phaser.Scene {
   private connectMultiplayer() {
     gameSocket.connect();
 
-    gameSocket.on("init", ({ world }) => {
+    gameSocket.on("init", ({ world, pixels, dayCycle }) => {
+      this.ui?.setWallet(pixels, 0);
+      this.ui?.setDayCycle(dayCycle.tNow, dayCycle.dayLengthMs, dayCycle.serverNow);
       this.rebuildWorld(world);
       // If the main menu asked for a specific world, request it now that the
       // server knows who we are. Skip if it already matches.
@@ -383,6 +446,10 @@ export class WorldScene extends Phaser.Scene {
         world.world.ownerPlayerId === wanted.ownerPlayerId;
       const sameOpen = wanted.kind === "openworld" && world.world.kind === "openworld";
       if (!sameVillage && !sameOpen) gameSocket.enterWorld(wanted);
+    });
+
+    gameSocket.on("wallet:update", ({ pixels, delta }) => {
+      this.ui?.setWallet(pixels, delta);
     });
     gameSocket.on("world:state", (state) => this.rebuildWorld(state));
 
@@ -477,50 +544,11 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private flashStatus(msg: string) {
-    if (!this.statusText) return;
-    this.statusText.setText(msg);
+    this.ui?.setStatus(msg);
     this.time.delayedCall(1800, () => this.refreshStatus());
   }
 
   getLocalPlayer() {
     return this.localPlayer;
-  }
-}
-
-// 12×11 pixel heart shape. Two colours (rim + fill) sell the chunky retro
-// look without needing an actual sprite asset.
-const HEART_PIXELS: { x: number; y: number }[] = (() => {
-  const rows = [
-    "0110011",
-    "1111111",
-    "1111111",
-    "1111111",
-    "0111110",
-    "0011100",
-    "0001000",
-  ];
-  const pts: { x: number; y: number }[] = [];
-  for (let r = 0; r < rows.length; r++) {
-    for (let c = 0; c < rows[r].length; c++) {
-      if (rows[r][c] === "1") pts.push({ x: c, y: r });
-    }
-  }
-  return pts;
-})();
-
-function drawHeart(g: Phaser.GameObjects.Graphics, filled: boolean) {
-  const PX = 2;
-  // shadow
-  g.fillStyle(0x000000, 0.7);
-  for (const { x, y } of HEART_PIXELS) g.fillRect(x * PX + 1, y * PX + 1, PX, PX);
-  // body
-  g.fillStyle(filled ? 0xcc2222 : 0x3a1212, 1);
-  for (const { x, y } of HEART_PIXELS) g.fillRect(x * PX, y * PX, PX, PX);
-  // highlight (top-left two rows of pixels)
-  if (filled) {
-    g.fillStyle(0xff8888, 1);
-    for (const { x, y } of HEART_PIXELS) {
-      if (y < 2) g.fillRect(x * PX, y * PX, PX, 1);
-    }
   }
 }

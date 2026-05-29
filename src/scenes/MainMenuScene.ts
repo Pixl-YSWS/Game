@@ -1,7 +1,6 @@
 import Phaser from "phaser";
 import { makeMenuButton } from "../utils/MenuButton";
 import type { WorldRef } from "../types/network";
-import { getOrCreatePlayerId } from "../network/playerIdentity";
 
 export class MainMenuScene extends Phaser.Scene {
   constructor() {
@@ -56,8 +55,10 @@ export class MainMenuScene extends Phaser.Scene {
     let by = H / 2 - 20;
     const STEP = 50;
 
+    // PLAY continues from your last saved world; first-time players land
+    // in their own village (server default).
     makeMenuButton(this, cx, by, "PLAY", {
-      onClick: () => this.startWorld({ kind: "village", ownerPlayerId: getOrCreatePlayerId() }),
+      onClick: () => this.startWorld(undefined),
     });
     by += STEP;
 
@@ -80,7 +81,7 @@ export class MainMenuScene extends Phaser.Scene {
       .setOrigin(0.5, 1);
   }
 
-  private startWorld(world: WorldRef) {
+  private startWorld(world: WorldRef | undefined) {
     this.scene.start("WorldScene", { initialWorld: world });
   }
 }

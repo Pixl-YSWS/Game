@@ -1,4 +1,4 @@
-import type { MapDef } from "../types/map";
+import type { MapDef, NpcDef } from "../types/map";
 import { PRESETS } from "./presets";
 
 // Mulberry32 — fast, good-quality seeded PRNG
@@ -187,6 +187,8 @@ export function generateMap(seed: number): MapDef {
     }
   }
 
+  const npcs = placeVillagers(preset, ground, deco, rng);
+
   return {
     doors,
     key: `world_${seed}`,
@@ -200,5 +202,80 @@ export function generateMap(seed: number): MapDef {
     solidDeco: preset.solidDeco,
     flatDeco: preset.flatDeco,
     spawnPoint: preset.spawn,
+    npcs,
   };
+}
+
+// Placeholder villagers — placed deterministically per-seed on walkable
+// tiles near the spawn so they're easy to find and don't block the player.
+// Sprite indices reference rows of the tiles-battle character columns.
+const VILLAGER_TEMPLATES: Omit<NpcDef, "cx" | "cy">[] = [
+  {
+    id: "villager_quill",
+    name: "Quill",
+    sprite: 100, // tiles-battle row 5 col 10
+    dialogue: [
+      "Hi there! Welcome to the village.",
+      "Folks say the merchant down south is hiring for odd jobs.",
+      "Take these — first meeting deserves a tip.",
+    ],
+    reward: 5,
+  },
+  {
+    id: "villager_mara",
+    name: "Mara",
+    sprite: 118, // tiles-battle row 6 col 10
+    dialogue: [
+      "Watch your step around the houses.",
+      "Some doors lead to places you've never been.",
+    ],
+    reward: 3,
+  },
+  {
+    id: "merchant_oda",
+    name: "Oda",
+    sprite: 172, // tiles-battle row 9 col 10
+    dialogue: ["(Oda opens her shop.)"], // unused — shopId routes around dialogue
+    shopId: "village_shop",
+  },
+];
+
+function placeVillagers(
+  preset: { cols: number; rows: number; spawn: { cx: number; cy: number }; walkableGround: ReadonlySet<number>; solidDeco: ReadonlySet<number> },
+  ground: number[][],
+  deco: number[][],
+  rng: () => number,
+): NpcDef[] {
+  const occupied = new Set<string>();
+  const npcs: NpcDef[] = [];
+
+  const walkable = (c: number, r: number) => {
+    if (c < 0 || r < 0 || c >= preset.cols || r >= preset.rows) return false;
+    const g = ground[r]?.[c];
+    if (g === undefined || !preset.walkableGround.has(g)) return false;
+    const d = deco[r]?.[c];
+    if (d !== undefined && d >= 0 && preset.solidDeco.has(d)) return false;
+    return !occupied.has(`${c},${r}`);
+  };
+
+  for (const tpl of VILLAGER_TEMPLATES) {
+    // Spiral outward from spawn looking for a walkable tile a few steps
+    // away, picking from a small jitter window so different seeds place
+    // villagers in slightly different spots.
+    let placed = false;
+    for (let radius = 3; radius < 10 && !placed; radius++) {
+      const tries = 12;
+      for (let t = 0; t < tries; t++) {
+        const angle = rng() * Math.PI * 2;
+        const cx = Math.round(preset.spawn.cx + Math.cos(angle) * radius);
+        const cy = Math.round(preset.spawn.cy + Math.sin(angle) * radius);
+        if (!walkable(cx, cy)) continue;
+        occupied.add(`${cx},${cy}`);
+        npcs.push({ ...tpl, cx, cy });
+        placed = true;
+        break;
+      }
+    }
+  }
+  return npcs;
 }

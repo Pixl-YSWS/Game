@@ -86,4 +86,5 @@ export const TOWN_MAP: MapDef = {
   flatDeco: FLAT_DECO,
   spawnPoint: { cx: 20, cy: 17 },
   doors: [], // hand-authored map has no door triggers; generator adds them
+  npcs: [], // NPCs are seeded by the map generator, not hand-authored here
 };
