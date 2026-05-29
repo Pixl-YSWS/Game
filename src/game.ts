@@ -16,6 +16,8 @@ const config: Phaser.Types.Core.GameConfig = {
   pixelArt: true, // crisp pixel rendering — essential for pixel art
   antialias: false,
   roundPixels: true,
+  // DOM container lets us overlay a real <input> for the chat box.
+  dom: { createContainer: true },
   scene: [BootScene, MainMenuScene, WorldScene, InteriorScene, UIScene, ShopScene, PauseScene, SettingsScene],
   scale: {
     mode: Phaser.Scale.NONE,

@@ -232,7 +232,9 @@ function mapFor(world: WorldRef) {
   const key = worldKey(world);
   let m = mapCache.get(key);
   if (!m) {
-    m = world.kind === "house" ? makeHouseInterior() : generateMap(worldSeed(world));
+    m = world.kind === "house"
+      ? makeHouseInterior()
+      : generateMap(worldSeed(world), { houses: world.kind !== "openworld" });
     mapCache.set(key, m);
   }
   return m;
@@ -265,12 +267,18 @@ function markDirty(socketId: string) {
 }
 
 function persistPlayerState(state: ServerPlayerState) {
-  const now = Date.now();
-  const worldStr = serializeWorld(state.world);
-  // Position is keyed by world so the previous slot for OTHER worlds is
-  // preserved — visiting open world doesn't clobber the village position.
-  upsertPosition.run(state.playerId, worldStr, state.cx, state.cy, now);
-  updateSummary.run(worldStr, state.pixels, now, state.playerId);
+  try {
+    const now = Date.now();
+    const worldStr = serializeWorld(state.world);
+    // Position is keyed by world so the previous slot for OTHER worlds is
+    // preserved — visiting open world doesn't clobber the village position.
+    upsertPosition.run(state.playerId, worldStr, state.cx, state.cy, now);
+    updateSummary.run(worldStr, state.pixels, now, state.playerId);
+  } catch (e) {
+    // Don't let a persistence hiccup kill a world switch — the player can
+    // keep playing; we just lose this snapshot.
+    console.error("[persist] failed for", state.playerId.slice(0, 8) + "…", e);
+  }
 }
 
 setInterval(() => {
@@ -281,6 +289,12 @@ setInterval(() => {
   }
   dirty.clear();
 }, FLUSH_INTERVAL_MS);
+
+// Per-socket timestamps of the last chat line / emote, for rate limiting.
+const chatLast = new Map<string, number>();
+const emoteLast = new Map<string, number>();
+// Emotes the server will relay. Keep in sync with the client emote bar.
+const ALLOWED_EMOTES = new Set(["wave", "laugh", "heart", "cry", "angry", "dance"]);
 
 // invites[recipientSocketId] = Map<inviterSocketId, expiresAt>
 // One-shot tickets: accepting consumes it; declines/disconnect/expiry clear it.
@@ -338,7 +352,14 @@ function switchWorld(socket: import("socket.io").Socket<ClientToServerEvents, Se
   socket.to(oldRoom).emit("player:leave", socket.id);
 
   state.world = next;
-  const remembered = getRememberedPosition(state.playerId, next);
+  // The shared house is a small transient room whose only exit is the door
+  // tile. Restoring a remembered position there would spawn the player ON the
+  // door (that's where they stood to leave), and the door-step exit only fires
+  // on a tile *change* onto the door — so they'd be unable to get back out.
+  // Always spawn at the house's spawnPoint (just above the door) instead.
+  const remembered = next.kind === "house"
+    ? null
+    : getRememberedPosition(state.playerId, next);
   if (remembered && isWalkable(next, remembered.cx, remembered.cy)) {
     state.cx = remembered.cx;
     state.cy = remembered.cy;
@@ -382,8 +403,15 @@ io.on("connection", (socket) => {
     isWalkable(saved.position.world, saved.position.cx, saved.position.cy)
   ) {
     world = saved.position.world;
-    cx = saved.position.cx;
-    cy = saved.position.cy;
+    if (world.kind === "house") {
+      // Same reasoning as switchWorld: never restore onto the house door tile.
+      const map = mapFor(world);
+      cx = map.spawnPoint.cx;
+      cy = map.spawnPoint.cy;
+    } else {
+      cx = saved.position.cx;
+      cy = saved.position.cy;
+    }
   } else {
     world = { kind: "village", ownerPlayerId: playerId };
     const map = mapFor(world);
@@ -559,12 +587,47 @@ io.on("connection", (socket) => {
     socket.emit("shop:result", { itemId, success: true });
   });
 
+  socket.on("chat:send", ({ text }) => {
+    const player = players.get(socket.id);
+    if (!player) return;
+    if (typeof text !== "string") return;
+    // Trim, collapse control chars, and cap length so one client can't spam
+    // huge payloads to everyone in the room.
+    const clean = text.replace(/[\x00-\x1f]/g, " ").trim().slice(0, 160);
+    if (!clean) return;
+    // Simple rate limit: max ~3 messages/sec per socket.
+    const now = Date.now();
+    const last = chatLast.get(socket.id) ?? 0;
+    if (now - last < 300) return;
+    chatLast.set(socket.id, now);
+    io.to(worldKey(player.world)).emit("chat:message", {
+      id: socket.id,
+      name: player.name,
+      text: clean,
+    });
+  });
+
+  socket.on("emote:send", ({ emote }) => {
+    const player = players.get(socket.id);
+    if (!player) return;
+    if (!ALLOWED_EMOTES.has(emote)) return;
+    const now = Date.now();
+    const last = emoteLast.get(socket.id) ?? 0;
+    if (now - last < 500) return;
+    emoteLast.set(socket.id, now);
+    // Broadcast to the whole room *including* the sender so everyone (and the
+    // sender) sees the emote bubble pop above the right avatar.
+    io.to(worldKey(player.world)).emit("player:emote", { id: socket.id, emote });
+  });
+
   socket.on("disconnect", () => {
     const player = players.get(socket.id);
     if (player) persistPlayerState(player);
     dirty.delete(socket.id);
     players.delete(socket.id);
     invites.delete(socket.id);
+    chatLast.delete(socket.id);
+    emoteLast.delete(socket.id);
     // Cancel any invites this socket sent out.
     for (const [toId, bucket] of invites) {
       if (bucket.delete(socket.id)) {

@@ -1,5 +1,7 @@
 import Phaser from "phaser";
 import { makeMenuButton } from "../utils/MenuButton";
+import { FONT } from "../ui/theme";
+import { panel } from "../ui/UIKit";
 import { gameSocket } from "../network/socket";
 
 interface PauseInit {
@@ -25,18 +27,21 @@ export class PauseScene extends Phaser.Scene {
     overlay.fillStyle(0x000000, 0.7);
     overlay.fillRect(0, 0, W, H);
 
+    // Menu panel.
+    panel(this, W / 2, H / 2 - 6, 360, 320, "ui-panel-dark");
+
     this.add
       .text(W / 2, H / 2 - 130, "PAUSED", {
-        fontFamily: '"Press Start 2P"',
-        fontSize: "32px",
+        fontFamily: FONT,
+        fontSize: "30px",
         color: "#f0a500",
       })
       .setOrigin(0.5)
       .setShadow(3, 3, "#000000", 0, true, true);
 
     const cx = W / 2;
-    let by = H / 2 - 40;
-    const STEP = 50;
+    let by = H / 2 - 50;
+    const STEP = 66;
 
     makeMenuButton(this, cx, by, "RESUME", {
       onClick: () => this.resume(),
@@ -54,8 +59,8 @@ export class PauseScene extends Phaser.Scene {
 
     this.add
       .text(W / 2, H - 16, "press ESC to resume", {
-        fontFamily: '"Press Start 2P"',
-        fontSize: "7px",
+        fontFamily: FONT,
+        fontSize: "10px",
         color: "#888899",
       })
       .setOrigin(0.5, 1);

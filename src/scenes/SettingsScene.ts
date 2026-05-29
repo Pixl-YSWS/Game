@@ -1,5 +1,7 @@
 import Phaser from "phaser";
 import { makeMenuButton, type MenuButton } from "../utils/MenuButton";
+import { FONT } from "../ui/theme";
+import { panel } from "../ui/UIKit";
 import { loadSettings, saveSettings, ZOOM_OPTIONS } from "../data/Settings";
 
 interface SettingsInit {
@@ -41,27 +43,22 @@ export class SettingsScene extends Phaser.Scene {
       .setInteractive();
 
     // Panel.
-    const panelW = 360;
-    const panelH = 280;
-    const px = (W - panelW) / 2;
+    const panelW = 380;
+    const panelH = 300;
     const py = (H - panelH) / 2;
-    const panel = this.add.graphics();
-    panel.fillStyle(0x161624, 1);
-    panel.fillRect(px, py, panelW, panelH);
-    panel.lineStyle(2, 0xf0a500, 1);
-    panel.strokeRect(px, py, panelW, panelH);
+    panel(this, W / 2, H / 2, panelW, panelH, "ui-panel-dark");
 
     this.add
-      .text(W / 2, py + 26, "SETTINGS", {
-        fontFamily: '"Press Start 2P"',
-        fontSize: "16px",
+      .text(W / 2, py + 34, "SETTINGS", {
+        fontFamily: FONT,
+        fontSize: "20px",
         color: "#f0a500",
       })
       .setOrigin(0.5);
 
     const cx = W / 2;
-    let by = py + 80;
-    const STEP = 50;
+    let by = py + 96;
+    const STEP = 66;
 
     this.zoomBtn = makeMenuButton(this, cx, by, this.zoomLabel(), {
       onClick: () => this.cycleZoom(),

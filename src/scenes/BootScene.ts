@@ -1,4 +1,8 @@
 import Phaser from "phaser";
+import { FONT } from "../ui/theme";
+
+const UI = "assets/kenney_ui-pack/PNG";
+const SND = "assets/kenney_ui-pack/Sounds";
 
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -18,8 +22,8 @@ export class BootScene extends Phaser.Scene {
 
     const label = this.add
       .text(W / 2, H / 2 - 36, "LOADING...", {
-        fontFamily: '"Press Start 2P"',
-        fontSize: "8px",
+        fontFamily: FONT,
+        fontSize: "12px",
         color: "#f0a500",
       })
       .setOrigin(0.5, 1);
@@ -49,10 +53,32 @@ export class BootScene extends Phaser.Scene {
       "assets/kenney_tiny-battle/Tilemap/tilemap_packed.png",
     );
 
-    // ── Player spritesheet ─────────────────────────────────────────
-    // Replace with real asset when ready:
-    //   public/assets/player.png — 16×16 frames, 4 frames walk cycle per direction
-    // For now we use a coloured rectangle in Player.ts as placeholder.
+    // ── Player avatars — Kenney pixel-platformer characters ────────
+    // 9 cols × 3 rows of 24×24 tiles with 1px spacing. The top row holds the
+    // colourful humanoid characters we map players onto.
+    this.load.spritesheet(
+      "chars",
+      "assets/kenney_pixel-platformer/Tilemap/tilemap-characters.png",
+      { frameWidth: 24, frameHeight: 24, spacing: 1 },
+    );
+
+    // ── Kenney UI pack — nine-sliceable panels, buttons, controls ──
+    this.load.image("ui-panel", `${UI}/Grey/Default/button_square_flat.png`);
+    this.load.image("ui-panel-dark", `${UI}/Grey/Default/button_square_depth_flat.png`);
+    this.load.image("ui-btn", `${UI}/Blue/Default/button_rectangle_depth_gloss.png`);
+    this.load.image("ui-btn-down", `${UI}/Blue/Default/button_rectangle_flat.png`);
+    this.load.image("ui-btn-grey", `${UI}/Grey/Default/button_rectangle_depth_gloss.png`);
+    this.load.image("ui-btn-grey-down", `${UI}/Grey/Default/button_rectangle_flat.png`);
+    this.load.image("ui-check-off", `${UI}/Grey/Default/check_square_grey.png`);
+    this.load.image("ui-check-on", `${UI}/Blue/Default/check_square_color_checkmark.png`);
+    this.load.image("ui-slide-track", `${UI}/Grey/Default/slide_horizontal_grey.png`);
+    this.load.image("ui-slide-fill", `${UI}/Blue/Default/slide_horizontal_color.png`);
+    this.load.image("ui-slide-handle", `${UI}/Grey/Default/slide_hangle.png`);
+
+    // ── UI sounds ──────────────────────────────────────────────────
+    this.load.audio("sfx-click", `${SND}/click-a.ogg`);
+    this.load.audio("sfx-tap", `${SND}/tap-a.ogg`);
+    this.load.audio("sfx-switch", `${SND}/switch-a.ogg`);
   }
 
   create() {

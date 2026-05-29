@@ -1,4 +1,6 @@
 import Phaser from "phaser";
+import { FONT, FONT_NARROW } from "./theme";
+import { panel } from "./UIKit";
 
 interface DialogueState {
   speaker: string;
@@ -12,7 +14,7 @@ interface DialogueState {
 // way that pushes a 1280×720-positioned panel off-screen.
 export class DialogueBox {
   private state?: DialogueState;
-  private bg: Phaser.GameObjects.Graphics;
+  private bg: Phaser.GameObjects.NineSlice;
   private speakerText: Phaser.GameObjects.Text;
   private bodyText: Phaser.GameObjects.Text;
   private hintText: Phaser.GameObjects.Text;
@@ -26,17 +28,15 @@ export class DialogueBox {
     const x = (screenW - this.W) / 2;
     const y = screenH - this.H - 16;
 
-    this.bg = scene.add.graphics();
-    this.bg.fillStyle(0x000000, 0.82);
-    this.bg.fillRect(x, y, this.W, this.H);
-    this.bg.lineStyle(2, 0xf0a500, 1);
-    this.bg.strokeRect(x, y, this.W, this.H);
-    this.bg.setScrollFactor(0).setDepth(10000).setVisible(false);
+    this.bg = panel(scene, x + this.W / 2, y + this.H / 2, this.W, this.H, "ui-panel-dark")
+      .setScrollFactor(0)
+      .setDepth(10000)
+      .setVisible(false);
 
     this.speakerText = scene.add
-      .text(x + 14, y + 10, "", {
-        fontFamily: '"Press Start 2P"',
-        fontSize: "12px",
+      .text(x + 22, y + 16, "", {
+        fontFamily: FONT,
+        fontSize: "14px",
         color: "#ffd24a",
       })
       .setScrollFactor(0)
@@ -44,11 +44,11 @@ export class DialogueBox {
       .setVisible(false);
 
     this.bodyText = scene.add
-      .text(x + 14, y + 40, "", {
-        fontFamily: '"Press Start 2P"',
-        fontSize: "10px",
+      .text(x + 22, y + 46, "", {
+        fontFamily: FONT_NARROW,
+        fontSize: "15px",
         color: "#ffffff",
-        wordWrap: { width: this.W - 28 },
+        wordWrap: { width: this.W - 44 },
         lineSpacing: 6,
       })
       .setScrollFactor(0)
@@ -56,9 +56,9 @@ export class DialogueBox {
       .setVisible(false);
 
     this.hintText = scene.add
-      .text(x + this.W - 14, y + this.H - 10, "[E] next", {
-        fontFamily: '"Press Start 2P"',
-        fontSize: "8px",
+      .text(x + this.W - 18, y + this.H - 12, "[E] next", {
+        fontFamily: FONT,
+        fontSize: "10px",
         color: "#888899",
       })
       .setOrigin(1, 1)

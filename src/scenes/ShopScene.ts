@@ -1,5 +1,7 @@
 import Phaser from "phaser";
 import { makeMenuButton, type MenuButton } from "../utils/MenuButton";
+import { FONT } from "../ui/theme";
+import { panel } from "../ui/UIKit";
 import { SHOP_CATALOG, type ShopItem } from "../shop/catalog";
 import { gameSocket } from "../network/socket";
 import { UIScene } from "./UIScene";
@@ -53,16 +55,12 @@ export class ShopScene extends Phaser.Scene {
     const panelH = 460;
     const px = (W - panelW) / 2;
     const py = (H - panelH) / 2;
-    const panel = this.add.graphics();
-    panel.fillStyle(0x161624, 1);
-    panel.fillRect(px, py, panelW, panelH);
-    panel.lineStyle(2, 0xf0a500, 1);
-    panel.strokeRect(px, py, panelW, panelH);
+    panel(this, W / 2, H / 2, panelW, panelH, "ui-panel-dark");
 
     this.add
-      .text(W / 2, py + 24, "SHOP", {
-        fontFamily: '"Press Start 2P"',
-        fontSize: "16px",
+      .text(W / 2, py + 30, "SHOP", {
+        fontFamily: FONT,
+        fontSize: "22px",
         color: "#f0a500",
       })
       .setOrigin(0.5);
@@ -73,36 +71,36 @@ export class ShopScene extends Phaser.Scene {
     this.currentPixels = ui?.walletTotal ?? 0;
 
     this.pixelsText = this.add
-      .text(W / 2, py + 50, `Wallet:  ${this.currentPixels}p`, {
-        fontFamily: '"Press Start 2P"',
-        fontSize: "10px",
+      .text(W / 2, py + 58, `Wallet:  ${this.currentPixels}p`, {
+        fontFamily: FONT,
+        fontSize: "13px",
         color: "#ffd24a",
       })
       .setOrigin(0.5);
 
     // One row per catalog item.
-    const rowH = 48;
-    let rowY = py + 90;
+    const rowH = 52;
+    let rowY = py + 96;
     for (const item of SHOP_CATALOG) {
       const label = this.add.text(
-        px + 18,
-        rowY + 4,
+        px + 32,
+        rowY + 6,
         `${item.name}\n${item.blurb ?? ""}`,
         {
-          fontFamily: '"Press Start 2P"',
-          fontSize: "9px",
+          fontFamily: FONT,
+          fontSize: "11px",
           color: "#ffffff",
-          lineSpacing: 4,
+          lineSpacing: 5,
         },
       );
       const btn = makeMenuButton(
         this,
-        px + panelW - 90,
+        px + panelW - 100,
         rowY + 18,
-        `${item.price}p BUY`,
+        `${item.price}p  BUY`,
         {
-          width: 140,
-          height: 32,
+          width: 150,
+          height: 44,
           onClick: () => gameSocket.shopBuy(item.id),
         },
       );
@@ -110,14 +108,15 @@ export class ShopScene extends Phaser.Scene {
       rowY += rowH + 8;
     }
 
-    makeMenuButton(this, W / 2, py + panelH - 32, "CLOSE", {
+    makeMenuButton(this, W / 2, py + panelH - 40, "CLOSE", {
+      variant: "grey",
       onClick: () => this.scene.stop(),
     });
 
     this.toast = this.add
-      .text(W / 2, py + panelH - 76, "", {
-        fontFamily: '"Press Start 2P"',
-        fontSize: "8px",
+      .text(W / 2, py + panelH - 84, "", {
+        fontFamily: FONT,
+        fontSize: "11px",
         color: "#ff7777",
       })
       .setOrigin(0.5);

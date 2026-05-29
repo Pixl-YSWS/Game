@@ -11,12 +11,15 @@ import { TILE_H, TILE_W, cartToIso } from "../utils/IsoUtils";
 import { getOrCreatePlayerId } from "../network/playerIdentity";
 import { loadSettings } from "../data/Settings";
 import { UIScene } from "./UIScene";
+import { CURSORS, FONT } from "../ui/theme";
+import { emoteGlyph } from "../ui/emotes";
 
 export class WorldScene extends Phaser.Scene {
   private isoMap?: IsoMap;
   private localPlayer?: Player;
   private mapDef?: MapDef;
   private loadingText?: Phaser.GameObjects.Text;
+  private connErrorText?: Phaser.GameObjects.Text;
   private remotePlayers = new Map<string, Player>();
   private lastSentCx = -1;
   private lastSentCy = -1;
@@ -51,6 +54,8 @@ export class WorldScene extends Phaser.Scene {
     label: Phaser.GameObjects.Text;
     bobTween: Phaser.Tweens.Tween;
   }[] = [];
+  // Transparent click targets over each door tile (mouse + hand cursor).
+  private doorZones: Phaser.GameObjects.Zone[] = [];
 
   private npcs: Npc[] = [];
   // Same shape as door indicators, but anchored above each NPC and shown
@@ -104,8 +109,8 @@ export class WorldScene extends Phaser.Scene {
     });
 
     this.loadingText = this.add
-      .text(this.scale.width / 2, this.scale.height / 2, "Loading village...", {
-        fontFamily: '"Press Start 2P"',
+      .text(this.scale.width / 2, this.scale.height / 2, "Connecting to server...", {
+        fontFamily: FONT,
         fontSize: "12px",
         color: "#ffffff",
       })
@@ -127,9 +132,20 @@ export class WorldScene extends Phaser.Scene {
       this.openPause();
     });
 
+    // Enter / T open the chat input. While it's open the DOM input swallows
+    // keystrokes (see ChatBox), so these only fire when chat is closed.
+    const openChat = () => {
+      if (this.ui && !this.ui.isChatOpen && !this.ui.isDialogueOpen) {
+        this.ui.openChat();
+      }
+    };
+    this.input.keyboard!.on("keydown-ENTER", openChat);
+    this.input.keyboard!.on("keydown-T", openChat);
+
     this.events.once("shutdown", () => {
       this.clearDoorIndicators();
       this.clearNpcs();
+      this.clearConnError();
       this.ui?.closeDialogue();
       this.scene.stop("UIScene");
       this.ui = undefined;
@@ -143,12 +159,40 @@ export class WorldScene extends Phaser.Scene {
     this.scene.launch("PauseScene", { pausedSceneKey: "WorldScene" });
   }
 
+  // Centre-screen overlay shown when the connection drops or never lands, so
+  // a dead server gives the player a clear message instead of a silent hang.
+  private showConnError(message: string) {
+    this.loadingText?.destroy();
+    this.loadingText = undefined;
+    if (!this.connErrorText) {
+      this.connErrorText = this.add
+        .text(this.scale.width / 2, this.scale.height / 2, "", {
+          fontFamily: FONT,
+          fontSize: "12px",
+          color: "#ff6666",
+          align: "center",
+          lineSpacing: 8,
+          stroke: "#000000",
+          strokeThickness: 4,
+        })
+        .setOrigin(0.5)
+        .setScrollFactor(0)
+        .setDepth(100000);
+    }
+    this.connErrorText.setText(message);
+  }
+
+  private clearConnError() {
+    this.connErrorText?.destroy();
+    this.connErrorText = undefined;
+  }
+
   update(_time: number, delta: number) {
     if (!this.localPlayer) return;
 
-    // Movement is locked while a dialogue line is on screen — feeds inputs
-    // into a no-op so any held key gets cleared rather than queued.
-    if (!this.ui?.isDialogueOpen) {
+    // Movement is locked while a dialogue line or the chat input is open —
+    // feeds inputs into a no-op so any held key gets cleared rather than queued.
+    if (!this.ui?.isDialogueOpen && !this.ui?.isChatOpen) {
       this.localPlayer.handleInput(this.cursors, this.wasd, delta);
     }
 
@@ -203,20 +247,37 @@ export class WorldScene extends Phaser.Scene {
       }
       const npc = this.adjacentNpc();
       if (npc) {
-        // Merchant short-circuits dialogue: opens the shop overlay directly.
-        if (npc.def.shopId) {
-          this.scene.launch("ShopScene", { from: "WorldScene" });
-          return;
-        }
-        this.ui?.openDialogue(npc.def.name, npc.def.dialogue);
-        // Server handles one-shot enforcement, validates adjacency, and
-        // emits wallet:update if a reward is due.
-        gameSocket.npcInteract(npc.def.id);
+        this.interactWithNpc(npc);
         return;
       }
       const { cx, cy } = this.localPlayer;
       if (this.doorTiles.has(`${cx},${cy}`)) this.enterHouse(cx, cy);
     });
+  }
+
+  // Shared by the E key and clicking an NPC. Opens the shop for merchants,
+  // otherwise a dialogue (server validates adjacency + grants any reward).
+  private interactWithNpc(npc: Npc) {
+    if (npc.def.shopId) {
+      this.scene.launch("ShopScene", { from: "WorldScene" });
+      return;
+    }
+    this.ui?.openDialogue(npc.def.name, npc.def.dialogue);
+    gameSocket.npcInteract(npc.def.id);
+  }
+
+  // Click handler wired up on each NPC. Talking requires adjacency, matching
+  // the E-key behaviour and the server-side reward check.
+  private onNpcClick(npc: Npc) {
+    if (!this.localPlayer) return;
+    if (this.ui?.isChatOpen || this.ui?.isDialogueOpen) return;
+    const dx = Math.abs(npc.def.cx - this.localPlayer.cx);
+    const dy = Math.abs(npc.def.cy - this.localPlayer.cy);
+    if (dx + dy > 1) {
+      this.flashStatus("Walk closer to talk");
+      return;
+    }
+    this.interactWithNpc(npc);
   }
 
   private adjacentNpc(): Npc | undefined {
@@ -234,6 +295,18 @@ export class WorldScene extends Phaser.Scene {
   private rebuildDoorIndicators() {
     this.clearDoorIndicators();
     if (!this.mapDef) return;
+
+    // Clickable zone on every door tile (enter from outside, exit the house),
+    // so the door works with the mouse + hand cursor as well as the E key.
+    for (const d of this.mapDef.doors) {
+      const { x, y } = cartToIso(d.cx, d.cy);
+      const zone = this.add
+        .zone(x + TILE_W / 2, y + TILE_H / 2, TILE_W, TILE_H)
+        .setInteractive({ cursor: CURSORS.pointer });
+      zone.on("pointerdown", () => this.onDoorClick(d.cx, d.cy));
+      this.doorZones.push(zone);
+    }
+
     // Inside the shared house, exit is automatic on stepping through the
     // doorway — no "E" prompt needed.
     if (this.world.kind === "house") return;
@@ -241,7 +314,7 @@ export class WorldScene extends Phaser.Scene {
       const { x, y } = cartToIso(d.cx, d.cy);
       const label = this.add
         .text(x + TILE_W / 2, y - 4, "E", {
-          fontFamily: '"Press Start 2P"',
+          fontFamily: FONT,
           fontSize: "8px",
           color: "#ffff66",
           stroke: "#000000",
@@ -268,6 +341,22 @@ export class WorldScene extends Phaser.Scene {
       ind.label.destroy();
     }
     this.doorIndicators.length = 0;
+    for (const z of this.doorZones) z.destroy();
+    this.doorZones.length = 0;
+  }
+
+  // Click handler for door zones. Requires the player to be on/next to the
+  // door, then runs the same enter/exit logic as the E key.
+  private onDoorClick(cx: number, cy: number) {
+    if (!this.localPlayer) return;
+    if (this.ui?.isChatOpen || this.ui?.isDialogueOpen) return;
+    const dx = Math.abs(cx - this.localPlayer.cx);
+    const dy = Math.abs(cy - this.localPlayer.cy);
+    if (dx + dy > 1) {
+      this.flashStatus("Walk to the door first");
+      return;
+    }
+    this.enterHouse(cx, cy);
   }
 
   private rebuildNpcs() {
@@ -275,11 +364,12 @@ export class WorldScene extends Phaser.Scene {
     if (!this.mapDef) return;
     for (const def of this.mapDef.npcs) {
       const npc = new Npc(this, def);
+      npc.on("pointerdown", () => this.onNpcClick(npc));
       this.npcs.push(npc);
       const { x, y } = cartToIso(def.cx, def.cy);
       const label = this.add
         .text(x + TILE_W / 2, y - TILE_H, "E", {
-          fontFamily: '"Press Start 2P"',
+          fontFamily: FONT,
           fontSize: "8px",
           color: "#ffff66",
           stroke: "#000000",
@@ -368,7 +458,10 @@ export class WorldScene extends Phaser.Scene {
     this.remotePlayers.clear();
     this.clearDoorIndicators();
 
-    this.mapDef = state.world.kind === "house" ? makeHouseInterior() : generateMap(state.seed);
+    this.mapDef =
+      state.world.kind === "house"
+        ? makeHouseInterior()
+        : generateMap(state.seed, { houses: state.world.kind !== "openworld" });
     this.isoMap = new IsoMap(this, this.mapDef);
     this.isoMap.build();
     this.rebuildDoorIndicators();
@@ -431,6 +524,26 @@ export class WorldScene extends Phaser.Scene {
   private connectMultiplayer() {
     gameSocket.connect();
 
+    gameSocket.onStatus((status, detail) => {
+      switch (status) {
+        case "connected":
+          this.clearConnError();
+          break;
+        case "offline":
+          // Retries exhausted — the server is almost certainly not running.
+          this.showConnError(
+            "Can't reach the game server.\n\nStart it with:\nbun run server/index.ts\n\nthen reload this page.",
+          );
+          break;
+        case "disconnected":
+          // Lost an established connection; socket.io is auto-retrying.
+          this.showConnError(
+            `Disconnected from server${detail ? ` (${detail})` : ""}.\nReconnecting…`,
+          );
+          break;
+      }
+    });
+
     gameSocket.on("init", ({ world, pixels, dayCycle }) => {
       this.ui?.setWallet(pixels, 0);
       this.ui?.setDayCycle(dayCycle.tNow, dayCycle.dayLengthMs, dayCycle.serverNow);
@@ -481,6 +594,21 @@ export class WorldScene extends Phaser.Scene {
     gameSocket.on("invite:error", ({ reason }) => {
       this.flashStatus(`Invite error: ${reason}`);
     });
+
+    gameSocket.on("chat:message", (msg) => {
+      this.ui?.addChatMessage(msg);
+      this.playerBySocketId(msg.id)?.showBubble(msg.text, "chat");
+    });
+
+    gameSocket.on("player:emote", ({ id, emote }) => {
+      this.playerBySocketId(id)?.showBubble(emoteGlyph(emote), "emote");
+    });
+  }
+
+  // Resolve a socket id to its on-screen avatar (local player or a remote).
+  private playerBySocketId(id: string): Player | undefined {
+    if (id === gameSocket.id) return this.localPlayer;
+    return this.remotePlayers.get(id);
   }
 
   private spawnRemote(state: PlayerState) {
@@ -488,6 +616,17 @@ export class WorldScene extends Phaser.Scene {
     if (this.remotePlayers.has(state.id)) return;
     if (!this.mapDef) return;
     const player = new Player(this, state, false, this.mapDef);
+    // Click a nearby player to wave at them.
+    player.makeClickable(CURSORS.pointer, () => {
+      if (!this.localPlayer) return;
+      const dx = Math.abs(player.cx - this.localPlayer.cx);
+      const dy = Math.abs(player.cy - this.localPlayer.cy);
+      if (dx + dy > 4) {
+        this.flashStatus("Too far away to wave");
+        return;
+      }
+      gameSocket.sendEmote("wave");
+    });
     this.remotePlayers.set(state.id, player);
   }
 
@@ -531,7 +670,7 @@ export class WorldScene extends Phaser.Scene {
         24,
         `${front.fromName} invites you to their village  [Y] accept  [N] decline`,
         {
-          fontFamily: '"Press Start 2P"',
+          fontFamily: FONT,
           fontSize: "8px",
           color: "#ffffff",
           backgroundColor: "#000000aa",

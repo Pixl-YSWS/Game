@@ -73,7 +73,8 @@ function clone(layer: number[][]): number[][] {
 // (roads, paths, scenery); this function decides what house goes in each
 // slot and where inside that slot it sits, giving every seed a different
 // arrangement while keeping the overall village layout coherent.
-export function generateMap(seed: number): MapDef {
+export function generateMap(seed: number, options: { houses?: boolean } = {}): MapDef {
+  const { houses = true } = options;
   const rng = seededRng(seed);
   const preset = PRESETS[ri(rng, PRESETS.length)];
 
@@ -85,7 +86,9 @@ export function generateMap(seed: number): MapDef {
   const used = new Set<number>();
   const placed: { baseX: number; baseY: number; w: number; h: number }[] = [];
   const doors: { cx: number; cy: number }[] = [];
-  for (const slot of preset.houseSlots) {
+  // The shared open world is left as clear terrain (no buildings); only the
+  // private/visited villages get houses stamped into their slots.
+  for (const slot of houses ? preset.houseSlots : []) {
     const fits: { tpl: number[][]; idx: number }[] = [];
     HOUSE_TEMPLATES.forEach((tpl, idx) => {
       if (tpl[0].length <= slot.width && tpl.length <= slot.height) {
@@ -208,12 +211,13 @@ export function generateMap(seed: number): MapDef {
 
 // Placeholder villagers — placed deterministically per-seed on walkable
 // tiles near the spawn so they're easy to find and don't block the player.
-// Sprite indices reference rows of the tiles-battle character columns.
+// `sprite` is an idle frame in the Kenney pixel-platformer "chars" sheet
+// (even frames are idle, odd are the walk frame). See Npc.ts.
 const VILLAGER_TEMPLATES: Omit<NpcDef, "cx" | "cy">[] = [
   {
     id: "villager_quill",
     name: "Quill",
-    sprite: 100, // tiles-battle row 5 col 10
+    sprite: 6,
     dialogue: [
       "Hi there! Welcome to the village.",
       "Folks say the merchant down south is hiring for odd jobs.",
@@ -224,7 +228,7 @@ const VILLAGER_TEMPLATES: Omit<NpcDef, "cx" | "cy">[] = [
   {
     id: "villager_mara",
     name: "Mara",
-    sprite: 118, // tiles-battle row 6 col 10
+    sprite: 8,
     dialogue: [
       "Watch your step around the houses.",
       "Some doors lead to places you've never been.",
@@ -234,7 +238,7 @@ const VILLAGER_TEMPLATES: Omit<NpcDef, "cx" | "cy">[] = [
   {
     id: "merchant_oda",
     name: "Oda",
-    sprite: 172, // tiles-battle row 9 col 10
+    sprite: 4,
     dialogue: ["(Oda opens her shop.)"], // unused — shopId routes around dialogue
     shopId: "village_shop",
   },

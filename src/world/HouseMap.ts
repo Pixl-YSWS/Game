@@ -58,7 +58,7 @@ export function makeHouseInterior(): MapDef {
         cx: ROOM_X + 1,
         cy: ROOM_Y + 2,
         name: "Innkeeper",
-        sprite: 154, // tiles-battle row 8 col 10 — green
+        sprite: 2, // chars sheet — idle frame
         dialogue: [
           "Welcome to the shared house.",
           "Other players you meet here are real — wave at them.",

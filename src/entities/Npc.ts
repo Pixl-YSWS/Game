@@ -1,25 +1,11 @@
 import Phaser from "phaser";
 import { cartToIso, TILE_W, TILE_H } from "../utils/IsoUtils";
 import type { NpcDef } from "../types/map";
+import { FONT, CURSORS } from "../ui/theme";
 
-const CHAR_SHEET = "tiles-battle";
-const CHAR_COLS = 18;
-
-function charFrame(scene: Phaser.Scene, idx: number): string {
-  const key = `${CHAR_SHEET}_f${idx}`;
-  const tex = scene.textures.get(CHAR_SHEET);
-  if (!tex.has(key)) {
-    tex.add(
-      key,
-      0,
-      (idx % CHAR_COLS) * 16,
-      Math.floor(idx / CHAR_COLS) * 16,
-      16,
-      16,
-    );
-  }
-  return key;
-}
+// NPCs share the Kenney pixel-platformer "chars" sheet with players; `sprite`
+// is a frame index into it (24×24, 1px spacing).
+const CHAR_SHEET = "chars";
 
 export class Npc extends Phaser.GameObjects.Container {
   public readonly def: NpcDef;
@@ -38,21 +24,32 @@ export class Npc extends Phaser.GameObjects.Container {
       0x000000,
       0.25,
     );
-    const sprite = scene.add.image(0, 0, CHAR_SHEET, charFrame(scene, def.sprite));
+    // Match the player avatar footprint: stand on the tile, feet-aligned.
+    const sprite = scene.add
+      .image(0, TILE_H / 2 + 2, CHAR_SHEET, def.sprite)
+      .setOrigin(0.5, 1);
     this.nameTag = scene.add
-      .text(0, -(TILE_H / 2) - 4, def.name, {
-        fontSize: "8px",
-        fontFamily: '"Press Start 2P"',
+      .text(0, -TILE_H - 2, def.name, {
+        fontSize: "9px",
+        fontFamily: FONT,
         color: "#ffd24a",
         stroke: "#000000",
         strokeThickness: 4,
       })
       .setOrigin(0.5, 1)
-      .setResolution(4)
-      .setScale(0.5);
+      .setResolution(4);
 
     this.add([shadow, sprite, this.nameTag]);
     scene.add.existing(this);
     this.setDepth(def.cy + 1.5);
+
+    // Clickable: hovering shows the hand cursor, clicking talks (handled by
+    // WorldScene via the "pointerdown" event).
+    this.setSize(TILE_W, TILE_H + 12);
+    this.setInteractive({
+      hitArea: new Phaser.Geom.Rectangle(-TILE_W / 2, -TILE_H, TILE_W, TILE_H + 12),
+      hitAreaCallback: Phaser.Geom.Rectangle.Contains,
+      cursor: CURSORS.pointer,
+    });
   }
 }

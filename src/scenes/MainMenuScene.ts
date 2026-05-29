@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { makeMenuButton } from "../utils/MenuButton";
+import { FONT } from "../ui/theme";
 import type { WorldRef } from "../types/network";
 
 export class MainMenuScene extends Phaser.Scene {
@@ -26,7 +27,7 @@ export class MainMenuScene extends Phaser.Scene {
     // Title.
     const title = this.add
       .text(W / 2, H / 2 - 140, "PIXLGAME", {
-        fontFamily: '"Press Start 2P"',
+        fontFamily: FONT,
         fontSize: "40px",
         color: "#f0a500",
       })
@@ -44,7 +45,7 @@ export class MainMenuScene extends Phaser.Scene {
 
     this.add
       .text(W / 2, H / 2 - 92, "a tiny multiplayer world", {
-        fontFamily: '"Press Start 2P"',
+        fontFamily: FONT,
         fontSize: "9px",
         color: "#888899",
       })
@@ -52,8 +53,8 @@ export class MainMenuScene extends Phaser.Scene {
 
     // Buttons.
     const cx = W / 2;
-    let by = H / 2 - 20;
-    const STEP = 50;
+    let by = H / 2 - 24;
+    const STEP = 66;
 
     // PLAY continues from your last saved world; first-time players land
     // in their own village (server default).
@@ -74,7 +75,7 @@ export class MainMenuScene extends Phaser.Scene {
     // Footer hint.
     this.add
       .text(W / 2, H - 16, "ESC pauses the game once you're in", {
-        fontFamily: '"Press Start 2P"',
+        fontFamily: FONT,
         fontSize: "7px",
         color: "#555566",
       })

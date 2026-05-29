@@ -1,11 +1,18 @@
 import Phaser from "phaser";
 import { DialogueBox } from "../ui/DialogueBox";
+import { ChatBox } from "../ui/ChatBox";
+import { FONT, COLORS, CURSORS } from "../ui/theme";
+import { panel, playUiSound } from "../ui/UIKit";
+import { EMOTES } from "../ui/emotes";
+import { gameSocket } from "../network/socket";
+import type { ChatMessage } from "../types/network";
 
 // Single UI scene running on top of WorldScene / InteriorScene. Its camera
 // is at zoom 1 with no scroll, so every UI element sits at fixed canvas
 // pixels regardless of the world camera's zoom.
 export class UIScene extends Phaser.Scene {
   private box?: DialogueBox;
+  private chat?: ChatBox;
   private statusText?: Phaser.GameObjects.Text;
   private coordText?: Phaser.GameObjects.Text;
   private pixelText?: Phaser.GameObjects.Text;
@@ -27,8 +34,6 @@ export class UIScene extends Phaser.Scene {
   }
 
   create() {
-    const baseX = 8;
-
     // Full-canvas overlay used to darken the world at night. Alpha is
     // recomputed each frame in update() from the day cycle anchor.
     this.nightOverlay = this.add
@@ -36,15 +41,17 @@ export class UIScene extends Phaser.Scene {
       .setOrigin(0)
       .setDepth(-10);
 
-    this.statusText = this.add.text(baseX, 8, "", {
-      fontFamily: '"Press Start 2P"',
-      fontSize: "8px",
-      color: "#ffffff",
-      stroke: "#000000",
-      strokeThickness: 3,
+    // ── HUD panel (top-left) ───────────────────────────────────────
+    panel(this, 12, 10, 230, 116, "ui-panel-dark").setOrigin(0, 0).setAlpha(0.95);
+    const baseX = 26;
+
+    this.statusText = this.add.text(baseX, 22, "", {
+      fontFamily: FONT,
+      fontSize: "10px",
+      color: COLORS.text,
     });
 
-    const heartsY = 24;
+    const heartsY = 44;
     for (let i = 0; i < this.hpMax; i++) {
       const g = this.add.graphics();
       g.x = baseX + i * 14;
@@ -54,30 +61,52 @@ export class UIScene extends Phaser.Scene {
     this.refreshHearts();
 
     this.coordText = this.add.text(baseX, heartsY + 22, "", {
-      fontFamily: '"Press Start 2P"',
-      fontSize: "8px",
-      color: "#ffffff",
-      stroke: "#000000",
-      strokeThickness: 3,
+      fontFamily: FONT,
+      fontSize: "10px",
+      color: COLORS.textDim,
     });
 
-    this.pixelText = this.add.text(baseX, heartsY + 36, "0p", {
-      fontFamily: '"Press Start 2P"',
-      fontSize: "8px",
-      color: "#ffd24a",
-      stroke: "#000000",
-      strokeThickness: 3,
+    this.pixelText = this.add.text(baseX, heartsY + 40, "0p", {
+      fontFamily: FONT,
+      fontSize: "11px",
+      color: COLORS.accent,
     });
 
-    this.timeText = this.add.text(baseX, heartsY + 50, "", {
-      fontFamily: '"Press Start 2P"',
-      fontSize: "8px",
+    this.timeText = this.add.text(baseX + 92, heartsY + 40, "", {
+      fontFamily: FONT,
+      fontSize: "10px",
       color: "#aabbff",
-      stroke: "#000000",
-      strokeThickness: 3,
     });
 
     this.box = new DialogueBox(this);
+    this.chat = new ChatBox(this);
+    this.buildEmoteBar();
+  }
+
+  // ── Emote bar (bottom-right) ──────────────────────────────────────
+  private buildEmoteBar() {
+    const n = EMOTES.length;
+    const cell = 40;
+    const w = n * cell + 16;
+    const h = cell + 16;
+    const x = this.scale.width - w - 12;
+    const y = this.scale.height - h - 12;
+    panel(this, x, y, w, h, "ui-panel-dark").setOrigin(0, 0).setAlpha(0.95);
+
+    EMOTES.forEach((e, i) => {
+      const cx = x + 8 + i * cell + cell / 2;
+      const cy = y + 8 + cell / 2;
+      const btn = this.add
+        .text(cx, cy, e.glyph, { fontSize: "22px", fontFamily: FONT })
+        .setOrigin(0.5)
+        .setInteractive({ cursor: CURSORS.pointer });
+      btn.on("pointerover", () => btn.setScale(1.2));
+      btn.on("pointerout", () => btn.setScale(1));
+      btn.on("pointerdown", () => {
+        gameSocket.sendEmote(e.key);
+        playUiSound(this, "sfx-tap", 0.3);
+      });
+    });
   }
 
   setDayCycle(tNow: number, dayLengthMs: number, _serverNow: number) {
@@ -163,6 +192,18 @@ export class UIScene extends Phaser.Scene {
   }
   closeDialogue() {
     this.box?.close();
+  }
+
+  // ── Chat passthrough ─────────────────────────────────────────────
+
+  get isChatOpen(): boolean {
+    return this.chat?.isOpen ?? false;
+  }
+  openChat() {
+    this.chat?.open();
+  }
+  addChatMessage(msg: ChatMessage) {
+    this.chat?.addMessage(msg);
   }
 
   // ── Internals ────────────────────────────────────────────────────

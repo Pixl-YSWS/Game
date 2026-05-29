@@ -4,10 +4,19 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>PixlGame</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=block" rel="stylesheet">
     <style>
+      /* ── Kenney UI fonts (bundled in public/assets) ─────────────── */
+      @font-face {
+        font-family: "Kenney Future";
+        src: url("/assets/kenney_ui-pack/Font/Kenney%20Future.ttf") format("truetype");
+        font-display: block;
+      }
+      @font-face {
+        font-family: "Kenney Future Narrow";
+        src: url("/assets/kenney_ui-pack/Font/Kenney%20Future%20Narrow.ttf") format("truetype");
+        font-display: block;
+      }
+
       * {
         margin: 0;
         padding: 0;
@@ -21,11 +30,14 @@
         width: 100vw;
         height: 100vh;
         overflow: hidden;
+        /* Default custom pixel cursor across the whole page. */
+        cursor: url("/assets/kenney_cursor-pixel-pack/Tiles/tile_0026.png") 1 1, auto;
       }
       #game-container canvas {
         display: block;
         image-rendering: pixelated; /* keep pixel art crisp */
         image-rendering: crisp-edges;
+        cursor: url("/assets/kenney_cursor-pixel-pack/Tiles/tile_0026.png") 1 1, auto;
       }
     </style>
   </head>

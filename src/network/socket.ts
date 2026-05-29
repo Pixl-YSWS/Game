@@ -11,9 +11,15 @@ export type { MovePayload };
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL ?? "http://localhost:3001";
 
+// Lifecycle of the underlying socket connection, surfaced to the UI so a
+// dead server shows a visible error instead of hanging on "Loading…".
+export type ConnectionStatus = "connected" | "disconnected" | "error" | "offline";
+type StatusHandler = (status: ConnectionStatus, detail?: string) => void;
+
 class GameSocket {
   private socket: Socket<ServerToClientEvents, ClientToServerEvents> | null = null;
   private handlers = new Map<string, Function[]>();
+  private statusHandlers: StatusHandler[] = [];
 
   connect() {
     if (this.socket?.connected) return;
@@ -27,15 +33,39 @@ class GameSocket {
 
     this.socket.on("connect", () => {
       console.log("[Socket] connected:", this.socket!.id);
+      this.emitStatus("connected");
     });
 
     this.socket.on("disconnect", (reason) => {
       console.warn("[Socket] disconnected:", reason);
+      this.emitStatus("disconnected", reason);
+    });
+
+    // Fires once per failed attempt (e.g. server is down / refusing).
+    this.socket.on("connect_error", (err) => {
+      console.warn("[Socket] connect_error:", err.message);
+      this.emitStatus("error", err.message);
+    });
+
+    // Fires after `reconnectionAttempts` failures — the server is unreachable.
+    this.socket.io.on("reconnect_failed", () => {
+      console.error("[Socket] reconnect failed — server unreachable");
+      this.emitStatus("offline");
     });
 
     this.socket.onAny((event: string, ...args: unknown[]) => {
       this.handlers.get(event)?.forEach((fn) => fn(...args));
     });
+  }
+
+  // Subscribe to connection lifecycle changes. Returns nothing; use
+  // clearHandlers() (called on scene shutdown) to remove all subscriptions.
+  onStatus(handler: StatusHandler) {
+    this.statusHandlers.push(handler);
+  }
+
+  private emitStatus(status: ConnectionStatus, detail?: string) {
+    this.statusHandlers.forEach((fn) => fn(status, detail));
   }
 
   on<K extends keyof ServerToClientEvents>(event: K, handler: ServerToClientEvents[K]) {
@@ -52,6 +82,7 @@ class GameSocket {
 
   clearHandlers() {
     this.handlers.clear();
+    this.statusHandlers.length = 0;
   }
 
   sendMove(cx: number, cy: number) {
@@ -68,6 +99,14 @@ class GameSocket {
 
   shopBuy(itemId: string) {
     this.socket?.emit("shop:buy", { itemId });
+  }
+
+  sendChat(text: string) {
+    this.socket?.emit("chat:send", { text });
+  }
+
+  sendEmote(emote: string) {
+    this.socket?.emit("emote:send", { emote });
   }
 
   sendInvite(toSocketId: string) {

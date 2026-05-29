@@ -52,6 +52,18 @@ export interface ServerToClientEvents {
   // Result of a shop:buy. success=false carries a reason code the client
   // can render ("not_enough_pixels", "unknown_item").
   "shop:result": (data: { itemId: string; success: boolean; reason?: string }) => void;
+  // A chat line from a player in the same world (echoed back to the sender too
+  // so everyone shares one ordered log).
+  "chat:message": (data: ChatMessage) => void;
+  // An emote (wave, etc.) triggered by a player in the same world.
+  "player:emote": (data: { id: string; emote: string }) => void;
+}
+
+// One line of world chat. `self` is filled in client-side, not sent.
+export interface ChatMessage {
+  id: string; // sender socket id
+  name: string;
+  text: string;
 }
 
 export interface ClientToServerEvents {
@@ -67,6 +79,10 @@ export interface ClientToServerEvents {
   // Buy one of an item from the shop. Server validates pixels and emits
   // wallet:update + shop:result.
   "shop:buy": (payload: { itemId: string }) => void;
+  // Send a chat line to everyone in the player's current world.
+  "chat:send": (payload: { text: string }) => void;
+  // Trigger an emote (e.g. "wave") broadcast to the player's current world.
+  "emote:send": (payload: { emote: string }) => void;
 }
 
 export type MovePayload = { cx: number; cy: number };
