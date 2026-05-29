@@ -278,9 +278,11 @@ const players = new Map<string, ServerPlayerState>();
 // account id -> the one socket id currently allowed to play it (single session).
 const liveByAccount = new Map<string, string>();
 
-// Open world is verified-only by default; flip with ALLOW_UNVERIFIED_OPENWORLD=true.
-// Guests always bypass so multiplayer can be tested without verified accounts.
-const OPENWORLD_REQUIRES_VERIFIED = process.env.ALLOW_UNVERIFIED_OPENWORLD !== "true";
+// Any logged-in account can enter the open world by default — note that most
+// Hack Club accounts are NOT "verified" (that's a separate identity check), so
+// gating on it would lock out normal logins. Opt into strict verified-only
+// access with OPENWORLD_VERIFIED_ONLY=true. Guests always get in.
+const OPENWORLD_REQUIRES_VERIFIED = process.env.OPENWORLD_VERIFIED_ONLY === "true";
 function canEnterOpenworld(p: { verified: boolean; playerId: string }): boolean {
   if (!OPENWORLD_REQUIRES_VERIFIED) return true;
   if (p.playerId.startsWith("guest_")) return true;
