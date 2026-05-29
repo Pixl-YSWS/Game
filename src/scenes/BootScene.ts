@@ -71,7 +71,13 @@ export class BootScene extends Phaser.Scene {
 
     // ── Kenney UI pack — nine-sliceable panels, buttons, controls ──
     this.load.image("ui-panel", `${UI}/Grey/Default/button_square_flat.png`);
-    this.load.image("ui-panel-dark", `${UI}/Grey/Default/button_square_depth_flat.png`);
+    // Dark themed panel behind the HUD, dialogue, and menus: a wood panel with
+    // metal corner brackets from the adventure pack (the plain grey square read
+    // as a flat white box). 64×64 with ~18px decorative corners → inset 20.
+    this.load.image(
+      "ui-panel-dark",
+      "assets/kenney_ui-pack-adventure/PNG/Default/panel_brown_dark_corners_a.png",
+    );
     this.load.image("ui-btn", `${UI}/Blue/Default/button_rectangle_depth_gloss.png`);
     this.load.image("ui-btn-down", `${UI}/Blue/Default/button_rectangle_flat.png`);
     this.load.image("ui-btn-grey", `${UI}/Grey/Default/button_rectangle_depth_gloss.png`);
