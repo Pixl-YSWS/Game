@@ -46,6 +46,21 @@ export interface Notification {
   createdAt: number;
 }
 
+// One stack in a player's inventory.
+export interface InventoryEntry {
+  itemId: string;
+  count: number;
+}
+
+// A piece of furniture placed in the shared house. Position is in tile coords.
+export interface HouseObject {
+  id: number;
+  itemId: string;
+  cx: number;
+  cy: number;
+  placedBy: string; // account id of whoever placed it
+}
+
 // Anchor for the world day/night cycle. Clients extrapolate the current
 // phase from (Date.now() - serverNow + tNow * dayLengthMs) mod dayLengthMs.
 export interface DayCycle {
@@ -91,6 +106,13 @@ export interface ServerToClientEvents {
   "player:appearance": (data: { id: string; char: number }) => void;
   // A world switch was refused (e.g. open world needs a verified account).
   "world:denied": (data: { reason: string }) => void;
+  // Inventory snapshot (in response to inventory:get, or after a change).
+  "inventory:list": (data: { items: InventoryEntry[] }) => void;
+  // Current furniture in the shared house, sent on entering it.
+  "house:objects": (data: { objects: HouseObject[] }) => void;
+  // A piece of furniture was placed / removed in the shared house.
+  "house:object:added": (data: { object: HouseObject }) => void;
+  "house:object:removed": (data: { id: number }) => void;
 }
 
 // One line of world chat. `self` is filled in client-side, not sent.
@@ -124,6 +146,12 @@ export interface ClientToServerEvents {
   "emote:send": (payload: { emote: string }) => void;
   // Choose a character skin (index into CHAR_BASES). Persisted on the account.
   "character:set": (payload: { char: number }) => void;
+  // Ask for the inventory snapshot (responds with inventory:list).
+  "inventory:get": () => void;
+  // Place a placeable item as furniture in the shared house.
+  "house:place": (payload: { itemId: string; cx: number; cy: number }) => void;
+  // Pick a placed item back up (returns it to your inventory).
+  "house:remove": (payload: { id: number }) => void;
 }
 
 export type MovePayload = { cx: number; cy: number };

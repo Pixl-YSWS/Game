@@ -144,6 +144,21 @@ class GameSocket {
     this.socket?.emit("notify:respond", { id, accept });
   }
 
+  // Ask for the inventory snapshot (reply on "inventory:list").
+  requestInventory() {
+    this.socket?.emit("inventory:get");
+  }
+
+  // Place a placeable item as furniture in the shared house.
+  placeHouseItem(itemId: string, cx: number, cy: number) {
+    this.socket?.emit("house:place", { itemId, cx, cy });
+  }
+
+  // Pick a placed item back up (returns it to your inventory).
+  removeHouseItem(id: number) {
+    this.socket?.emit("house:remove", { id });
+  }
+
   get id(): string | undefined {
     return this.socket?.id;
   }

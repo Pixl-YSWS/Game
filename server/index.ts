@@ -14,6 +14,8 @@ import type {
   WorldRef,
   WorldState,
   Notification,
+  HouseObject,
+  InventoryEntry,
 } from "../src/types/network.ts";
 import { generateMap } from "../src/world/MapGen.ts";
 import { makeHouseInterior } from "../src/world/HouseMap.ts";
@@ -99,6 +101,54 @@ const incrementInventory = db.query<unknown, [string, string, number]>(
   "INSERT INTO inventory (player_id, item_id, count) VALUES (?, ?, ?) " +
     "ON CONFLICT(player_id, item_id) DO UPDATE SET count = inventory.count + excluded.count",
 );
+const selectInventory = db.query<{ item_id: string; count: number }, [string]>(
+  "SELECT item_id, count FROM inventory WHERE player_id = ? AND count > 0 ORDER BY item_id",
+);
+const itemCount = db.query<{ count: number }, [string, string]>(
+  "SELECT count FROM inventory WHERE player_id = ? AND item_id = ?",
+);
+const decrementInventory = db.query<unknown, [string, string]>(
+  "UPDATE inventory SET count = count - 1 WHERE player_id = ? AND item_id = ? AND count > 0",
+);
+
+// Furniture placed in the single shared house. No house key is needed since
+// there's exactly one shared interior.
+db.run(`
+  CREATE TABLE IF NOT EXISTS house_objects (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    item_id    TEXT NOT NULL,
+    cx         INTEGER NOT NULL,
+    cy         INTEGER NOT NULL,
+    placed_by  TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+  )
+`);
+const insertHouseObject = db.query<{ id: number }, [string, number, number, string, number]>(
+  "INSERT INTO house_objects (item_id, cx, cy, placed_by, created_at) VALUES (?, ?, ?, ?, ?) RETURNING id",
+);
+const selectHouseObjects = db.query<
+  { id: number; item_id: string; cx: number; cy: number; placed_by: string },
+  []
+>("SELECT id, item_id, cx, cy, placed_by FROM house_objects ORDER BY id");
+const selectHouseObject = db.query<
+  { id: number; item_id: string; cx: number; cy: number; placed_by: string },
+  [number]
+>("SELECT id, item_id, cx, cy, placed_by FROM house_objects WHERE id = ?");
+const deleteHouseObject = db.query<unknown, [number]>(
+  "DELETE FROM house_objects WHERE id = ?",
+);
+const houseObjectAtTile = db.query<{ n: number }, [number, number]>(
+  "SELECT COUNT(*) AS n FROM house_objects WHERE cx = ? AND cy = ?",
+);
+
+function inventoryItems(playerId: string): InventoryEntry[] {
+  return selectInventory.all(playerId).map(r => ({ itemId: r.item_id, count: r.count }));
+}
+function houseObjectsList(): HouseObject[] {
+  return selectHouseObjects.all().map(r => ({
+    id: r.id, itemId: r.item_id, cx: r.cx, cy: r.cy, placedBy: r.placed_by,
+  }));
+}
 
 // Remembered position PER world, so leaving and returning to your village
 // puts you back where you stood instead of at the village spawn.
@@ -495,6 +545,7 @@ function switchWorld(socket: import("socket.io").Socket<ClientToServerEvents, Se
 
   socket.join(newRoom);
   socket.emit("world:state", worldStateFor(state));
+  if (next.kind === "house") socket.emit("house:objects", { objects: houseObjectsList() });
   socket.to(newRoom).emit("player:join", {
     id: state.id, cx: state.cx, cy: state.cy, name: state.name,
     char: state.char, verified: state.verified,
@@ -592,6 +643,7 @@ io.on("connection", (socket) => {
     id: state.id, cx: state.cx, cy: state.cy, name: state.name,
     char: state.char, verified: state.verified,
   });
+  if (world.kind === "house") socket.emit("house:objects", { objects: houseObjectsList() });
 
   socket.on("player:move", ({ cx, cy }) => {
     const player = players.get(socket.id);
@@ -765,6 +817,49 @@ io.on("connection", (socket) => {
       reason: item.name,
     });
     socket.emit("shop:result", { itemId, success: true });
+    socket.emit("inventory:list", { items: inventoryItems(player.playerId) });
+  });
+
+  // ── Inventory + house furniture ──────────────────────────────────
+
+  socket.on("inventory:get", () => {
+    const player = players.get(socket.id);
+    if (!player) return;
+    socket.emit("inventory:list", { items: inventoryItems(player.playerId) });
+  });
+
+  // Place a placeable item from inventory as furniture in the shared house.
+  socket.on("house:place", ({ itemId, cx, cy }) => {
+    const player = players.get(socket.id);
+    if (!player || player.world.kind !== "house") return;
+    const item = getShopItem(itemId);
+    if (!item || !item.placeable) return;
+    // Must actually own one.
+    if ((itemCount.get(player.playerId, itemId)?.count ?? 0) <= 0) return;
+    // Tile must be a walkable, empty floor tile (not on a wall/door/another item).
+    if (!isWalkable(player.world, cx, cy)) return;
+    if ((houseObjectAtTile.get(cx, cy)?.n ?? 0) > 0) return;
+
+    decrementInventory.run(player.playerId, itemId);
+    const now = Date.now();
+    const row = insertHouseObject.get(itemId, cx, cy, player.playerId, now);
+    const object: HouseObject = { id: row!.id, itemId, cx, cy, placedBy: player.playerId };
+    io.to(worldKey(player.world)).emit("house:object:added", { object });
+    socket.emit("inventory:list", { items: inventoryItems(player.playerId) });
+  });
+
+  // Pick a placed item back up — returns it to the remover's inventory.
+  socket.on("house:remove", ({ id }) => {
+    const player = players.get(socket.id);
+    if (!player || player.world.kind !== "house") return;
+    const obj = selectHouseObject.get(id);
+    if (!obj) return;
+    // Only the player who placed it can pick it back up.
+    if (obj.placed_by !== player.playerId) return;
+    deleteHouseObject.run(id);
+    incrementInventory.run(player.playerId, obj.item_id, 1);
+    io.to(worldKey(player.world)).emit("house:object:removed", { id });
+    socket.emit("inventory:list", { items: inventoryItems(player.playerId) });
   });
 
   socket.on("chat:send", ({ text }) => {

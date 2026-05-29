@@ -5,6 +5,8 @@ import { FONT, COLORS, CURSORS } from "../ui/theme";
 import { panel, playUiSound } from "../ui/UIKit";
 import { EMOTES } from "../ui/emotes";
 import { gameSocket } from "../network/socket";
+import { loadSettings } from "../data/Settings";
+import { musicEngine } from "../audio/MusicEngine";
 import type { ChatMessage } from "../types/network";
 
 // Single UI scene running on top of WorldScene / InteriorScene. Its camera
@@ -86,17 +88,36 @@ export class UIScene extends Phaser.Scene {
     this.chat = new ChatBox(this);
     this.buildEmoteBar();
     this.buildSocialButtons();
+
+    // Procedural background music, gated on the sound setting and the day
+    // cycle. Resume the audio context on the first input (autoplay policy).
+    musicEngine.start(() => this.dayPhase());
+    musicEngine.setEnabled(loadSettings().soundEnabled);
+    this.input.once("pointerdown", () => musicEngine.resume());
+    this.input.keyboard?.once("keydown", () => musicEngine.resume());
+    this.events.once("shutdown", () => musicEngine.stop());
+  }
+
+  // Current day/night phase, 0..1 (0 = midnight). 0.5 when not yet synced.
+  private dayPhase(): number {
+    if (this.dayLengthMs <= 0) return 0.5;
+    const t = (((Date.now() - this.dayEpoch) % this.dayLengthMs) + this.dayLengthMs) % this.dayLengthMs;
+    return t / this.dayLengthMs;
   }
 
   // ── Invite + inbox buttons (top-right) ────────────────────────────
   private buildSocialButtons() {
     const world = () => this.scene.get("WorldScene") as
-      | (Phaser.Scene & { openInvitePanel: () => void; openInbox: () => void })
+      | (Phaser.Scene & { openInvitePanel: () => void; openInbox: () => void; openInventory: () => void })
       | undefined;
 
-    const x = this.scale.width - 12;
-    const inviteBtn = this.pill(x - 92, 22, "✦ Invite", () => world()?.openInvitePanel());
-    const inboxBtn = this.pill(x - 16, 22, "✉ Inbox", () => world()?.openInbox());
+    // Laid out right-to-left from the top-right corner.
+    let x = this.scale.width - 12;
+    const inboxBtn = this.pill(x, 22, "✉ Inbox", () => world()?.openInbox());
+    x -= inboxBtn.width + 8;
+    const bagBtn = this.pill(x, 22, "🎒 Bag", () => world()?.openInventory());
+    x -= bagBtn.width + 8;
+    this.pill(x, 22, "✦ Invite", () => world()?.openInvitePanel());
     // Anchor the unread badge to the inbox button's top-right corner.
     const bx = inboxBtn.x + inboxBtn.width / 2 - 4;
     const by = inboxBtn.y - inboxBtn.height / 2 + 2;
@@ -107,7 +128,6 @@ export class UIScene extends Phaser.Scene {
       .setResolution(3)
       .setDepth(61)
       .setVisible(false);
-    void inviteBtn;
     this.refreshBadge();
   }
 
@@ -183,9 +203,12 @@ export class UIScene extends Phaser.Scene {
   }
 
   update() {
+    // Keep the music's mute state in step with the sound setting (cheap —
+    // loadSettings is cached and setEnabled is a no-op when unchanged).
+    musicEngine.setEnabled(loadSettings().soundEnabled);
+
     if (this.dayLengthMs <= 0 || !this.nightOverlay) return;
-    const t = (((Date.now() - this.dayEpoch) % this.dayLengthMs) + this.dayLengthMs) % this.dayLengthMs;
-    const phase = t / this.dayLengthMs; // 0..1
+    const phase = this.dayPhase(); // 0..1
     // Brightness peaks at noon (phase 0.5), troughs at midnight (phase 0 or 1).
     const brightness = (1 - Math.cos(2 * Math.PI * phase)) / 2;
     const darkness = (1 - brightness) * 0.55; // max 55% dark at midnight

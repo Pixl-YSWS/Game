@@ -11,6 +11,7 @@ import { UIScene } from "./scenes/UIScene";
 import { ShopScene } from "./scenes/ShopScene";
 import { InvitePanelScene } from "./scenes/InvitePanelScene";
 import { InboxScene } from "./scenes/InboxScene";
+import { InventoryScene } from "./scenes/InventoryScene";
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
   width: 1280,
@@ -22,7 +23,7 @@ const config: Phaser.Types.Core.GameConfig = {
   roundPixels: true,
   // DOM container lets us overlay a real <input> for the chat box.
   dom: { createContainer: true },
-  scene: [BootScene, LoginScene, MainMenuScene, WorldScene, InteriorScene, UIScene, ShopScene, PauseScene, SettingsScene, CharacterScene, InvitePanelScene, InboxScene],
+  scene: [BootScene, LoginScene, MainMenuScene, WorldScene, InteriorScene, UIScene, ShopScene, PauseScene, SettingsScene, CharacterScene, InvitePanelScene, InboxScene, InventoryScene],
   scale: {
     mode: Phaser.Scale.NONE,
     autoCenter: Phaser.Scale.CENTER_BOTH,

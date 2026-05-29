@@ -7,7 +7,10 @@ import type { MapDef } from "../types/map";
 import { generateMap } from "../world/MapGen";
 import { makeHouseInterior } from "../world/HouseMap";
 import { gameSocket } from "../network/socket";
-import { TILE_H, TILE_W, cartToIso } from "../utils/IsoUtils";
+import { TILE_H, TILE_W, cartToIso, isoToCart } from "../utils/IsoUtils";
+import { getShopItem } from "../shop/catalog";
+import { FONT_EMOJI } from "../ui/theme";
+import type { HouseObject } from "../types/network";
 import {
   getAccountId,
   setAccountId,
@@ -49,8 +52,17 @@ export class WorldScene extends Phaser.Scene {
     O: Phaser.Input.Keyboard.Key;
     I: Phaser.Input.Keyboard.Key;
     N: Phaser.Input.Keyboard.Key;
+    B: Phaser.Input.Keyboard.Key;
     E: Phaser.Input.Keyboard.Key;
   };
+
+  // Furniture placed in the shared house, keyed by object id.
+  private houseObjects = new Map<number, Phaser.GameObjects.Text>();
+  // Active furniture-placement mode (set from the inventory PLACE button):
+  // the item id being placed, a ghost preview, and an on-screen hint.
+  private placingItem?: string;
+  private placeGhost?: Phaser.GameObjects.Text;
+  private placeHint?: Phaser.GameObjects.Text;
 
   // World-space "E" indicators, one per door tile. The whole list is
   // re-built when the map changes; visibility is toggled per-frame based
@@ -108,6 +120,7 @@ export class WorldScene extends Phaser.Scene {
       O: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.O),
       I: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.I),
       N: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.N),
+      B: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.B),
       E: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.E),
     };
 
@@ -133,11 +146,25 @@ export class WorldScene extends Phaser.Scene {
     this.connectMultiplayer();
 
     this.input.keyboard!.on("keydown-ESC", () => {
+      if (this.placingItem) {
+        this.cancelPlacement();
+        return;
+      }
       if (this.ui?.isDialogueOpen) {
         this.ui.closeDialogue();
         return;
       }
       this.openPause();
+    });
+
+    // While in furniture-placement mode, a click drops the item on the
+    // pointed-at tile (server validates ownership / walkability / overlap).
+    this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
+      if (!this.placingItem) return;
+      const { worldX, worldY } = pointer;
+      const { cx, cy } = isoToCart(worldX, worldY);
+      gameSocket.placeHouseItem(this.placingItem, cx, cy);
+      this.cancelPlacement();
     });
 
     // Enter / T open the chat input. While it's open the DOM input swallows
@@ -152,6 +179,8 @@ export class WorldScene extends Phaser.Scene {
 
     this.events.once("shutdown", () => {
       this.clearDoorIndicators();
+      this.clearHouseObjects();
+      this.cancelPlacement();
       this.clearNpcs();
       this.clearConnError();
       this.ui?.closeDialogue();
@@ -241,6 +270,14 @@ export class WorldScene extends Phaser.Scene {
     }
 
     this.ui?.setCoords(cx, cy);
+
+    // Snap the placement ghost to the tile under the cursor.
+    if (this.placingItem && this.placeGhost) {
+      const p = this.input.activePointer;
+      const t = isoToCart(p.worldX, p.worldY);
+      const w = cartToIso(t.cx, t.cy);
+      this.placeGhost.setPosition(w.x + TILE_W / 2, w.y + TILE_H / 2).setDepth(t.cy + 1);
+    }
   }
 
   private bindKeyHandlers() {
@@ -257,6 +294,8 @@ export class WorldScene extends Phaser.Scene {
     this.hotkeys.I.on("down", () => this.openInvitePanel());
     // N — open the notifications inbox (invites land here).
     this.hotkeys.N.on("down", () => this.openInbox());
+    // B — open the inventory bag.
+    this.hotkeys.B.on("down", () => this.openInventory());
     // E — advance dialogue, talk to an adjacent NPC, or enter a house door.
     this.hotkeys.E.on("down", () => {
       if (!this.localPlayer) return;
@@ -476,6 +515,8 @@ export class WorldScene extends Phaser.Scene {
     for (const remote of this.remotePlayers.values()) remote.destroy();
     this.remotePlayers.clear();
     this.clearDoorIndicators();
+    this.clearHouseObjects();
+    this.cancelPlacement();
 
     this.mapDef =
       state.world.kind === "house"
@@ -666,6 +707,17 @@ export class WorldScene extends Phaser.Scene {
     gameSocket.on("world:denied", ({ reason }) => {
       this.flashStatus(reason);
     });
+
+    // Shared-house furniture.
+    gameSocket.on("house:objects", ({ objects }) => {
+      this.clearHouseObjects();
+      for (const obj of objects) this.renderHouseObject(obj);
+    });
+    gameSocket.on("house:object:added", ({ object }) => this.renderHouseObject(object));
+    gameSocket.on("house:object:removed", ({ id }) => {
+      this.houseObjects.get(id)?.destroy();
+      this.houseObjects.delete(id);
+    });
   }
 
   // Resolve a socket id to its on-screen avatar (local player or a remote).
@@ -705,6 +757,81 @@ export class WorldScene extends Phaser.Scene {
   openInbox() {
     if (this.scene.isActive("InboxScene")) return;
     this.scene.launch("InboxScene", { from: "WorldScene" });
+  }
+
+  // Open the inventory bag (B key, or the HUD button).
+  openInventory() {
+    if (this.scene.isActive("InventoryScene")) return;
+    this.scene.launch("InventoryScene", { from: "WorldScene" });
+  }
+
+  isInHouse(): boolean {
+    return this.world.kind === "house";
+  }
+
+  // ── House furniture ────────────────────────────────────────────────
+
+  // Enter placement mode for a placeable item: a ghost glyph follows the
+  // cursor until the player clicks a tile (handled in create's pointerdown).
+  beginPlacement(itemId: string) {
+    if (this.world.kind !== "house") return;
+    const item = getShopItem(itemId);
+    if (!item?.placeable) return;
+    this.cancelPlacement();
+    this.placingItem = itemId;
+    this.placeGhost = this.add
+      .text(0, 0, item.glyph, { fontFamily: FONT_EMOJI, fontSize: "16px" })
+      .setOrigin(0.5)
+      .setAlpha(0.6)
+      .setDepth(99998);
+    this.placeHint = this.add
+      .text(this.scale.width / 2, 40, `Placing ${item.name} — click a tile  •  ESC to cancel`, {
+        fontFamily: FONT,
+        fontSize: "9px",
+        color: "#ffffff",
+        backgroundColor: "#000000aa",
+        padding: { x: 8, y: 6 },
+      })
+      .setOrigin(0.5, 0)
+      .setScrollFactor(0)
+      .setDepth(99999);
+  }
+
+  private cancelPlacement() {
+    this.placingItem = undefined;
+    this.placeGhost?.destroy();
+    this.placeGhost = undefined;
+    this.placeHint?.destroy();
+    this.placeHint = undefined;
+  }
+
+  private renderHouseObject(obj: HouseObject) {
+    const item = getShopItem(obj.itemId);
+    if (!item) return;
+    this.houseObjects.get(obj.id)?.destroy();
+    const { x, y } = cartToIso(obj.cx, obj.cy);
+    const glyph = this.add
+      .text(x + TILE_W / 2, y + TILE_H / 2, item.glyph, {
+        fontFamily: FONT_EMOJI,
+        fontSize: "16px",
+      })
+      .setOrigin(0.5, 0.6)
+      .setDepth(obj.cy + 1);
+    // Only the placer can pick it back up (server enforces this too).
+    if (obj.placedBy === getAccountId()) {
+      glyph.setInteractive({ cursor: CURSORS.pointer });
+      glyph.on("pointerdown", (p: Phaser.Input.Pointer) => {
+        if (this.placingItem) return; // placing takes priority
+        p.event.stopPropagation();
+        gameSocket.removeHouseItem(obj.id);
+      });
+    }
+    this.houseObjects.set(obj.id, glyph);
+  }
+
+  private clearHouseObjects() {
+    for (const g of this.houseObjects.values()) g.destroy();
+    this.houseObjects.clear();
   }
 
   private flashStatus(msg: string) {

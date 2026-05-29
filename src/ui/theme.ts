@@ -5,6 +5,9 @@
 export const FONT = "Kenney Future";
 /** Condensed variant — handy for chat / dialogue where line length matters. */
 export const FONT_NARROW = "Kenney Future Narrow";
+/** System emoji font stack — for item glyphs (Kenney has no emoji coverage). */
+export const FONT_EMOJI =
+  '"Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji", sans-serif';
 
 // Shared palette (hex strings for Phaser text, numbers for fills).
 export const COLORS = {
