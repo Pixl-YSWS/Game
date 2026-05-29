@@ -28,7 +28,7 @@ export class PauseScene extends Phaser.Scene {
     overlay.fillRect(0, 0, W, H);
 
     // Menu panel.
-    panel(this, W / 2, H / 2 - 6, 360, 320, "ui-panel-dark");
+    panel(this, W / 2, H / 2 - 6, 380, 380, "ui-panel-dark");
 
     this.add
       .text(W / 2, H / 2 - 130, "PAUSED", {
@@ -50,6 +50,11 @@ export class PauseScene extends Phaser.Scene {
 
     makeMenuButton(this, cx, by, "SETTINGS", {
       onClick: () => this.scene.launch("SettingsScene", { from: "PauseScene" }),
+    });
+    by += STEP;
+
+    makeMenuButton(this, cx, by, "CHARACTER", {
+      onClick: () => this.scene.launch("CharacterScene", { from: "PauseScene" }),
     });
     by += STEP;
 

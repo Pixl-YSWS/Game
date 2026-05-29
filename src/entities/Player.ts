@@ -12,14 +12,15 @@ const STEP_MS = 120; // ms per tile — one step every 120 ms (~8 tiles/sec)
 // The top row holds humanoid characters as {idle, walk} frame pairs, so each
 // playable colour is a base frame (idle) with base+1 as its walking frame.
 const CHAR_SHEET = "chars";
-const CHAR_BASES = [0, 2, 4, 6, 8] as const; // distinct character colours
+// Idle frames for the selectable skins; base+1 is each one's walk frame.
+export const CHAR_BASES = [0, 2, 4, 6, 8] as const;
 
-// Deterministically pick a character colour from a player id so the same
-// player always looks the same to everyone.
-function charBaseFor(id: string): number {
+// Deterministic default skin *index* from a player id, used when the player
+// hasn't explicitly chosen one.
+export function charIndexFor(id: string): number {
   let h = 0;
   for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) | 0;
-  return CHAR_BASES[Math.abs(h) % CHAR_BASES.length];
+  return Math.abs(h) % CHAR_BASES.length;
 }
 
 export class Player extends Phaser.GameObjects.Container {
@@ -37,7 +38,8 @@ export class Player extends Phaser.GameObjects.Container {
   private isMoving = false;
   // Direction held at the end of the current step — drives auto-continuation.
   private inputDir = { dx: 0, dy: 0 };
-  // Idle frame for this player's colour; base+1 is the walk frame.
+  // Selected skin index + its idle frame (base+1 is the walk frame).
+  private charIndex: number;
   private charBase: number;
   // Bubble shown above the head for chat lines / emotes (lazily created).
   private bubble?: Phaser.GameObjects.Container;
@@ -67,23 +69,29 @@ export class Player extends Phaser.GameObjects.Container {
       0.25,
     );
 
-    this.charBase = charBaseFor(state.id);
+    this.charIndex = state.char ?? charIndexFor(state.id);
+    this.charBase = CHAR_BASES[this.charIndex];
     // 24px character standing on the tile: origin at the feet, nudged down so
     // it reads as occupying the tile rather than floating above it.
     this.sprite = scene.add
       .image(0, TILE_H / 2 + 2, CHAR_SHEET, this.charBase)
       .setOrigin(0.5, 1);
 
+    // Verified Hack Clubbers get a green name + check badge.
+    const verified = state.verified ?? false;
+    // Rendered large then scaled down so it stays crisp under the world
+    // camera's zoom without dominating the screen.
     this.nameTag = scene.add
-      .text(0, -TILE_H - 2, state.name, {
-        fontSize: "9px",
+      .text(0, -TILE_H - 2, verified ? `✓ ${state.name}` : state.name, {
+        fontSize: "16px",
         fontFamily: FONT,
-        color: "#ffffff",
+        color: verified ? COLORS.good : "#ffffff",
         stroke: "#000000",
-        strokeThickness: 4,
+        strokeThickness: 5,
       })
       .setOrigin(0.5, 1)
-      .setResolution(4);
+      .setResolution(4)
+      .setScale(0.34);
 
     this.add([this.shadow, this.sprite, this.nameTag]);
     scene.add.existing(this);
@@ -92,6 +100,14 @@ export class Player extends Phaser.GameObjects.Container {
 
   assignId(id: string) {
     this.playerId = id;
+  }
+
+  // Swap the character skin live (from the picker / a remote's appearance).
+  setCharacter(index: number) {
+    if (index < 0 || index >= CHAR_BASES.length) return;
+    this.charIndex = index;
+    this.charBase = CHAR_BASES[index];
+    this.sprite.setFrame(this.isMoving ? this.charBase + 1 : this.charBase);
   }
 
   // Make this avatar clickable (hand cursor + callback). Used for remote
@@ -149,12 +165,12 @@ export class Player extends Phaser.GameObjects.Container {
     return true;
   }
 
-  // Show the walking frame and face the direction of travel (sprites face
-  // right by default; flip for leftward movement).
+  // Show the walking frame and face the direction of travel. The sheet's
+  // characters face left by default, so flip for rightward movement.
   private setStepFrame(dx: number) {
     this.sprite.setFrame(this.charBase + 1);
-    if (dx < 0) this.sprite.setFlipX(true);
-    else if (dx > 0) this.sprite.setFlipX(false);
+    if (dx > 0) this.sprite.setFlipX(true);
+    else if (dx < 0) this.sprite.setFlipX(false);
   }
 
   private canMoveToTile(cx: number, cy: number): boolean {
@@ -235,7 +251,7 @@ export class Player extends Phaser.GameObjects.Container {
     const label = this.scene.add
       .text(0, 0, text, {
         fontFamily: FONT_NARROW,
-        fontSize: isEmote ? "20px" : "10px",
+        fontSize: isEmote ? "30px" : "15px",
         color: COLORS.text,
         align: "center",
         wordWrap: { width: 130 },
@@ -257,14 +273,16 @@ export class Player extends Phaser.GameObjects.Container {
       .setStrokeStyle(1, 0xffffff, 0.25)
       .setOrigin(0.5);
 
-    const bubble = this.scene.add.container(0, -TILE_H - 14, [bg, label]);
+    const bubble = this.scene.add.container(0, -TILE_H - 12, [bg, label]);
     bubble.setDepth(100000);
     this.add(bubble);
     this.bubble = bubble;
 
-    // Pop-in, then auto-dismiss.
-    bubble.setScale(0.6);
-    this.scene.tweens.add({ targets: bubble, scale: 1, duration: 120, ease: "Back.easeOut" });
+    // The bubble lives in world space, so the camera zoom enlarges it; render
+    // the text big (crisp) but scale the whole bubble down to a sane size.
+    const rest = 0.4;
+    bubble.setScale(rest * 0.6);
+    this.scene.tweens.add({ targets: bubble, scale: rest, duration: 120, ease: "Back.easeOut" });
     this.bubbleTimer = this.scene.time.delayedCall(isEmote ? 1800 : 4000, () => {
       if (!this.scene) return;
       this.scene.tweens.add({

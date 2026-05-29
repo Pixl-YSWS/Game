@@ -1,6 +1,8 @@
 import Phaser from "phaser";
 import { makeMenuButton } from "../utils/MenuButton";
-import { FONT } from "../ui/theme";
+import { FONT, COLORS } from "../ui/theme";
+import { getAccountName, clearSession } from "../network/playerIdentity";
+import { gameSocket } from "../network/socket";
 import type { WorldRef } from "../types/network";
 
 export class MainMenuScene extends Phaser.Scene {
@@ -68,9 +70,32 @@ export class MainMenuScene extends Phaser.Scene {
     });
     by += STEP;
 
+    makeMenuButton(this, cx, by, "CHARACTER", {
+      onClick: () => this.scene.launch("CharacterScene", { from: "MainMenuScene" }),
+    });
+    by += STEP;
+
     makeMenuButton(this, cx, by, "SETTINGS", {
       onClick: () => this.scene.launch("SettingsScene", { from: "MainMenuScene" }),
     });
+    by += STEP;
+
+    makeMenuButton(this, cx, by, "LOGOUT", {
+      variant: "grey",
+      onClick: () => this.logout(),
+    });
+
+    // Signed-in identity.
+    const name = getAccountName();
+    if (name) {
+      this.add
+        .text(W / 2, H / 2 - 66, `Signed in as ${name}`, {
+          fontFamily: FONT,
+          fontSize: "10px",
+          color: COLORS.good,
+        })
+        .setOrigin(0.5);
+    }
 
     // Footer hint.
     this.add
@@ -84,5 +109,11 @@ export class MainMenuScene extends Phaser.Scene {
 
   private startWorld(world: WorldRef | undefined) {
     this.scene.start("WorldScene", { initialWorld: world });
+  }
+
+  private logout() {
+    clearSession();
+    gameSocket.disconnect();
+    this.scene.start("LoginScene", { message: "You've been logged out." });
   }
 }

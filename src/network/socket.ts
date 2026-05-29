@@ -5,15 +5,20 @@ import type {
   MovePayload,
   WorldRef,
 } from "../types/network";
-import { getOrCreatePlayerId } from "./playerIdentity";
+import { getSessionToken } from "./playerIdentity";
 
 export type { MovePayload };
 
-const SERVER_URL = import.meta.env.VITE_SERVER_URL ?? "http://localhost:3001";
+export const SERVER_URL = import.meta.env.VITE_SERVER_URL ?? "http://localhost:3001";
 
 // Lifecycle of the underlying socket connection, surfaced to the UI so a
 // dead server shows a visible error instead of hanging on "Loading…".
-export type ConnectionStatus = "connected" | "disconnected" | "error" | "offline";
+export type ConnectionStatus =
+  | "connected"
+  | "disconnected"
+  | "error"
+  | "offline"
+  | "unauthorized";
 type StatusHandler = (status: ConnectionStatus, detail?: string) => void;
 
 class GameSocket {
@@ -28,7 +33,7 @@ class GameSocket {
       transports: ["websocket"],
       reconnection: true,
       reconnectionAttempts: 5,
-      auth: { playerId: getOrCreatePlayerId() },
+      auth: { sessionToken: getSessionToken() },
     });
 
     this.socket.on("connect", () => {
@@ -44,7 +49,13 @@ class GameSocket {
     // Fires once per failed attempt (e.g. server is down / refusing).
     this.socket.on("connect_error", (err) => {
       console.warn("[Socket] connect_error:", err.message);
-      this.emitStatus("error", err.message);
+      // The auth middleware rejects with this exact message — surface it so
+      // the client can bounce the player back to the login screen.
+      if (err.message === "unauthorized") {
+        this.emitStatus("unauthorized", err.message);
+      } else {
+        this.emitStatus("error", err.message);
+      }
     });
 
     // Fires after `reconnectionAttempts` failures — the server is unreachable.
@@ -107,6 +118,10 @@ class GameSocket {
 
   sendEmote(emote: string) {
     this.socket?.emit("emote:send", { emote });
+  }
+
+  setCharacter(char: number) {
+    this.socket?.emit("character:set", { char });
   }
 
   sendInvite(toSocketId: string) {

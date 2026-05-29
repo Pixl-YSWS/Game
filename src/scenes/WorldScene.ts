@@ -8,11 +8,20 @@ import { generateMap } from "../world/MapGen";
 import { makeHouseInterior } from "../world/HouseMap";
 import { gameSocket } from "../network/socket";
 import { TILE_H, TILE_W, cartToIso } from "../utils/IsoUtils";
-import { getOrCreatePlayerId } from "../network/playerIdentity";
+import {
+  getAccountId,
+  setAccountId,
+  setAccountName,
+  clearSession,
+  getCharIndex,
+  setCharIndex,
+} from "../network/playerIdentity";
 import { loadSettings } from "../data/Settings";
 import { UIScene } from "./UIScene";
 import { CURSORS, FONT } from "../ui/theme";
 import { emoteGlyph } from "../ui/emotes";
+import { formatChatBubble } from "../ui/ChatBox";
+import { playUiSound } from "../ui/UIKit";
 
 export class WorldScene extends Phaser.Scene {
   private isoMap?: IsoMap;
@@ -71,7 +80,11 @@ export class WorldScene extends Phaser.Scene {
   private ui?: UIScene;
 
   // Currently displayed world (set by server).
-  private world: WorldRef = { kind: "village", ownerPlayerId: getOrCreatePlayerId() };
+  private world: WorldRef = { kind: "village", ownerPlayerId: getAccountId() };
+  // Our own appearance, from the server `init` (used when (re)building the
+  // local avatar on every world switch).
+  private myChar = 0;
+  private myVerified = false;
   // Optional world to request right after connecting, set from the main menu.
   private initialWorld?: WorldRef;
 
@@ -159,6 +172,18 @@ export class WorldScene extends Phaser.Scene {
     this.scene.launch("PauseScene", { pausedSceneKey: "WorldScene" });
   }
 
+  // Tear down gameplay and bounce back to the login screen. `clear` wipes the
+  // stored session (use for an expired/invalid token; skip when the token may
+  // still be valid, e.g. a kick from another device).
+  private returnToLogin(message: string, clear = true) {
+    if (clear) clearSession();
+    gameSocket.disconnect();
+    this.scene.stop("UIScene");
+    this.scene.stop("ShopScene");
+    this.scene.stop("PauseScene");
+    this.scene.start("LoginScene", { message });
+  }
+
   // Centre-screen overlay shown when the connection drops or never lands, so
   // a dead server gives the player a clear message instead of a silent hang.
   private showConnError(message: string) {
@@ -228,7 +253,7 @@ export class WorldScene extends Phaser.Scene {
     // shared house this also kicks you back out to the open world.
     this.hotkeys.O.on("down", () => {
       if (this.world.kind === "openworld") {
-        gameSocket.enterWorld({ kind: "village", ownerPlayerId: getOrCreatePlayerId() });
+        gameSocket.enterWorld({ kind: "village", ownerPlayerId: getAccountId() });
       } else {
         gameSocket.enterWorld({ kind: "openworld" });
       }
@@ -485,7 +510,7 @@ export class WorldScene extends Phaser.Scene {
     const { cx, cy } = state.spawn;
     this.localPlayer = new Player(
       this,
-      { id: gameSocket.id ?? "local", cx, cy, name: "You" },
+      { id: gameSocket.id ?? "local", cx, cy, name: "You", char: this.myChar, verified: this.myVerified },
       true,
       this.mapDef,
     );
@@ -511,7 +536,7 @@ export class WorldScene extends Phaser.Scene {
       label = "Open World  [O] village  [I] invite";
     } else if (this.world.kind === "house") {
       label = "Shared House  walk through the doorway to exit";
-    } else if (this.world.ownerPlayerId === getOrCreatePlayerId()) {
+    } else if (this.world.ownerPlayerId === getAccountId()) {
       label = "Your Village  [O] open world";
     } else {
       label = "Visiting Village  [O] open world";
@@ -541,10 +566,32 @@ export class WorldScene extends Phaser.Scene {
             `Disconnected from server${detail ? ` (${detail})` : ""}.\nReconnecting…`,
           );
           break;
+        case "unauthorized":
+          // Session token rejected — force a re-login.
+          this.returnToLogin("Your session has expired. Please log in again.");
+          break;
       }
     });
 
-    gameSocket.on("init", ({ world, pixels, dayCycle }) => {
+    // The server kicks older sockets when the same account logs in elsewhere.
+    gameSocket.on("auth:kicked", () => {
+      this.returnToLogin("This account was opened somewhere else.", false);
+    });
+
+    gameSocket.on("init", ({ accountId, name, char, verified, world, pixels, dayCycle }) => {
+      setAccountId(accountId);
+      setAccountName(name);
+      this.myVerified = verified;
+      // Reconcile any locally-chosen skin with the server's stored one: if the
+      // player picked one before connecting, push it; otherwise adopt theirs.
+      const pref = getCharIndex();
+      if (pref >= 0 && pref !== char) {
+        this.myChar = pref;
+        gameSocket.setCharacter(pref);
+      } else {
+        this.myChar = char;
+        setCharIndex(char);
+      }
       this.ui?.setWallet(pixels, 0);
       this.ui?.setDayCycle(dayCycle.tNow, dayCycle.dayLengthMs, dayCycle.serverNow);
       this.rebuildWorld(world);
@@ -597,11 +644,21 @@ export class WorldScene extends Phaser.Scene {
 
     gameSocket.on("chat:message", (msg) => {
       this.ui?.addChatMessage(msg);
-      this.playerBySocketId(msg.id)?.showBubble(msg.text, "chat");
+      this.playerBySocketId(msg.id)?.showBubble(formatChatBubble(msg.text), "chat");
     });
 
     gameSocket.on("player:emote", ({ id, emote }) => {
       this.playerBySocketId(id)?.showBubble(emoteGlyph(emote), "emote");
+      if (id !== gameSocket.id) playUiSound(this, "sfx-switch", 0.25);
+    });
+
+    gameSocket.on("player:appearance", ({ id, char }) => {
+      this.playerBySocketId(id)?.setCharacter(char);
+      if (id === gameSocket.id) this.myChar = char;
+    });
+
+    gameSocket.on("world:denied", ({ reason }) => {
+      this.flashStatus(reason);
     });
   }
 

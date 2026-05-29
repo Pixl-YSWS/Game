@@ -17,6 +17,7 @@ import type {
 import { generateMap } from "../src/world/MapGen.ts";
 import { makeHouseInterior } from "../src/world/HouseMap.ts";
 import { getShopItem } from "../src/shop/catalog.ts";
+import { setupAuth, type Account } from "./auth.ts";
 
 // Fixed seed for the shared open world. Anything stable & distinct from
 // the player-id-derived seeds is fine; spelling something out makes it
@@ -244,17 +245,47 @@ function mapFor(world: WorldRef) {
 const app = express();
 app.use(cors());
 
+// Hack Club OAuth routes (/auth/login, /auth/callback, /auth/verify).
+const auth = setupAuth(db);
+app.use("/auth", auth.router);
+
 const httpServer = createServer(app);
 const io = new Server<ClientToServerEvents, ServerToClientEvents>(httpServer, {
   cors: { origin: "*" },
+});
+
+// Reject any socket without a valid Hack Club session token. This is what
+// stops anonymous play — no game events are wired up until this passes.
+io.use((socket, next) => {
+  const token = (socket.handshake.auth as { sessionToken?: string })?.sessionToken;
+  const account = typeof token === "string" ? auth.verifySession(token) : null;
+  if (!account) {
+    next(new Error("unauthorized"));
+    return;
+  }
+  (socket.data as { account: Account }).account = account;
+  next();
 });
 
 interface ServerPlayerState extends PlayerState {
   playerId: string;
   world: WorldRef;
   pixels: number;
+  char: number;
+  verified: boolean;
 }
 const players = new Map<string, ServerPlayerState>();
+// account id -> the one socket id currently allowed to play it (single session).
+const liveByAccount = new Map<string, string>();
+
+// Open world is verified-only by default; flip with ALLOW_UNVERIFIED_OPENWORLD=true.
+// Guests always bypass so multiplayer can be tested without verified accounts.
+const OPENWORLD_REQUIRES_VERIFIED = process.env.ALLOW_UNVERIFIED_OPENWORLD !== "true";
+function canEnterOpenworld(p: { verified: boolean; playerId: string }): boolean {
+  if (!OPENWORLD_REQUIRES_VERIFIED) return true;
+  if (p.playerId.startsWith("guest_")) return true;
+  return p.verified;
+}
 
 // Socket ids whose state has changed but isn't persisted yet. Flushed in
 // batches every FLUSH_INTERVAL_MS so we don't write SQLite on every tile
@@ -321,7 +352,7 @@ function peersInWorld(world: WorldRef, exceptSocketId?: string): PlayerState[] {
   const target = worldKey(world);
   return [...players.values()]
     .filter(p => worldKey(p.world) === target && p.id !== exceptSocketId)
-    .map(({ id, cx, cy, name }) => ({ id, cx, cy, name }));
+    .map(({ id, cx, cy, name, char, verified }) => ({ id, cx, cy, name, char, verified }));
 }
 
 function worldStateFor(state: ServerPlayerState): WorldState {
@@ -373,6 +404,7 @@ function switchWorld(socket: import("socket.io").Socket<ClientToServerEvents, Se
   socket.emit("world:state", worldStateFor(state));
   socket.to(newRoom).emit("player:join", {
     id: state.id, cx: state.cx, cy: state.cy, name: state.name,
+    char: state.char, verified: state.verified,
   });
   // World switches are the natural rollback points — persist the NEW
   // world's record too so a crash mid-session never strands a player.
@@ -382,12 +414,20 @@ function switchWorld(socket: import("socket.io").Socket<ClientToServerEvents, Se
 }
 
 io.on("connection", (socket) => {
-  const playerId = socket.handshake.auth?.playerId;
-  if (typeof playerId !== "string" || playerId.length === 0) {
-    console.warn(`[!] ${socket.id} connected without playerId — disconnecting`);
-    socket.disconnect();
-    return;
+  // Guaranteed by the io.use() auth middleware above.
+  const account = (socket.data as { account: Account }).account;
+  const playerId = account.accountId;
+
+  // Single session per account: a fresh login kicks any older live socket.
+  const prevSocketId = liveByAccount.get(playerId);
+  if (prevSocketId && prevSocketId !== socket.id) {
+    const prevSock = io.sockets.sockets.get(prevSocketId);
+    if (prevSock) {
+      prevSock.emit("auth:kicked");
+      prevSock.disconnect(true);
+    }
   }
+  liveByAccount.set(playerId, socket.id);
 
   // Restore saved world + position if we have one and it's still valid
   // (the tile must be walkable on the current map). A visit to someone
@@ -400,6 +440,9 @@ io.on("connection", (socket) => {
     saved?.position &&
     (saved.position.world.kind !== "village" ||
       saved.position.world.ownerPlayerId === playerId) &&
+    // Don't auto-resume into the open world if the account can't enter it.
+    (saved.position.world.kind !== "openworld" ||
+      canEnterOpenworld({ verified: account.verified, playerId })) &&
     isWalkable(saved.position.world, saved.position.cx, saved.position.cy)
   ) {
     world = saved.position.world;
@@ -424,7 +467,9 @@ io.on("connection", (socket) => {
     playerId,
     cx,
     cy,
-    name: `Player_${socket.id.slice(0, 4)}`,
+    name: account.name,
+    char: account.char,
+    verified: account.verified,
     world,
     pixels: saved?.pixels ?? 0,
   };
@@ -437,6 +482,10 @@ io.on("connection", (socket) => {
 
   socket.emit("init", {
     id: socket.id,
+    accountId: playerId,
+    name: account.name,
+    char: state.char,
+    verified: state.verified,
     world: worldStateFor(state),
     pixels: state.pixels,
     dayCycle: {
@@ -447,6 +496,7 @@ io.on("connection", (socket) => {
   });
   socket.to(room).emit("player:join", {
     id: state.id, cx: state.cx, cy: state.cy, name: state.name,
+    char: state.char, verified: state.verified,
   });
 
   socket.on("player:move", ({ cx, cy }) => {
@@ -465,6 +515,12 @@ io.on("connection", (socket) => {
     if (!player) return;
 
     if (target.kind === "openworld" || target.kind === "house") {
+      if (target.kind === "openworld" && !canEnterOpenworld(player)) {
+        socket.emit("world:denied", {
+          reason: "The open world is for verified Hack Clubbers. Verify your account at auth.hackclub.com.",
+        });
+        return;
+      }
       switchWorld(socket, target);
       return;
     }
@@ -620,6 +676,15 @@ io.on("connection", (socket) => {
     io.to(worldKey(player.world)).emit("player:emote", { id: socket.id, emote });
   });
 
+  socket.on("character:set", ({ char }) => {
+    const player = players.get(socket.id);
+    if (!player) return;
+    if (!Number.isInteger(char) || char < 0 || char >= 5) return;
+    player.char = char;
+    auth.setChar(player.playerId, char);
+    io.to(worldKey(player.world)).emit("player:appearance", { id: socket.id, char });
+  });
+
   socket.on("disconnect", () => {
     const player = players.get(socket.id);
     if (player) persistPlayerState(player);
@@ -628,6 +693,11 @@ io.on("connection", (socket) => {
     invites.delete(socket.id);
     chatLast.delete(socket.id);
     emoteLast.delete(socket.id);
+    // Only clear the live-session slot if it still points at us (a newer login
+    // may have already taken it over).
+    if (player && liveByAccount.get(player.playerId) === socket.id) {
+      liveByAccount.delete(player.playerId);
+    }
     // Cancel any invites this socket sent out.
     for (const [toId, bucket] of invites) {
       if (bucket.delete(socket.id)) {

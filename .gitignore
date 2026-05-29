@@ -12,6 +12,11 @@ dist
 dist-ssr
 *.local
 
+# Secrets — never commit real credentials
+.env
+.env.*
+!.env.example
+
 .claude
 
 server/data/

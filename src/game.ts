@@ -1,6 +1,8 @@
 import Phaser from "phaser";
 import { BootScene } from "./scenes/BootScene";
+import { LoginScene } from "./scenes/LoginScene";
 import { MainMenuScene } from "./scenes/MainMenuScene";
+import { CharacterScene } from "./scenes/CharacterScene";
 import { SettingsScene } from "./scenes/SettingsScene";
 import { PauseScene } from "./scenes/PauseScene";
 import { WorldScene } from "./scenes/WorldScene";
@@ -18,7 +20,7 @@ const config: Phaser.Types.Core.GameConfig = {
   roundPixels: true,
   // DOM container lets us overlay a real <input> for the chat box.
   dom: { createContainer: true },
-  scene: [BootScene, MainMenuScene, WorldScene, InteriorScene, UIScene, ShopScene, PauseScene, SettingsScene],
+  scene: [BootScene, LoginScene, MainMenuScene, WorldScene, InteriorScene, UIScene, ShopScene, PauseScene, SettingsScene, CharacterScene],
   scale: {
     mode: Phaser.Scale.NONE,
     autoCenter: Phaser.Scale.CENTER_BOTH,

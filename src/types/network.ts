@@ -3,6 +3,11 @@ export interface PlayerState {
   cx: number;
   cy: number;
   name: string;
+  // Character skin index (into the client's CHAR_BASES). Optional so the
+  // lightweight player:move payload doesn't have to carry it.
+  char?: number;
+  // True if the account is Hack Club "verified".
+  verified?: boolean;
 }
 
 // What "world" a player is currently in. The shared overworld is a single
@@ -38,7 +43,7 @@ export interface DayCycle {
 }
 
 export interface ServerToClientEvents {
-  init: (data: { id: string; world: WorldState; pixels: number; dayCycle: DayCycle }) => void;
+  init: (data: { id: string; accountId: string; name: string; char: number; verified: boolean; world: WorldState; pixels: number; dayCycle: DayCycle }) => void;
   "world:state": (data: WorldState) => void;
   "player:join": (state: PlayerState) => void;
   "player:move": (data: { id: string; cx: number; cy: number }) => void;
@@ -57,6 +62,13 @@ export interface ServerToClientEvents {
   "chat:message": (data: ChatMessage) => void;
   // An emote (wave, etc.) triggered by a player in the same world.
   "player:emote": (data: { id: string; emote: string }) => void;
+  // Sent to a socket right before it's disconnected because the same account
+  // logged in elsewhere (single-session enforcement).
+  "auth:kicked": () => void;
+  // A player changed their character skin; update their avatar in place.
+  "player:appearance": (data: { id: string; char: number }) => void;
+  // A world switch was refused (e.g. open world needs a verified account).
+  "world:denied": (data: { reason: string }) => void;
 }
 
 // One line of world chat. `self` is filled in client-side, not sent.
@@ -83,6 +95,8 @@ export interface ClientToServerEvents {
   "chat:send": (payload: { text: string }) => void;
   // Trigger an emote (e.g. "wave") broadcast to the player's current world.
   "emote:send": (payload: { emote: string }) => void;
+  // Choose a character skin (index into CHAR_BASES). Persisted on the account.
+  "character:set": (payload: { char: number }) => void;
 }
 
 export type MovePayload = { cx: number; cy: number };

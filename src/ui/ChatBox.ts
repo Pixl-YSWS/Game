@@ -1,7 +1,13 @@
 import Phaser from "phaser";
 import { gameSocket } from "../network/socket";
 import { FONT_NARROW, COLORS } from "./theme";
+import { playUiSound } from "./UIKit";
 import type { ChatMessage } from "../types/network";
+
+// "/me waves" → an action line instead of a normal "Name: text" line.
+export function formatChatBubble(text: string): string {
+  return text.startsWith("/me ") ? text.slice(4) : text;
+}
 
 const MAX_LINES = 7;
 const LINE_TTL = 11000; // ms a line stays before fading when chat is closed
@@ -16,6 +22,7 @@ export class ChatBox {
   private inputEl: HTMLInputElement;
   private hint: Phaser.GameObjects.Text;
   private active = false;
+  private unread = 0;
   private readonly x = 14;
   private readonly inputY: number;
 
@@ -78,6 +85,8 @@ export class ChatBox {
   open() {
     if (this.active) return;
     this.active = true;
+    this.unread = 0;
+    this.updateHint();
     this.dom.setVisible(true);
     this.hint.setVisible(false);
     this.inputEl.value = "";
@@ -87,6 +96,21 @@ export class ChatBox {
       l.fade?.remove();
       l.fade = undefined;
       l.text.setAlpha(1);
+    }
+  }
+
+  // Reflect the unread count on the closed-chat hint.
+  private updateHint() {
+    if (this.unread > 0) {
+      this.hint
+        .setText(`Press  Enter  to chat  (${this.unread} new)`)
+        .setColor(COLORS.accent)
+        .setAlpha(0.95);
+    } else {
+      this.hint
+        .setText("Press  Enter  to chat")
+        .setColor(COLORS.textDim)
+        .setAlpha(0.55);
     }
   }
 
@@ -109,11 +133,17 @@ export class ChatBox {
 
   addMessage(msg: ChatMessage) {
     const mine = msg.id === gameSocket.id;
+    const action = msg.text.startsWith("/me ");
+    const display = action
+      ? `✦ ${msg.name} ${msg.text.slice(4)}`
+      : `${msg.name}: ${msg.text}`;
+    const color = action ? COLORS.good : mine ? COLORS.accent : COLORS.text;
+
     const text = this.scene.add
-      .text(this.x, 0, `${msg.name}: ${msg.text}`, {
+      .text(this.x, 0, display, {
         fontFamily: FONT_NARROW,
         fontSize: "13px",
-        color: mine ? COLORS.accent : COLORS.text,
+        color,
         stroke: "#000000",
         strokeThickness: 3,
         wordWrap: { width: 460 },
@@ -130,8 +160,17 @@ export class ChatBox {
       old.text.destroy();
     }
     this.reflow();
-    if (this.active) line.text.setAlpha(1);
-    else this.scheduleFade(line);
+    if (this.active) {
+      line.text.setAlpha(1);
+    } else {
+      this.scheduleFade(line);
+      // Incoming chatter while closed: blip + bump the unread badge.
+      if (!mine) {
+        this.unread++;
+        this.updateHint();
+        playUiSound(this.scene, "sfx-tap", 0.25);
+      }
+    }
   }
 
   private scheduleFade(line: { text: Phaser.GameObjects.Text; fade?: Phaser.Time.TimerEvent }) {

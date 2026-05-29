@@ -1,5 +1,12 @@
 import Phaser from "phaser";
 import { FONT } from "../ui/theme";
+import { SERVER_URL } from "../network/socket";
+import {
+  getSessionToken,
+  setAccountId,
+  setAccountName,
+  clearSession,
+} from "../network/playerIdentity";
 
 const UI = "assets/kenney_ui-pack/PNG";
 const SND = "assets/kenney_ui-pack/Sounds";
@@ -82,6 +89,38 @@ export class BootScene extends Phaser.Scene {
   }
 
   create() {
-    this.scene.start("MainMenuScene");
+    const token = getSessionToken();
+    if (!token) {
+      this.scene.start("LoginScene");
+      return;
+    }
+
+    this.add
+      .text(this.scale.width / 2, this.scale.height / 2, "Signing in…", {
+        fontFamily: FONT,
+        fontSize: "14px",
+        color: "#ffffff",
+      })
+      .setOrigin(0.5);
+
+    // Validate the saved session before letting the player into the menu.
+    fetch(`${SERVER_URL}/auth/verify?token=${encodeURIComponent(token)}`)
+      .then(async (r) => {
+        if (r.status === 401) {
+          clearSession();
+          this.scene.start("LoginScene", { message: "Please log in again." });
+          return;
+        }
+        if (!r.ok) throw new Error(`verify ${r.status}`);
+        const d = (await r.json()) as { accountId: string; name: string };
+        setAccountId(d.accountId);
+        setAccountName(d.name);
+        this.scene.start("MainMenuScene");
+      })
+      .catch(() => {
+        // Server unreachable — keep the token and let the menu through; the
+        // gameplay scene surfaces the offline-server message if they play.
+        this.scene.start("MainMenuScene");
+      });
   }
 }

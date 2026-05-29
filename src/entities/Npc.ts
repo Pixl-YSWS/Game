@@ -30,14 +30,15 @@ export class Npc extends Phaser.GameObjects.Container {
       .setOrigin(0.5, 1);
     this.nameTag = scene.add
       .text(0, -TILE_H - 2, def.name, {
-        fontSize: "9px",
+        fontSize: "16px",
         fontFamily: FONT,
         color: "#ffd24a",
         stroke: "#000000",
-        strokeThickness: 4,
+        strokeThickness: 5,
       })
       .setOrigin(0.5, 1)
-      .setResolution(4);
+      .setResolution(4)
+      .setScale(0.34);
 
     this.add([shadow, sprite, this.nameTag]);
     scene.add.existing(this);

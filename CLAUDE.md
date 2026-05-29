@@ -8,8 +8,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Client (Vite dev server on http://localhost:5173)
 bun run dev
 
-# Server (Socket.IO game server on http://localhost:3001)
-bun run server/index.ts
+# Server (Socket.IO game server on http://localhost:3001), auto-reloads on change
+bun run server
 
 # Type-check
 bun run build          # tsc && vite build
@@ -18,6 +18,25 @@ bun run build          # tsc && vite build
 ```
 
 The client and server must run concurrently for multiplayer to work. Set `VITE_SERVER_URL` to override the default server URL (`http://localhost:3001`).
+
+### Auth setup (required to play)
+
+Login is mandatory — the socket server rejects any connection without a valid
+Hack Club session, so the game can't be played logged-out. Set it up once:
+
+1. Register an OAuth app at https://auth.hackclub.com (Developer Apps → "app me
+   up!"). Add redirect URI `http://localhost:3001/auth/callback` and request
+   scopes `openid profile email name slack_id`.
+2. `cp .env.example .env` and fill in `HACKCLUB_CLIENT_ID` / `HACKCLUB_CLIENT_SECRET`
+   (Bun auto-loads `.env`). `.env` is gitignored.
+3. `bun run server` + `bun run dev`, open the client, click **Login with Hack Club**.
+
+Flow: client → `GET /auth/login` → Hack Club consent → `GET /auth/callback`
+(token exchange + `/api/v1/me`) → redirect to client with `#auth=<sessionToken>`.
+The client stores the token in localStorage and sends it in the socket handshake;
+`server/auth.ts` verifies it. Accounts + tokens live in the SQLite `accounts`
+table (`server/data/`). Game state (seed, position, pixels) is keyed by the Hack
+Club account id. One active session per account — a new login kicks the old one.
 
 ## Architecture
 
