@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { makeMenuButton } from "../utils/MenuButton";
+import { makeMenuButton, attachMenuNav } from "../utils/MenuButton";
 import { FONT, COLORS } from "../ui/theme";
 import { getAccountName, clearSession } from "../network/playerIdentity";
 import { gameSocket } from "../network/socket";
@@ -55,35 +55,30 @@ export class MainMenuScene extends Phaser.Scene {
 
     // Buttons.
     const cx = W / 2;
-    let by = H / 2 - 24;
+    const by = H / 2 - 24;
     const STEP = 66;
 
     // PLAY continues from your last saved world; first-time players land
     // in their own village (server default).
-    makeMenuButton(this, cx, by, "PLAY", {
-      onClick: () => this.startWorld(undefined),
-    });
-    by += STEP;
-
-    makeMenuButton(this, cx, by, "JOIN OPEN WORLD", {
-      onClick: () => this.startWorld({ kind: "openworld" }),
-    });
-    by += STEP;
-
-    makeMenuButton(this, cx, by, "CHARACTER", {
-      onClick: () => this.scene.launch("CharacterScene", { from: "MainMenuScene" }),
-    });
-    by += STEP;
-
-    makeMenuButton(this, cx, by, "SETTINGS", {
-      onClick: () => this.scene.launch("SettingsScene", { from: "MainMenuScene" }),
-    });
-    by += STEP;
-
-    makeMenuButton(this, cx, by, "LOGOUT", {
-      variant: "grey",
-      onClick: () => this.logout(),
-    });
+    const buttons = [
+      makeMenuButton(this, cx, by, "PLAY", {
+        onClick: () => this.startWorld(undefined),
+      }),
+      makeMenuButton(this, cx, by + STEP, "JOIN OPEN WORLD", {
+        onClick: () => this.startWorld({ kind: "openworld" }),
+      }),
+      makeMenuButton(this, cx, by + STEP * 2, "CHARACTER", {
+        onClick: () => this.scene.launch("CharacterScene", { from: "MainMenuScene" }),
+      }),
+      makeMenuButton(this, cx, by + STEP * 3, "SETTINGS", {
+        onClick: () => this.scene.launch("SettingsScene", { from: "MainMenuScene" }),
+      }),
+      makeMenuButton(this, cx, by + STEP * 4, "LOGOUT", {
+        variant: "grey",
+        onClick: () => this.logout(),
+      }),
+    ];
+    attachMenuNav(this, buttons);
 
     // Signed-in identity.
     const name = getAccountName();

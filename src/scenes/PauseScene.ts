@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { makeMenuButton } from "../utils/MenuButton";
+import { makeMenuButton, attachMenuNav } from "../utils/MenuButton";
 import { FONT } from "../ui/theme";
 import { panel } from "../ui/UIKit";
 import { gameSocket } from "../network/socket";
@@ -40,27 +40,24 @@ export class PauseScene extends Phaser.Scene {
       .setShadow(3, 3, "#000000", 0, true, true);
 
     const cx = W / 2;
-    let by = H / 2 - 50;
+    const by = H / 2 - 50;
     const STEP = 66;
 
-    makeMenuButton(this, cx, by, "RESUME", {
-      onClick: () => this.resume(),
-    });
-    by += STEP;
-
-    makeMenuButton(this, cx, by, "SETTINGS", {
-      onClick: () => this.scene.launch("SettingsScene", { from: "PauseScene" }),
-    });
-    by += STEP;
-
-    makeMenuButton(this, cx, by, "CHARACTER", {
-      onClick: () => this.scene.launch("CharacterScene", { from: "PauseScene" }),
-    });
-    by += STEP;
-
-    makeMenuButton(this, cx, by, "QUIT TO MAIN MENU", {
-      onClick: () => this.quitToMenu(),
-    });
+    const buttons = [
+      makeMenuButton(this, cx, by, "RESUME", {
+        onClick: () => this.resume(),
+      }),
+      makeMenuButton(this, cx, by + STEP, "SETTINGS", {
+        onClick: () => this.scene.launch("SettingsScene", { from: "PauseScene" }),
+      }),
+      makeMenuButton(this, cx, by + STEP * 2, "CHARACTER", {
+        onClick: () => this.scene.launch("CharacterScene", { from: "PauseScene" }),
+      }),
+      makeMenuButton(this, cx, by + STEP * 3, "QUIT TO MAIN MENU", {
+        onClick: () => this.quitToMenu(),
+      }),
+    ];
+    attachMenuNav(this, buttons);
 
     this.add
       .text(W / 2, H - 16, "press ESC to resume", {
