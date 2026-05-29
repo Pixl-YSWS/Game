@@ -22,6 +22,10 @@ export class UIScene extends Phaser.Scene {
   private hpMax = 10;
   private pixels = 0;
   private flashTween?: Phaser.Tweens.Tween;
+  // Unread-notification badge on the inbox button.
+  private unread = 0;
+  private badgeBg?: Phaser.GameObjects.Arc;
+  private badgeText?: Phaser.GameObjects.Text;
 
   // Night overlay + day-cycle anchor. The overlay sits at depth -10 so all
   // HUD elements and the dialogue panel render above it.
@@ -81,6 +85,68 @@ export class UIScene extends Phaser.Scene {
     this.box = new DialogueBox(this);
     this.chat = new ChatBox(this);
     this.buildEmoteBar();
+    this.buildSocialButtons();
+  }
+
+  // ── Invite + inbox buttons (top-right) ────────────────────────────
+  private buildSocialButtons() {
+    const world = () => this.scene.get("WorldScene") as
+      | (Phaser.Scene & { openInvitePanel: () => void; openInbox: () => void })
+      | undefined;
+
+    const x = this.scale.width - 12;
+    const inviteBtn = this.pill(x - 92, 22, "✦ Invite", () => world()?.openInvitePanel());
+    const inboxBtn = this.pill(x - 16, 22, "✉ Inbox", () => world()?.openInbox());
+    // Anchor the unread badge to the inbox button's top-right corner.
+    const bx = inboxBtn.x + inboxBtn.width / 2 - 4;
+    const by = inboxBtn.y - inboxBtn.height / 2 + 2;
+    this.badgeBg = this.add.circle(bx, by, 9, 0xe5484d).setDepth(60).setVisible(false);
+    this.badgeText = this.add
+      .text(bx, by, "", { fontFamily: FONT, fontSize: "10px", color: "#ffffff" })
+      .setOrigin(0.5)
+      .setResolution(3)
+      .setDepth(61)
+      .setVisible(false);
+    void inviteBtn;
+    this.refreshBadge();
+  }
+
+  // A small rounded HUD button: panel-backed label, hand cursor, hover tint.
+  // Returns the backing rectangle (origin centre) so callers can anchor to it.
+  private pill(rightX: number, y: number, label: string, onClick: () => void) {
+    const text = this.add
+      .text(0, 0, label, { fontFamily: FONT, fontSize: "10px", color: COLORS.text })
+      .setOrigin(0.5)
+      .setResolution(3);
+    const w = text.width + 22;
+    const h = 26;
+    const cx = rightX - w / 2;
+    const bg = this.add
+      .nineslice(cx, y, "ui-panel-dark", undefined, w, h, 20, 20, 20, 20)
+      .setOrigin(0.5)
+      .setAlpha(0.95)
+      .setInteractive({ cursor: CURSORS.pointer });
+    text.setPosition(cx, y).setDepth(51);
+    bg.setDepth(50);
+    bg.on("pointerover", () => bg.setTint(0xffe08a));
+    bg.on("pointerout", () => bg.clearTint());
+    bg.on("pointerdown", () => {
+      playUiSound(this, "sfx-tap", 0.3);
+      onClick();
+    });
+    return bg;
+  }
+
+  // Public: refresh the unread badge from the server count.
+  setUnread(n: number) {
+    this.unread = Math.max(0, n | 0);
+    this.refreshBadge();
+  }
+
+  private refreshBadge() {
+    const show = this.unread > 0;
+    this.badgeBg?.setVisible(show);
+    this.badgeText?.setVisible(show).setText(this.unread > 9 ? "9+" : String(this.unread));
   }
 
   // ── Emote bar (bottom-right) ──────────────────────────────────────

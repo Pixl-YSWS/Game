@@ -124,16 +124,24 @@ class GameSocket {
     this.socket?.emit("character:set", { char });
   }
 
-  sendInvite(toSocketId: string) {
-    this.socket?.emit("invite:send", { toSocketId });
+  // Send a persistent village invite to an account.
+  sendInvite(toAccountId: string) {
+    this.socket?.emit("invite:send", { toAccountId });
   }
 
-  acceptInvite(fromSocketId: string) {
-    this.socket?.emit("invite:accept", { fromSocketId });
+  // Ask for the searchable account directory (reply on "players:list").
+  requestPlayers() {
+    this.socket?.emit("players:list");
   }
 
-  declineInvite(fromSocketId: string) {
-    this.socket?.emit("invite:decline", { fromSocketId });
+  // Ask for the inbox snapshot (reply on "notify:list"; marks all read).
+  requestNotifications() {
+    this.socket?.emit("notify:list");
+  }
+
+  // Accept / decline a pending notification by id.
+  respondNotification(id: number, accept: boolean) {
+    this.socket?.emit("notify:respond", { id, accept });
   }
 
   get id(): string | undefined {

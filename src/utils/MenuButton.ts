@@ -7,6 +7,10 @@ export interface MenuButton {
   label: Phaser.GameObjects.Text;
   setText(text: string): void;
   setFocused(v: boolean): void;
+  // Swap the click handler (used by recycled list rows).
+  setOnClick(fn: () => void): void;
+  // Disable/enable: dims the button and ignores clicks while disabled.
+  setEnabled(v: boolean): void;
   trigger(): void;
   destroy(): void;
 }
@@ -52,6 +56,8 @@ export function makeMenuButton(
   let hovering = false;
   let pressed = false;
   let focused = false;
+  let enabled = true;
+  let onClick = opts.onClick;
 
   const render = () => {
     bg.setTexture(pressed ? downTex : upTex);
@@ -59,10 +65,13 @@ export function makeMenuButton(
     else if (hovering) bg.setTint(0xeaf4ff);
     else bg.clearTint();
     container.setScale(focused ? 1.05 : 1);
+    container.setAlpha(enabled ? 1 : 0.5);
     label.setY(pressed ? 0 : -2);
   };
 
-  const fire = () => opts.onClick();
+  const fire = () => {
+    if (enabled) onClick();
+  };
 
   container.on("pointerover", () => { hovering = true; render(); });
   container.on("pointerout", () => { hovering = false; pressed = false; render(); });
@@ -89,6 +98,13 @@ export function makeMenuButton(
     },
     setFocused(v: boolean) {
       focused = v;
+      render();
+    },
+    setOnClick(fn: () => void) {
+      onClick = fn;
+    },
+    setEnabled(v: boolean) {
+      enabled = v;
       render();
     },
     trigger() {

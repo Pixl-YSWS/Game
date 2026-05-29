@@ -13,6 +13,7 @@ import type {
   ClientToServerEvents,
   WorldRef,
   WorldState,
+  Notification,
 } from "../src/types/network.ts";
 import { generateMap } from "../src/world/MapGen.ts";
 import { makeHouseInterior } from "../src/world/HouseMap.ts";
@@ -24,7 +25,17 @@ import { setupAuth, type Account } from "./auth.ts";
 // easy to recognise in logs.
 const OPENWORLD_SEED = 0xC0FFEE;
 
-const INVITE_TTL_MS = 30_000;
+// Row shape for the notifications table (sans the `read` flag, which the
+// client never sees).
+interface NotificationRow {
+  id: number;
+  type: string;
+  from_id: string;
+  from_name: string;
+  message: string | null;
+  status: string;
+  created_at: number;
+}
 
 // 8 minutes of real time per full day/night cycle. Tweak to taste.
 const DAY_LENGTH_MS = 8 * 60 * 1000;
@@ -114,6 +125,83 @@ const hasNpcReward = db.query<{ n: number }, [string, string]>(
 const insertNpcReward = db.query<unknown, [string, string, number]>(
   "INSERT INTO npc_rewards (player_id, npc_id, granted_at) VALUES (?, ?, ?)",
 );
+
+// Persistent inbox. Currently only village invites, but `type` leaves room
+// for system messages later. `status` tracks the invite lifecycle; an
+// accepted village_invite is what grants the recipient access to that
+// owner's village (and surfaces a join button on their main menu).
+db.run(`
+  CREATE TABLE IF NOT EXISTS notifications (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    recipient_id TEXT NOT NULL,
+    type         TEXT NOT NULL,
+    from_id      TEXT NOT NULL,
+    from_name    TEXT NOT NULL,
+    message      TEXT,
+    status       TEXT NOT NULL DEFAULT 'pending',
+    read         INTEGER NOT NULL DEFAULT 0,
+    created_at   INTEGER NOT NULL
+  )
+`);
+db.run("CREATE INDEX IF NOT EXISTS idx_notif_recipient ON notifications(recipient_id)");
+
+const insertNotification = db.query<unknown, [string, string, string, string, string | null, number]>(
+  "INSERT INTO notifications (recipient_id, type, from_id, from_name, message, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+);
+const selectNotifications = db.query<NotificationRow, [string]>(
+  "SELECT id, type, from_id, from_name, message, status, created_at FROM notifications WHERE recipient_id = ? ORDER BY created_at DESC LIMIT 50",
+);
+const selectNotification = db.query<NotificationRow & { recipient_id: string }, [number]>(
+  "SELECT id, recipient_id, type, from_id, from_name, message, status, created_at FROM notifications WHERE id = ?",
+);
+const setNotificationStatus = db.query<unknown, [string, number]>(
+  "UPDATE notifications SET status = ? WHERE id = ?",
+);
+const markNotificationsRead = db.query<unknown, [string]>(
+  "UPDATE notifications SET read = 1 WHERE recipient_id = ? AND read = 0",
+);
+const countUnread = db.query<{ n: number }, [string]>(
+  "SELECT COUNT(*) AS n FROM notifications WHERE recipient_id = ? AND read = 0",
+);
+// A pending invite from the same inviter shouldn't pile up duplicates.
+const countPendingInviteFrom = db.query<{ n: number }, [string, string]>(
+  "SELECT COUNT(*) AS n FROM notifications WHERE recipient_id = ? AND from_id = ? AND type = 'village_invite' AND status = 'pending'",
+);
+// Villages this account has been granted access to (accepted invites).
+const selectAcceptedVillages = db.query<{ from_id: string; from_name: string }, [string]>(
+  "SELECT DISTINCT from_id, from_name FROM notifications WHERE recipient_id = ? AND type = 'village_invite' AND status = 'accepted'",
+);
+const hasAcceptedVillage = db.query<{ n: number }, [string, string]>(
+  "SELECT COUNT(*) AS n FROM notifications WHERE recipient_id = ? AND from_id = ? AND type = 'village_invite' AND status = 'accepted'",
+);
+// Account directory for the invite search panel.
+const selectAllAccounts = db.query<{ account_id: string; name: string }, []>(
+  "SELECT account_id, name FROM accounts ORDER BY name COLLATE NOCASE",
+);
+const selectAccountName = db.query<{ name: string }, [string]>(
+  "SELECT name FROM accounts WHERE account_id = ?",
+);
+
+function unreadCount(playerId: string): number {
+  return countUnread.get(playerId)?.n ?? 0;
+}
+
+function nameForAccount(accountId: string): string | undefined {
+  return selectAccountName.get(accountId)?.name;
+}
+
+// Strip a DB row down to the client-facing Notification shape.
+function toClientNotification(row: NotificationRow): Notification {
+  return {
+    id: row.id,
+    type: row.type as "village_invite",
+    fromId: row.from_id,
+    fromName: row.from_name,
+    message: row.message ?? undefined,
+    status: row.status as "pending" | "accepted" | "declined",
+    createdAt: row.created_at,
+  };
+}
 
 const selectSeed = db.query<{ seed: number }, [string]>(
   "SELECT seed FROM players WHERE player_id = ?",
@@ -249,6 +337,25 @@ app.use(cors());
 const auth = setupAuth(db);
 app.use("/auth", auth.router);
 
+// Villages this account may visit (from accepted invites), for the main menu.
+// Token-gated like /auth/verify since the menu has no live socket yet.
+app.get("/api/villages", (req, res) => {
+  const token =
+    (typeof req.query.token === "string" && req.query.token) ||
+    (req.headers.authorization?.startsWith("Bearer ")
+      ? req.headers.authorization.slice(7)
+      : "");
+  const account = token ? auth.verifySession(token) : null;
+  if (!account) {
+    res.status(401).json({ ok: false });
+    return;
+  }
+  const villages = selectAcceptedVillages
+    .all(account.accountId)
+    .map(v => ({ ownerId: v.from_id, name: v.from_name }));
+  res.json({ ok: true, villages });
+});
+
 const httpServer = createServer(app);
 const io = new Server<ClientToServerEvents, ServerToClientEvents>(httpServer, {
   cors: { origin: "*" },
@@ -329,25 +436,9 @@ const emoteLast = new Map<string, number>();
 // Emotes the server will relay. Keep in sync with the client emote bar.
 const ALLOWED_EMOTES = new Set(["wave", "laugh", "heart", "cry", "angry", "dance"]);
 
-// invites[recipientSocketId] = Map<inviterSocketId, expiresAt>
-// One-shot tickets: accepting consumes it; declines/disconnect/expiry clear it.
-const invites = new Map<string, Map<string, number>>();
-
-function clearInvite(toSocket: string, fromSocket: string) {
-  const m = invites.get(toSocket);
-  if (!m) return;
-  m.delete(fromSocket);
-  if (m.size === 0) invites.delete(toSocket);
-}
-
-function consumeInvite(toSocket: string, fromSocket: string): boolean {
-  const m = invites.get(toSocket);
-  if (!m) return false;
-  const expires = m.get(fromSocket);
-  if (!expires) return false;
-  m.delete(fromSocket);
-  if (m.size === 0) invites.delete(toSocket);
-  return expires > Date.now();
+// Resolve an account id to its live socket id, if that account is online.
+function socketIdForAccount(accountId: string): string | undefined {
+  return liveByAccount.get(accountId);
 }
 
 function peersInWorld(world: WorldRef, exceptSocketId?: string): PlayerState[] {
@@ -490,6 +581,7 @@ io.on("connection", (socket) => {
     verified: state.verified,
     world: worldStateFor(state),
     pixels: state.pixels,
+    unread: unreadCount(playerId),
     dayCycle: {
       tNow: currentDayT(),
       dayLengthMs: DAY_LENGTH_MS,
@@ -533,68 +625,98 @@ io.on("connection", (socket) => {
       return;
     }
 
-    // Otherwise, must have a consumable invite from a socket whose
-    // current player is the village owner.
-    const inviteMap = invites.get(socket.id);
-    if (inviteMap) {
-      for (const [fromSocketId, expires] of inviteMap.entries()) {
-        if (expires < Date.now()) continue;
-        const inviter = players.get(fromSocketId);
-        if (!inviter) continue;
-        if (inviter.playerId === target.ownerPlayerId) {
-          clearInvite(socket.id, fromSocketId);
-          switchWorld(socket, target);
-          return;
-        }
-      }
+    // Otherwise the player must hold an accepted invite to that owner's
+    // village. Access is persistent once granted (no more one-shot tickets).
+    if ((hasAcceptedVillage.get(player.playerId, target.ownerPlayerId)?.n ?? 0) > 0) {
+      switchWorld(socket, target);
+      return;
     }
     socket.emit("invite:error", { reason: "no_invite" });
   });
 
-  socket.on("invite:send", ({ toSocketId }) => {
-    if (toSocketId === socket.id) return;
-    const target = players.get(toSocketId);
+  // ── Invite / notification flow ───────────────────────────────────
+
+  // The full account directory for the invite search panel, with an online
+  // flag so the client can show who's around right now.
+  socket.on("players:list", () => {
+    const me = players.get(socket.id);
+    const rows = selectAllAccounts.all();
+    const list = rows
+      .filter(r => r.account_id !== (me?.playerId ?? ""))
+      .map(r => ({
+        accountId: r.account_id,
+        name: r.name,
+        online: liveByAccount.has(r.account_id),
+      }));
+    socket.emit("players:list", { players: list });
+  });
+
+  // Send a persistent village invite to another account. Stored in the inbox;
+  // delivered live (notify:new) if the recipient is online.
+  socket.on("invite:send", ({ toAccountId }) => {
     const inviter = players.get(socket.id);
-    if (!target || !inviter) return;
-
-    // Only allow inviting players you can actually see (same world).
-    if (worldKey(target.world) !== worldKey(inviter.world)) {
-      socket.emit("invite:error", { reason: "not_in_same_world" });
+    if (!inviter) return;
+    if (typeof toAccountId !== "string" || toAccountId === inviter.playerId) {
+      socket.emit("invite:error", { reason: "invalid_target" });
       return;
     }
-
-    let bucket = invites.get(toSocketId);
-    if (!bucket) {
-      bucket = new Map();
-      invites.set(toSocketId, bucket);
+    if ((countPendingInviteFrom.get(toAccountId, inviter.playerId)?.n ?? 0) > 0) {
+      socket.emit("invite:error", { reason: "already_invited" });
+      return;
     }
-    bucket.set(socket.id, Date.now() + INVITE_TTL_MS);
-    io.to(toSocketId).emit("invite:received", {
-      fromSocketId: socket.id,
-      fromName: inviter.name,
-    });
+    const now = Date.now();
+    const message = `${inviter.name} invited you to their village`;
+    insertNotification.run(toAccountId, "village_invite", inviter.playerId, inviter.name, message, now);
+
+    // Push to the recipient live if they're connected.
+    const toSocketId = socketIdForAccount(toAccountId);
+    if (toSocketId) {
+      const row = selectNotifications.get(toAccountId); // newest first → the one we just made
+      if (row) {
+        io.to(toSocketId).emit("notify:new", {
+          item: toClientNotification(row),
+          unread: unreadCount(toAccountId),
+        });
+      }
+    }
+    socket.emit("invite:sent", { toName: nameForAccount(toAccountId) ?? "player" });
   });
 
-  socket.on("invite:accept", ({ fromSocketId }) => {
-    if (!consumeInvite(socket.id, fromSocketId)) {
-      socket.emit("invite:error", { reason: "invite_expired" });
-      return;
-    }
-    const inviter = players.get(fromSocketId);
-    if (!inviter) {
-      socket.emit("invite:error", { reason: "inviter_offline" });
-      return;
-    }
-    const village: WorldRef = { kind: "village", ownerPlayerId: inviter.playerId };
-    // Bring the inviter home so the two actually end up together.
-    const inviterSocket = io.sockets.sockets.get(fromSocketId);
-    if (inviterSocket) switchWorld(inviterSocket, village);
-    switchWorld(socket, village);
+  // Inbox snapshot. Listing marks everything read (clears the badge).
+  socket.on("notify:list", () => {
+    const player = players.get(socket.id);
+    if (!player) return;
+    const items = selectNotifications.all(player.playerId).map(toClientNotification);
+    markNotificationsRead.run(player.playerId);
+    socket.emit("notify:list", { items, unread: 0 });
   });
 
-  socket.on("invite:decline", ({ fromSocketId }) => {
-    clearInvite(socket.id, fromSocketId);
-    io.to(fromSocketId).emit("invite:cancelled", { fromSocketId: socket.id });
+  // Accept / decline a pending notification. Accepting a village_invite grants
+  // persistent access to the inviter's village.
+  socket.on("notify:respond", ({ id, accept }) => {
+    const player = players.get(socket.id);
+    if (!player) return;
+    const row = selectNotification.get(id);
+    if (!row || row.recipient_id !== player.playerId) return;
+    if (row.status !== "pending") return;
+    setNotificationStatus.run(accept ? "accepted" : "declined", id);
+
+    if (accept && row.type === "village_invite") {
+      // Let the inviter know, if they're online.
+      const inviterSocket = socketIdForAccount(row.from_id);
+      if (inviterSocket) {
+        const now = Date.now();
+        const msg = `${player.name} accepted your village invite`;
+        insertNotification.run(row.from_id, "village_invite", player.playerId, player.name, msg, now);
+        const back = selectNotifications.get(row.from_id);
+        if (back) {
+          io.to(inviterSocket).emit("notify:new", {
+            item: toClientNotification(back),
+            unread: unreadCount(row.from_id),
+          });
+        }
+      }
+    }
   });
 
   socket.on("npc:interact", ({ npcId }) => {
@@ -692,20 +814,12 @@ io.on("connection", (socket) => {
     if (player) persistPlayerState(player);
     dirty.delete(socket.id);
     players.delete(socket.id);
-    invites.delete(socket.id);
     chatLast.delete(socket.id);
     emoteLast.delete(socket.id);
     // Only clear the live-session slot if it still points at us (a newer login
     // may have already taken it over).
     if (player && liveByAccount.get(player.playerId) === socket.id) {
       liveByAccount.delete(player.playerId);
-    }
-    // Cancel any invites this socket sent out.
-    for (const [toId, bucket] of invites) {
-      if (bucket.delete(socket.id)) {
-        io.to(toId).emit("invite:cancelled", { fromSocketId: socket.id });
-        if (bucket.size === 0) invites.delete(toId);
-      }
     }
     if (player) {
       io.to(worldKey(player.world)).emit("player:leave", socket.id);

@@ -26,9 +26,24 @@ export interface WorldState {
   players: PlayerState[];
 }
 
-export interface InviteInfo {
-  fromSocketId: string;
+// One entry in the searchable player directory shown by the invite panel.
+// `online` is whether that account currently has a live socket.
+export interface PlayerDirEntry {
+  accountId: string;
+  name: string;
+  online: boolean;
+}
+
+// A stored, persistent notification (currently only village invites). Lives
+// in the server's SQLite `notifications` table and survives reconnects.
+export interface Notification {
+  id: number;
+  type: "village_invite";
+  fromId: string;
   fromName: string;
+  message?: string;
+  status: "pending" | "accepted" | "declined";
+  createdAt: number;
 }
 
 // Anchor for the world day/night cycle. Clients extrapolate the current
@@ -43,13 +58,20 @@ export interface DayCycle {
 }
 
 export interface ServerToClientEvents {
-  init: (data: { id: string; accountId: string; name: string; char: number; verified: boolean; world: WorldState; pixels: number; dayCycle: DayCycle }) => void;
+  init: (data: { id: string; accountId: string; name: string; char: number; verified: boolean; world: WorldState; pixels: number; unread: number; dayCycle: DayCycle }) => void;
   "world:state": (data: WorldState) => void;
   "player:join": (state: PlayerState) => void;
   "player:move": (data: { id: string; cx: number; cy: number }) => void;
   "player:leave": (id: string) => void;
-  "invite:received": (info: InviteInfo) => void;
-  "invite:cancelled": (data: { fromSocketId: string }) => void;
+  // Account directory for the invite panel.
+  "players:list": (data: { players: PlayerDirEntry[] }) => void;
+  // Full inbox snapshot (in response to notify:list). `unread` is the count
+  // remaining unread after this snapshot (always 0 — listing marks them read).
+  "notify:list": (data: { items: Notification[]; unread: number }) => void;
+  // A new notification arrived while online; carries the live unread count.
+  "notify:new": (data: { item: Notification; unread: number }) => void;
+  // An invite was sent successfully (ack for the sender).
+  "invite:sent": (data: { toName: string }) => void;
   "invite:error": (data: { reason: string }) => void;
   // Wallet sync. `wallet:update` carries the new total + delta + an optional
   // human-readable reason so the client can flash a "+5 from Quill" toast.
@@ -81,9 +103,14 @@ export interface ChatMessage {
 export interface ClientToServerEvents {
   "player:move": (payload: { cx: number; cy: number }) => void;
   "world:enter": (payload: WorldRef) => void;
-  "invite:send": (payload: { toSocketId: string }) => void;
-  "invite:accept": (payload: { fromSocketId: string }) => void;
-  "invite:decline": (payload: { fromSocketId: string }) => void;
+  // Send a persistent village invite to another account.
+  "invite:send": (payload: { toAccountId: string }) => void;
+  // Ask the server for the account directory (responds with players:list).
+  "players:list": () => void;
+  // Ask for the inbox snapshot (responds with notify:list, marks all read).
+  "notify:list": () => void;
+  // Accept or decline a pending notification by id.
+  "notify:respond": (payload: { id: number; accept: boolean }) => void;
   // Fired when the player opens a dialogue with an NPC. Server validates
   // the NPC exists in the player's current world and grants any one-shot
   // reward attached to that NPC.

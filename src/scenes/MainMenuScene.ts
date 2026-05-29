@@ -1,9 +1,14 @@
 import Phaser from "phaser";
-import { makeMenuButton, attachMenuNav } from "../utils/MenuButton";
+import { makeMenuButton, attachMenuNav, type MenuButton } from "../utils/MenuButton";
 import { FONT, COLORS } from "../ui/theme";
-import { getAccountName, clearSession } from "../network/playerIdentity";
-import { gameSocket } from "../network/socket";
+import { getAccountName, getSessionToken, clearSession } from "../network/playerIdentity";
+import { gameSocket, SERVER_URL } from "../network/socket";
 import type { WorldRef } from "../types/network";
+
+interface JoinableVillage {
+  ownerId: string;
+  name: string;
+}
 
 export class MainMenuScene extends Phaser.Scene {
   constructor() {
@@ -53,32 +58,12 @@ export class MainMenuScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    // Buttons.
-    const cx = W / 2;
-    const by = H / 2 - 24;
-    const STEP = 66;
-
-    // PLAY continues from your last saved world; first-time players land
-    // in their own village (server default).
-    const buttons = [
-      makeMenuButton(this, cx, by, "PLAY", {
-        onClick: () => this.startWorld(undefined),
-      }),
-      makeMenuButton(this, cx, by + STEP, "JOIN OPEN WORLD", {
-        onClick: () => this.startWorld({ kind: "openworld" }),
-      }),
-      makeMenuButton(this, cx, by + STEP * 2, "CHARACTER", {
-        onClick: () => this.scene.launch("CharacterScene", { from: "MainMenuScene" }),
-      }),
-      makeMenuButton(this, cx, by + STEP * 3, "SETTINGS", {
-        onClick: () => this.scene.launch("SettingsScene", { from: "MainMenuScene" }),
-      }),
-      makeMenuButton(this, cx, by + STEP * 4, "LOGOUT", {
-        variant: "grey",
-        onClick: () => this.logout(),
-      }),
-    ];
-    attachMenuNav(this, buttons);
+    // Buttons are built after we know which villages this account can join,
+    // so the join shortcuts slot into the keyboard-navigable list. The fetch
+    // is fast on localhost; the decor above shows instantly meanwhile.
+    this.fetchVillages().then((villages) => {
+      if (this.scene.isActive()) this.buildButtons(villages);
+    });
 
     // Signed-in identity.
     const name = getAccountName();
@@ -100,6 +85,62 @@ export class MainMenuScene extends Phaser.Scene {
         color: "#555566",
       })
       .setOrigin(0.5, 1);
+  }
+
+  // Villages this account has been invited into (accepted invites). Failures
+  // (offline server, expired token) just yield none — the menu still works.
+  private async fetchVillages(): Promise<JoinableVillage[]> {
+    const token = getSessionToken();
+    if (!token) return [];
+    try {
+      const r = await fetch(`${SERVER_URL}/api/villages?token=${encodeURIComponent(token)}`);
+      if (!r.ok) return [];
+      const d = (await r.json()) as { ok: boolean; villages?: JoinableVillage[] };
+      return d.ok ? d.villages ?? [] : [];
+    } catch {
+      return [];
+    }
+  }
+
+  private buildButtons(villages: JoinableVillage[]) {
+    const cx = this.scale.width / 2;
+    const STEP = 60;
+    // Keep the stack vertically centred regardless of how many village
+    // shortcuts we add.
+    const rows = 5 + villages.length;
+    let y = this.scale.height / 2 - 24 - ((rows - 5) * STEP) / 2;
+
+    // PLAY continues from your last saved world; first-time players land
+    // in their own village (server default).
+    const buttons: MenuButton[] = [
+      makeMenuButton(this, cx, y, "PLAY", { onClick: () => this.startWorld(undefined) }),
+      makeMenuButton(this, cx, (y += STEP), "JOIN OPEN WORLD", {
+        onClick: () => this.startWorld({ kind: "openworld" }),
+      }),
+    ];
+
+    // One shortcut per village the player has been invited into.
+    for (const v of villages) {
+      buttons.push(
+        makeMenuButton(this, cx, (y += STEP), `VISIT ${v.name.toUpperCase()}`, {
+          onClick: () => this.startWorld({ kind: "village", ownerPlayerId: v.ownerId }),
+        }),
+      );
+    }
+
+    buttons.push(
+      makeMenuButton(this, cx, (y += STEP), "CHARACTER", {
+        onClick: () => this.scene.launch("CharacterScene", { from: "MainMenuScene" }),
+      }),
+      makeMenuButton(this, cx, (y += STEP), "SETTINGS", {
+        onClick: () => this.scene.launch("SettingsScene", { from: "MainMenuScene" }),
+      }),
+      makeMenuButton(this, cx, (y += STEP), "LOGOUT", {
+        variant: "grey",
+        onClick: () => this.logout(),
+      }),
+    );
+    attachMenuNav(this, buttons);
   }
 
   private startWorld(world: WorldRef | undefined) {

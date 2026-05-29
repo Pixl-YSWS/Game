@@ -2,7 +2,7 @@ import Phaser from "phaser";
 import { IsoMap } from "../world/IsoMap";
 import { Player } from "../entities/Player";
 import { Npc } from "../entities/Npc";
-import type { PlayerState, WorldRef, WorldState, InviteInfo } from "../types/network";
+import type { PlayerState, WorldRef, WorldState } from "../types/network";
 import type { MapDef } from "../types/map";
 import { generateMap } from "../world/MapGen";
 import { makeHouseInterior } from "../world/HouseMap";
@@ -48,7 +48,6 @@ export class WorldScene extends Phaser.Scene {
   private hotkeys!: {
     O: Phaser.Input.Keyboard.Key;
     I: Phaser.Input.Keyboard.Key;
-    Y: Phaser.Input.Keyboard.Key;
     N: Phaser.Input.Keyboard.Key;
     E: Phaser.Input.Keyboard.Key;
   };
@@ -88,9 +87,6 @@ export class WorldScene extends Phaser.Scene {
   // Optional world to request right after connecting, set from the main menu.
   private initialWorld?: WorldRef;
 
-  // Pending invites awaiting our Y/N answer.
-  private inviteQueue: InviteInfo[] = [];
-  private invitePromptText?: Phaser.GameObjects.Text;
 
   constructor() {
     super({ key: "WorldScene" });
@@ -111,7 +107,6 @@ export class WorldScene extends Phaser.Scene {
     this.hotkeys = {
       O: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.O),
       I: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.I),
-      Y: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.Y),
       N: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.N),
       E: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.E),
     };
@@ -258,11 +253,10 @@ export class WorldScene extends Phaser.Scene {
         gameSocket.enterWorld({ kind: "openworld" });
       }
     });
-    // I — invite the nearest other player in the same world.
-    this.hotkeys.I.on("down", () => this.inviteNearest());
-    // Y / N — respond to the front of the invite queue.
-    this.hotkeys.Y.on("down", () => this.respondToInvite(true));
-    this.hotkeys.N.on("down", () => this.respondToInvite(false));
+    // I — open the searchable invite panel (same as the HUD button).
+    this.hotkeys.I.on("down", () => this.openInvitePanel());
+    // N — open the notifications inbox (invites land here).
+    this.hotkeys.N.on("down", () => this.openInbox());
     // E — advance dialogue, talk to an adjacent NPC, or enter a house door.
     this.hotkeys.E.on("down", () => {
       if (!this.localPlayer) return;
@@ -538,7 +532,7 @@ export class WorldScene extends Phaser.Scene {
     if (!this.ui) return;
     let label: string;
     if (this.world.kind === "openworld") {
-      label = "Open World  [E] house  [O] village  [I] invite";
+      label = "Open World  [E] house  [O] village  [N] inbox";
     } else if (this.world.kind === "house") {
       label = "Shared House  walk through the doorway to exit";
     } else if (this.world.ownerPlayerId === getAccountId()) {
@@ -583,7 +577,7 @@ export class WorldScene extends Phaser.Scene {
       this.returnToLogin("This account was opened somewhere else.", false);
     });
 
-    gameSocket.on("init", ({ accountId, name, char, verified, world, pixels, dayCycle }) => {
+    gameSocket.on("init", ({ accountId, name, char, verified, world, pixels, unread, dayCycle }) => {
       setAccountId(accountId);
       setAccountName(name);
       this.myVerified = verified;
@@ -598,6 +592,7 @@ export class WorldScene extends Phaser.Scene {
         setCharIndex(char);
       }
       this.ui?.setWallet(pixels, 0);
+      this.ui?.setUnread(unread);
       this.ui?.setDayCycle(dayCycle.tNow, dayCycle.dayLengthMs, dayCycle.serverNow);
       this.rebuildWorld(world);
       // If the main menu asked for a specific world, request it now that the
@@ -635,16 +630,22 @@ export class WorldScene extends Phaser.Scene {
       }
     });
 
-    gameSocket.on("invite:received", (info) => {
-      this.inviteQueue.push(info);
-      this.renderInvitePrompt();
+    // A notification arrived live — bump the inbox badge and toast it.
+    gameSocket.on("notify:new", ({ item, unread }) => {
+      this.ui?.setUnread(unread);
+      this.flashStatus(item.message ?? "New notification  [N] inbox");
+      playUiSound(this, "sfx-switch", 0.3);
     });
-    gameSocket.on("invite:cancelled", ({ fromSocketId }) => {
-      this.inviteQueue = this.inviteQueue.filter(i => i.fromSocketId !== fromSocketId);
-      this.renderInvitePrompt();
+    gameSocket.on("invite:sent", ({ toName }) => {
+      this.flashStatus(`Invite sent to ${toName}`);
     });
     gameSocket.on("invite:error", ({ reason }) => {
-      this.flashStatus(`Invite error: ${reason}`);
+      const human: Record<string, string> = {
+        already_invited: "You already invited them",
+        invalid_target: "Can't invite that player",
+        no_invite: "You need an invite to enter that village",
+      };
+      this.flashStatus(human[reason] ?? `Invite error: ${reason}`);
     });
 
     gameSocket.on("chat:message", (msg) => {
@@ -692,56 +693,18 @@ export class WorldScene extends Phaser.Scene {
     this.remotePlayers.set(state.id, player);
   }
 
-  // ── Invites ───────────────────────────────────────────────────────
+  // ── Invites / inbox ────────────────────────────────────────────────
 
-  private inviteNearest() {
-    if (!this.localPlayer) return;
-    if (this.remotePlayers.size === 0) {
-      this.flashStatus("No one nearby to invite");
-      return;
-    }
-    let nearest: Player | undefined;
-    let bestDist = Infinity;
-    for (const r of this.remotePlayers.values()) {
-      const dx = r.cx - this.localPlayer.cx;
-      const dy = r.cy - this.localPlayer.cy;
-      const d = dx * dx + dy * dy;
-      if (d < bestDist) { bestDist = d; nearest = r; }
-    }
-    if (!nearest) return;
-    gameSocket.sendInvite(nearest.playerId);
-    this.flashStatus(`Invite sent to ${nearest.playerId.slice(0, 4)}`);
+  // Open the searchable invite panel (launched from the HUD button).
+  openInvitePanel() {
+    if (this.scene.isActive("InvitePanelScene")) return;
+    this.scene.launch("InvitePanelScene", { from: "WorldScene" });
   }
 
-  private respondToInvite(accept: boolean) {
-    const next = this.inviteQueue.shift();
-    if (!next) return;
-    if (accept) gameSocket.acceptInvite(next.fromSocketId);
-    else gameSocket.declineInvite(next.fromSocketId);
-    this.renderInvitePrompt();
-  }
-
-  private renderInvitePrompt() {
-    this.invitePromptText?.destroy();
-    this.invitePromptText = undefined;
-    const front = this.inviteQueue[0];
-    if (!front) return;
-    this.invitePromptText = this.add
-      .text(
-        this.scale.width / 2,
-        24,
-        `${front.fromName} invites you to their village  [Y] accept  [N] decline`,
-        {
-          fontFamily: FONT,
-          fontSize: "8px",
-          color: "#ffffff",
-          backgroundColor: "#000000aa",
-          padding: { x: 8, y: 6 },
-        },
-      )
-      .setOrigin(0.5, 0)
-      .setScrollFactor(0)
-      .setDepth(1000);
+  // Open the notifications inbox (N key, or the HUD bell).
+  openInbox() {
+    if (this.scene.isActive("InboxScene")) return;
+    this.scene.launch("InboxScene", { from: "WorldScene" });
   }
 
   private flashStatus(msg: string) {
