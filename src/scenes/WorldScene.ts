@@ -486,7 +486,12 @@ export class WorldScene extends Phaser.Scene {
     this.mapDef =
       state.world.kind === "house"
         ? makeHouseInterior()
-        : generateMap(state.seed, { houses: state.world.kind !== "openworld" });
+        : generateMap(state.seed, {
+            houses: state.world.kind !== "openworld",
+            // The open world gets a single house whose door leads into the
+            // shared multiplayer house.
+            sharedHouse: state.world.kind === "openworld",
+          });
     this.isoMap = new IsoMap(this, this.mapDef);
     this.isoMap.build();
     this.rebuildDoorIndicators();
@@ -533,13 +538,13 @@ export class WorldScene extends Phaser.Scene {
     if (!this.ui) return;
     let label: string;
     if (this.world.kind === "openworld") {
-      label = "Open World  [O] village  [I] invite";
+      label = "Open World  [E] house  [O] village  [I] invite";
     } else if (this.world.kind === "house") {
       label = "Shared House  walk through the doorway to exit";
     } else if (this.world.ownerPlayerId === getAccountId()) {
-      label = "Your Village  [O] open world";
+      label = "Your Village  [O] open world  [Shift] run";
     } else {
-      label = "Visiting Village  [O] open world";
+      label = "Visiting Village  [O] open world  [Shift] run";
     }
     this.ui.setStatus(label);
   }

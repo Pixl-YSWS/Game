@@ -73,8 +73,11 @@ function clone(layer: number[][]): number[][] {
 // (roads, paths, scenery); this function decides what house goes in each
 // slot and where inside that slot it sits, giving every seed a different
 // arrangement while keeping the overall village layout coherent.
-export function generateMap(seed: number, options: { houses?: boolean } = {}): MapDef {
-  const { houses = true } = options;
+export function generateMap(
+  seed: number,
+  options: { houses?: boolean; sharedHouse?: boolean } = {},
+): MapDef {
+  const { houses = true, sharedHouse = false } = options;
   const rng = seededRng(seed);
   const preset = PRESETS[ri(rng, PRESETS.length)];
 
@@ -86,9 +89,16 @@ export function generateMap(seed: number, options: { houses?: boolean } = {}): M
   const used = new Set<number>();
   const placed: { baseX: number; baseY: number; w: number; h: number }[] = [];
   const doors: { cx: number; cy: number }[] = [];
-  // The shared open world is left as clear terrain (no buildings); only the
-  // private/visited villages get houses stamped into their slots.
-  for (const slot of houses ? preset.houseSlots : []) {
+  // Private/visited villages fill every house slot. The shared open world is
+  // otherwise clear terrain, but gets a single house stamped into its first
+  // slot so there's a visible door leading into the shared multiplayer house
+  // (a door in the open world routes there — see WorldScene.enterHouse).
+  const slots = houses
+    ? preset.houseSlots
+    : sharedHouse
+      ? preset.houseSlots.slice(0, 1)
+      : [];
+  for (const slot of slots) {
     const fits: { tpl: number[][]; idx: number }[] = [];
     HOUSE_TEMPLATES.forEach((tpl, idx) => {
       if (tpl[0].length <= slot.width && tpl.length <= slot.height) {

@@ -7,6 +7,12 @@ import { FONT, FONT_NARROW, COLORS } from "../ui/theme";
 export type { PlayerState };
 
 const STEP_MS = 120; // ms per tile — one step every 120 ms (~8 tiles/sec)
+const RUN_STEP_MS = 72; // holding Shift sprints at ~14 tiles/sec
+
+// Resting y of the character sprite within the container: origin at the feet,
+// nudged down so it reads as standing on the tile. The walk-hop and idle bob
+// both animate around this baseline.
+const SPRITE_FOOT_Y = TILE_H / 2 + 2;
 
 // Kenney pixel-platformer "chars" sheet: 9 cols × 3 rows of 24×24 tiles.
 // The top row holds humanoid characters as {idle, walk} frame pairs, so each
@@ -44,6 +50,15 @@ export class Player extends Phaser.GameObjects.Container {
   // Bubble shown above the head for chat lines / emotes (lazily created).
   private bubble?: Phaser.GameObjects.Container;
   private bubbleTimer?: Phaser.Time.TimerEvent;
+  // Gentle breathing bob while standing still (looping); stopped while walking.
+  private idleBob?: Phaser.Tweens.Tween;
+  // Counts steps so footstep dust puffs on alternate tiles, not every one.
+  private stepCount = 0;
+  // True while Shift is held — the local player sprints (shorter step time).
+  private running = false;
+  // Scene time of the last remote move, so remote interpolation can match the
+  // sender's actual cadence (and so look right when a peer is sprinting).
+  private lastRemoteMoveT = 0;
 
   constructor(
     scene: Phaser.Scene,
@@ -74,7 +89,7 @@ export class Player extends Phaser.GameObjects.Container {
     // 24px character standing on the tile: origin at the feet, nudged down so
     // it reads as occupying the tile rather than floating above it.
     this.sprite = scene.add
-      .image(0, TILE_H / 2 + 2, CHAR_SHEET, this.charBase)
+      .image(0, SPRITE_FOOT_Y, CHAR_SHEET, this.charBase)
       .setOrigin(0.5, 1);
 
     // Verified Hack Clubbers get a green name + check badge.
@@ -96,6 +111,7 @@ export class Player extends Phaser.GameObjects.Container {
     this.add([this.shadow, this.sprite, this.nameTag]);
     scene.add.existing(this);
     this.setDepth(state.cy + 1.5);
+    this.startIdleBob();
   }
 
   assignId(id: string) {
@@ -135,7 +151,8 @@ export class Player extends Phaser.GameObjects.Container {
     this.cx = cx;
     this.cy = cy;
     this.isMoving = true;
-    this.setStepFrame(dx);
+    const dur = this.running ? RUN_STEP_MS : STEP_MS;
+    this.startStepAnim(dx, dur);
 
     const { x, y } = cartToIso(cx, cy);
 
@@ -143,7 +160,7 @@ export class Player extends Phaser.GameObjects.Container {
       targets: this,
       x: x + TILE_W / 2,
       y: y + TILE_H / 2,
-      duration: STEP_MS,
+      duration: dur,
       ease: "Linear",
       onComplete: () => {
         // The player may have been destroyed mid-step (e.g. a world switch
@@ -157,7 +174,7 @@ export class Player extends Phaser.GameObjects.Container {
         if (hx !== 0 || hy !== 0) {
           this.moveToTile(this.cx + hx, this.cy + hy);
         } else {
-          this.sprite.setFrame(this.charBase); // back to idle
+          this.returnToIdle();
         }
       },
     });
@@ -171,6 +188,71 @@ export class Player extends Phaser.GameObjects.Container {
     this.sprite.setFrame(this.charBase + 1);
     if (dx > 0) this.sprite.setFlipX(true);
     else if (dx < 0) this.sprite.setFlipX(false);
+  }
+
+  // One footstep: walk frame + a small vertical hop, plus a dust puff on
+  // alternate tiles. The hop is a yoyo over exactly one step (so chained
+  // steps read as a continuous bouncing walk cycle) — `dur` keeps it in sync
+  // whether the player is walking or sprinting.
+  private startStepAnim(dx: number, dur: number) {
+    this.setStepFrame(dx);
+    this.stopIdleBob();
+    this.scene.tweens.killTweensOf(this.sprite);
+    this.scene.tweens.add({
+      targets: this.sprite,
+      y: SPRITE_FOOT_Y - 2,
+      duration: dur / 2,
+      ease: "Sine.easeOut",
+      yoyo: true,
+    });
+    if (this.stepCount++ % 2 === 0) this.spawnDust();
+  }
+
+  // Settle back to the idle frame at rest height and resume the breathing bob.
+  private returnToIdle() {
+    if (!this.scene) return;
+    this.scene.tweens.killTweensOf(this.sprite);
+    this.sprite.setFrame(this.charBase);
+    this.startIdleBob();
+  }
+
+  private startIdleBob() {
+    if (!this.scene) return;
+    this.stopIdleBob();
+    this.sprite.y = SPRITE_FOOT_Y;
+    this.idleBob = this.scene.tweens.add({
+      targets: this.sprite,
+      y: SPRITE_FOOT_Y - 0.8,
+      duration: 1100,
+      ease: "Sine.easeInOut",
+      yoyo: true,
+      repeat: -1,
+    });
+  }
+
+  private stopIdleBob() {
+    this.idleBob?.stop();
+    this.idleBob = undefined;
+  }
+
+  // A short-lived puff of dust kicked up at the feet on a footstep. Lives in
+  // scene space (not parented to the player) so it stays put as the player
+  // walks on, fading and spreading before it removes itself.
+  private spawnDust() {
+    if (!this.scene) return;
+    const puff = this.scene.add
+      .ellipse(this.x, this.y + 5, 5, 3, 0xd8cba8, 0.4)
+      .setDepth(this.depth - 0.5);
+    this.scene.tweens.add({
+      targets: puff,
+      scaleX: 2,
+      scaleY: 2,
+      alpha: 0,
+      y: puff.y - 2,
+      duration: 280,
+      ease: "Quad.easeOut",
+      onComplete: () => puff.destroy(),
+    });
   }
 
   private canMoveToTile(cx: number, cy: number): boolean {
@@ -195,6 +277,10 @@ export class Player extends Phaser.GameObjects.Container {
     },
     _delta: number,
   ): boolean {
+    // Hold Shift to sprint. createCursorKeys() exposes the Shift key, so this
+    // works for both arrow-key and WASD movement.
+    this.running = !!cursors.shift?.isDown;
+
     // Cardinal only — one direction at a time, matching classic retro games.
     let dx = 0,
       dy = 0;
@@ -216,6 +302,8 @@ export class Player extends Phaser.GameObjects.Container {
     // (which chains another move and touches the scene) can't fire on a
     // half-destroyed object and crash the game loop.
     this.scene?.tweens.killTweensOf(this);
+    this.scene?.tweens.killTweensOf(this.sprite);
+    this.stopIdleBob();
     this.bubbleTimer?.remove();
     this.inputDir = { dx: 0, dy: 0 };
     super.destroy(fromScene);
@@ -225,18 +313,22 @@ export class Player extends Phaser.GameObjects.Container {
     const dx = state.cx - this.cx;
     this.cx = state.cx;
     this.cy = state.cy;
-    this.setStepFrame(dx);
+    // Interpolate over the gap since this peer's last move so a sprinting
+    // peer animates at their real speed instead of a fixed walk cadence.
+    const now = this.scene.time.now;
+    const elapsed = this.lastRemoteMoveT ? now - this.lastRemoteMoveT : STEP_MS;
+    this.lastRemoteMoveT = now;
+    const dur = Phaser.Math.Clamp(elapsed, RUN_STEP_MS, STEP_MS);
+    this.startStepAnim(dx, dur);
     const { x, y } = cartToIso(state.cx, state.cy);
     this.scene.tweens.killTweensOf(this);
     this.scene.tweens.add({
       targets: this,
       x: x + TILE_W / 2,
       y: y + TILE_H / 2,
-      duration: STEP_MS,
+      duration: dur,
       ease: "Linear",
-      onComplete: () => {
-        if (this.scene) this.sprite.setFrame(this.charBase);
-      },
+      onComplete: () => this.returnToIdle(),
     });
   }
 
