@@ -7,16 +7,24 @@ import { mkdirSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { Database } from "bun:sqlite";
-import type { PlayerState, ServerToClientEvents, ClientToServerEvents } from "../src/types/network.ts";
+import type {
+  PlayerState,
+  ServerToClientEvents,
+  ClientToServerEvents,
+  WorldRef,
+  WorldState,
+} from "../src/types/network.ts";
 import { generateMap } from "../src/world/MapGen.ts";
+import { makeHouseInterior } from "../src/world/HouseMap.ts";
 
-const MAP_COLS = 30;
-const MAP_ROWS = 20;
+// Fixed seed for the shared open world. Anything stable & distinct from
+// the player-id-derived seeds is fine; spelling something out makes it
+// easy to recognise in logs.
+const OPENWORLD_SEED = 0xC0FFEE;
+
+const INVITE_TTL_MS = 30_000;
 
 // ── Seed persistence (SQLite) ────────────────────────────────────
-// `players` table: one row per persistent player. Looking a player up
-// by their (browser-local) playerId returns the seed of the village
-// procedurally generated for them on first visit.
 const DATA_DIR = join(dirname(fileURLToPath(import.meta.url)), "data");
 mkdirSync(DATA_DIR, { recursive: true });
 
@@ -46,8 +54,6 @@ function getOrCreateSeed(playerId: string): number {
   return seed;
 }
 
-// One-time migration: if the old players.json is still around, fold any
-// missing entries into the table and leave the file alone as a backup.
 async function migrateLegacyJson() {
   const legacy = join(DATA_DIR, "players.json");
   try {
@@ -65,6 +71,35 @@ async function migrateLegacyJson() {
   }
 }
 
+// ── World helpers ────────────────────────────────────────────────
+
+type WorldKey = "openworld" | "house" | `village:${string}`;
+
+function worldKey(world: WorldRef): WorldKey {
+  if (world.kind === "openworld") return "openworld";
+  if (world.kind === "house") return "house";
+  return `village:${world.ownerPlayerId}`;
+}
+
+function worldSeed(world: WorldRef): number {
+  if (world.kind === "openworld") return OPENWORLD_SEED;
+  if (world.kind === "house") return 0;
+  return getOrCreateSeed(world.ownerPlayerId);
+}
+
+// Generated map cache, keyed by WorldKey. The MapDef is large; caching
+// avoids regenerating it on every world switch / spawn lookup.
+const mapCache = new Map<WorldKey, ReturnType<typeof generateMap>>();
+function mapFor(world: WorldRef) {
+  const key = worldKey(world);
+  let m = mapCache.get(key);
+  if (!m) {
+    m = world.kind === "house" ? makeHouseInterior() : generateMap(worldSeed(world));
+    mapCache.set(key, m);
+  }
+  return m;
+}
+
 // ── HTTP / Socket.IO ─────────────────────────────────────────────
 const app = express();
 app.use(cors());
@@ -74,8 +109,75 @@ const io = new Server<ClientToServerEvents, ServerToClientEvents>(httpServer, {
   cors: { origin: "*" },
 });
 
-interface ServerPlayerState extends PlayerState { seed: number }
+interface ServerPlayerState extends PlayerState {
+  playerId: string;
+  world: WorldRef;
+}
 const players = new Map<string, ServerPlayerState>();
+
+// invites[recipientSocketId] = Map<inviterSocketId, expiresAt>
+// One-shot tickets: accepting consumes it; declines/disconnect/expiry clear it.
+const invites = new Map<string, Map<string, number>>();
+
+function clearInvite(toSocket: string, fromSocket: string) {
+  const m = invites.get(toSocket);
+  if (!m) return;
+  m.delete(fromSocket);
+  if (m.size === 0) invites.delete(toSocket);
+}
+
+function consumeInvite(toSocket: string, fromSocket: string): boolean {
+  const m = invites.get(toSocket);
+  if (!m) return false;
+  const expires = m.get(fromSocket);
+  if (!expires) return false;
+  m.delete(fromSocket);
+  if (m.size === 0) invites.delete(toSocket);
+  return expires > Date.now();
+}
+
+function peersInWorld(world: WorldRef, exceptSocketId?: string): PlayerState[] {
+  const target = worldKey(world);
+  return [...players.values()]
+    .filter(p => worldKey(p.world) === target && p.id !== exceptSocketId)
+    .map(({ id, cx, cy, name }) => ({ id, cx, cy, name }));
+}
+
+function worldStateFor(state: ServerPlayerState): WorldState {
+  mapFor(state.world); // ensure the map is cached so spawn lookups are consistent
+  return {
+    world: state.world,
+    seed: worldSeed(state.world),
+    spawn: { cx: state.cx, cy: state.cy },
+    players: peersInWorld(state.world, state.id),
+  };
+}
+
+// Move a connected socket into a new world. Handles room membership,
+// player:leave for the old world, world:state to the switcher, and
+// player:join broadcast to the new world.
+function switchWorld(socket: import("socket.io").Socket<ClientToServerEvents, ServerToClientEvents>, next: WorldRef) {
+  const state = players.get(socket.id);
+  if (!state) return;
+  const oldRoom = worldKey(state.world);
+  const newRoom = worldKey(next);
+  if (oldRoom === newRoom) return;
+
+  socket.leave(oldRoom);
+  socket.to(oldRoom).emit("player:leave", socket.id);
+
+  const nextMap = mapFor(next);
+  state.world = next;
+  state.cx = nextMap.spawnPoint.cx;
+  state.cy = nextMap.spawnPoint.cy;
+
+  socket.join(newRoom);
+  socket.emit("world:state", worldStateFor(state));
+  socket.to(newRoom).emit("player:join", {
+    id: state.id, cx: state.cx, cy: state.cy, name: state.name,
+  });
+  console.log(`[~] ${socket.id} → ${newRoom}`);
+}
 
 io.on("connection", (socket) => {
   const playerId = socket.handshake.auth?.playerId;
@@ -85,29 +187,24 @@ io.on("connection", (socket) => {
     return;
   }
 
-  const seed = getOrCreateSeed(playerId);
-  // Spawn on the road intersection of the player's own village
-  const map = generateMap(seed);
-  console.log(`[+] ${socket.id} (player ${playerId.slice(0, 8)}…) seed=${seed}`);
+  // Everyone starts in their own village.
+  const world: WorldRef = { kind: "village", ownerPlayerId: playerId };
+  const map = mapFor(world);
 
   const state: ServerPlayerState = {
     id: socket.id,
+    playerId,
     cx: map.spawnPoint.cx,
     cy: map.spawnPoint.cy,
     name: `Player_${socket.id.slice(0, 4)}`,
-    seed,
+    world,
   };
   players.set(socket.id, state);
-
-  // Each seed is its own "world" — broadcasts only go to sockets in it.
-  const room = `world:${seed}`;
+  const room = worldKey(world);
   socket.join(room);
+  console.log(`[+] ${socket.id} (player ${playerId.slice(0, 8)}…) → ${room}`);
 
-  const peers = [...players.values()]
-    .filter(p => p.seed === seed && p.id !== socket.id)
-    .map(({ seed: _, ...rest }) => rest);
-
-  socket.emit("init", { id: socket.id, players: peers, seed });
+  socket.emit("init", { id: socket.id, world: worldStateFor(state) });
   socket.to(room).emit("player:join", {
     id: state.id, cx: state.cx, cy: state.cy, name: state.name,
   });
@@ -115,15 +212,106 @@ io.on("connection", (socket) => {
   socket.on("player:move", ({ cx, cy }) => {
     const player = players.get(socket.id);
     if (!player) return;
-    if (cx < 0 || cy < 0 || cx >= MAP_COLS || cy >= MAP_ROWS) return;
+    const m = mapFor(player.world);
+    if (cx < 0 || cy < 0 || cx >= m.cols || cy >= m.rows) return;
     player.cx = cx;
     player.cy = cy;
-    socket.to(room).emit("player:move", { id: socket.id, cx, cy });
+    socket.to(worldKey(player.world)).emit("player:move", { id: socket.id, cx, cy });
+  });
+
+  socket.on("world:enter", (target) => {
+    const player = players.get(socket.id);
+    if (!player) return;
+
+    if (target.kind === "openworld" || target.kind === "house") {
+      switchWorld(socket, target);
+      return;
+    }
+
+    // Entering own village always allowed.
+    if (target.ownerPlayerId === player.playerId) {
+      switchWorld(socket, target);
+      return;
+    }
+
+    // Otherwise, must have a consumable invite from a socket whose
+    // current player is the village owner.
+    const inviteMap = invites.get(socket.id);
+    if (inviteMap) {
+      for (const [fromSocketId, expires] of inviteMap.entries()) {
+        if (expires < Date.now()) continue;
+        const inviter = players.get(fromSocketId);
+        if (!inviter) continue;
+        if (inviter.playerId === target.ownerPlayerId) {
+          clearInvite(socket.id, fromSocketId);
+          switchWorld(socket, target);
+          return;
+        }
+      }
+    }
+    socket.emit("invite:error", { reason: "no_invite" });
+  });
+
+  socket.on("invite:send", ({ toSocketId }) => {
+    if (toSocketId === socket.id) return;
+    const target = players.get(toSocketId);
+    const inviter = players.get(socket.id);
+    if (!target || !inviter) return;
+
+    // Only allow inviting players you can actually see (same world).
+    if (worldKey(target.world) !== worldKey(inviter.world)) {
+      socket.emit("invite:error", { reason: "not_in_same_world" });
+      return;
+    }
+
+    let bucket = invites.get(toSocketId);
+    if (!bucket) {
+      bucket = new Map();
+      invites.set(toSocketId, bucket);
+    }
+    bucket.set(socket.id, Date.now() + INVITE_TTL_MS);
+    io.to(toSocketId).emit("invite:received", {
+      fromSocketId: socket.id,
+      fromName: inviter.name,
+    });
+  });
+
+  socket.on("invite:accept", ({ fromSocketId }) => {
+    if (!consumeInvite(socket.id, fromSocketId)) {
+      socket.emit("invite:error", { reason: "invite_expired" });
+      return;
+    }
+    const inviter = players.get(fromSocketId);
+    if (!inviter) {
+      socket.emit("invite:error", { reason: "inviter_offline" });
+      return;
+    }
+    const village: WorldRef = { kind: "village", ownerPlayerId: inviter.playerId };
+    // Bring the inviter home so the two actually end up together.
+    const inviterSocket = io.sockets.sockets.get(fromSocketId);
+    if (inviterSocket) switchWorld(inviterSocket, village);
+    switchWorld(socket, village);
+  });
+
+  socket.on("invite:decline", ({ fromSocketId }) => {
+    clearInvite(socket.id, fromSocketId);
+    io.to(fromSocketId).emit("invite:cancelled", { fromSocketId: socket.id });
   });
 
   socket.on("disconnect", () => {
+    const player = players.get(socket.id);
     players.delete(socket.id);
-    io.to(room).emit("player:leave", socket.id);
+    invites.delete(socket.id);
+    // Cancel any invites this socket sent out.
+    for (const [toId, bucket] of invites) {
+      if (bucket.delete(socket.id)) {
+        io.to(toId).emit("invite:cancelled", { fromSocketId: socket.id });
+        if (bucket.size === 0) invites.delete(toId);
+      }
+    }
+    if (player) {
+      io.to(worldKey(player.world)).emit("player:leave", socket.id);
+    }
     console.log(`[-] ${socket.id}`);
   });
 });

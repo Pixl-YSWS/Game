@@ -1,5 +1,10 @@
 import { io, Socket } from "socket.io-client";
-import type { ServerToClientEvents, ClientToServerEvents, MovePayload } from "../types/network";
+import type {
+  ServerToClientEvents,
+  ClientToServerEvents,
+  MovePayload,
+  WorldRef,
+} from "../types/network";
 import { getOrCreatePlayerId } from "./playerIdentity";
 
 export type { MovePayload };
@@ -38,8 +43,28 @@ class GameSocket {
     this.handlers.get(event)!.push(handler as Function);
   }
 
+  clearHandlers() {
+    this.handlers.clear();
+  }
+
   sendMove(cx: number, cy: number) {
     this.socket?.emit("player:move", { cx, cy });
+  }
+
+  enterWorld(world: WorldRef) {
+    this.socket?.emit("world:enter", world);
+  }
+
+  sendInvite(toSocketId: string) {
+    this.socket?.emit("invite:send", { toSocketId });
+  }
+
+  acceptInvite(fromSocketId: string) {
+    this.socket?.emit("invite:accept", { fromSocketId });
+  }
+
+  declineInvite(fromSocketId: string) {
+    this.socket?.emit("invite:decline", { fromSocketId });
   }
 
   get id(): string | undefined {

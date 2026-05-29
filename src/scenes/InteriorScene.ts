@@ -4,16 +4,19 @@ import { Player } from "../entities/Player";
 import { TILE_H } from "../utils/IsoUtils";
 import type { MapDef } from "../types/map";
 
-const ROOM_COLS = 10;
-const ROOM_ROWS = 8;
+// 16:9 aspect so the map exactly fills the 1280×720 canvas — no letterbox.
 const COLS = 32;
 const ROWS = 18;
-const ROOM_X = 11;
-const ROOM_Y = 4;
+const ROOM_COLS = 10;
+const ROOM_ROWS = 8;
+const ROOM_X = Math.floor((COLS - ROOM_COLS) / 2);
+const ROOM_Y = Math.floor((ROWS - ROOM_ROWS) / 2);
 const DOOR_COL = ROOM_X + Math.floor(ROOM_COLS / 2);
 const DOOR_ROW = ROOM_Y + ROOM_ROWS - 1;
 
 function makeInteriorMap(): MapDef {
+  // Grass everywhere by default — fills the area around the house so the
+  // viewport doesn't show void. No trees or other decos outside the walls.
   const ground = Array.from({ length: ROWS }, () => new Array(COLS).fill(0));
   const deco = Array.from({ length: ROWS }, () => new Array(COLS).fill(-1));
 
@@ -35,34 +38,6 @@ function makeInteriorMap(): MapDef {
   }
   deco[DOOR_ROW][DOOR_COL] = 43; // door
 
-  // Stone path leading south from the door
-  for (let r = DOOR_ROW + 1; r < ROWS; r++) {
-    deco[r][DOOR_COL] = 43;
-  }
-
-  // Garden decorations around the building
-  // Top
-  deco[1][5] = 4; deco[2][5] = 16;
-  deco[1][15] = 15;
-  deco[2][20] = 3;
-  deco[1][26] = 4; deco[2][26] = 16;
-  deco[3][28] = 27;
-
-  // Left
-  deco[8][2] = 4; deco[9][2] = 16;
-  deco[10][3] = 7;
-  deco[12][4] = 28;
-
-  // Right
-  deco[8][29] = 4; deco[9][29] = 16;
-  deco[10][28] = 7;
-
-  // Bottom (besides the path)
-  deco[14][4] = 3;
-  deco[15][28] = 15;
-  deco[16][8] = 4; deco[17][8] = 16;
-  deco[16][25] = 27;
-
   return {
     key: "interior_default",
     cols: COLS,
@@ -72,8 +47,8 @@ function makeInteriorMap(): MapDef {
     groundLayer: ground,
     decoLayer: deco,
     walkableGround: new Set([0, 1, 2]),
-    solidDeco: new Set([44, 45, 56, 68, 80, 82, 94, 4, 16, 7, 3, 15, 27, 28]),
-    flatDeco: new Set([43, 3, 15, 27, 28]),
+    solidDeco: new Set([44, 45, 56, 68, 80, 82, 94]),
+    flatDeco: new Set([43]),
     spawnPoint: { cx: DOOR_COL, cy: DOOR_ROW - 1 },
     doors: [],
   };
@@ -134,6 +109,12 @@ export class InteriorScene extends Phaser.Scene {
       this.mapDef,
     );
     this.exitTile = { cx: DOOR_COL, cy: DOOR_ROW };
+
+    this.input.keyboard!.on("keydown-ESC", () => {
+      if (this.scene.isActive("PauseScene")) return;
+      this.scene.pause();
+      this.scene.launch("PauseScene", { pausedSceneKey: "InteriorScene" });
+    });
   }
 
   update(_time: number, delta: number) {

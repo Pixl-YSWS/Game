@@ -7,6 +7,9 @@ const SRC_TILE = 16;
 export class IsoMap {
   private scene: Phaser.Scene;
   private mapDef: MapDef;
+  // Stamped tile images, kept so the whole layer can be wiped when the
+  // player switches to a different world.
+  private stamps: Phaser.GameObjects.Image[] = [];
 
   public boundsX = 0;
   public boundsY = 0;
@@ -16,6 +19,11 @@ export class IsoMap {
   constructor(scene: Phaser.Scene, mapDef: MapDef) {
     this.scene = scene;
     this.mapDef = mapDef;
+  }
+
+  destroy() {
+    for (const img of this.stamps) img.destroy();
+    this.stamps.length = 0;
   }
 
   build() {
@@ -68,6 +76,7 @@ export class IsoMap {
     img.setScale(TILE_W / SRC_TILE, TILE_H / SRC_TILE);
     img.setOrigin(0, 0);
     img.setDepth(depth);
+    this.stamps.push(img);
     return img;
   }
 

@@ -9,16 +9,23 @@ const STEP_MS = 120; // ms per tile — one step every 120 ms (~8 tiles/sec)
 
 // tiny-battle sheet: 18 cols × 11 rows, 16×16 px tiles
 // Character sprites begin at col 10; one colour group per row.
-const CHAR_SHEET  = "tiles-battle";
-const CHAR_COLS   = 18;
-const CHAR_LOCAL  = 136; // row 7 col 10 — blue warrior
-const CHAR_REMOTE = 64;  // row 3 col 10 — red warrior
+const CHAR_SHEET = "tiles-battle";
+const CHAR_COLS = 18;
+const CHAR_LOCAL = 136; // row 7 col 10 — blue warrior
+const CHAR_REMOTE = 64; // row 3 col 10 — red warrior
 
 function charFrame(scene: Phaser.Scene, idx: number): string {
   const key = `${CHAR_SHEET}_f${idx}`;
   const tex = scene.textures.get(CHAR_SHEET);
   if (!tex.has(key)) {
-    tex.add(key, 0, (idx % CHAR_COLS) * 16, Math.floor(idx / CHAR_COLS) * 16, 16, 16);
+    tex.add(
+      key,
+      0,
+      (idx % CHAR_COLS) * 16,
+      Math.floor(idx / CHAR_COLS) * 16,
+      16,
+      16,
+    );
   }
   return key;
 }
@@ -39,7 +46,12 @@ export class Player extends Phaser.GameObjects.Container {
   // Direction held at the end of the current step — drives auto-continuation.
   private inputDir = { dx: 0, dy: 0 };
 
-  constructor(scene: Phaser.Scene, state: PlayerState, isLocal: boolean, mapDef: MapDef) {
+  constructor(
+    scene: Phaser.Scene,
+    state: PlayerState,
+    isLocal: boolean,
+    mapDef: MapDef,
+  ) {
     const { x, y } = cartToIso(state.cx, state.cy);
     super(scene, x + TILE_W / 2, y + TILE_H / 2);
 
@@ -49,7 +61,14 @@ export class Player extends Phaser.GameObjects.Container {
     this.isLocal = isLocal;
     this.mapDef = mapDef;
 
-    this.shadow = scene.add.ellipse(0, 4, TILE_W * 0.7, TILE_H * 0.4, 0x000000, 0.25);
+    this.shadow = scene.add.ellipse(
+      0,
+      4,
+      TILE_W * 0.7,
+      TILE_H * 0.4,
+      0x000000,
+      0.25,
+    );
 
     const tileIdx = isLocal ? CHAR_LOCAL : CHAR_REMOTE;
     this.sprite = scene.add.image(0, 0, CHAR_SHEET, charFrame(scene, tileIdx));
@@ -110,12 +129,14 @@ export class Player extends Phaser.GameObjects.Container {
   }
 
   private canMoveToTile(cx: number, cy: number): boolean {
-    const { cols, rows, groundLayer, decoLayer, walkableGround, solidDeco } = this.mapDef;
+    const { cols, rows, groundLayer, decoLayer, walkableGround, solidDeco } =
+      this.mapDef;
     if (cx < 0 || cy < 0 || cx >= cols || cy >= rows) return false;
     const groundIdx = groundLayer[cy]?.[cx];
     if (groundIdx === undefined || !walkableGround.has(groundIdx)) return false;
     const decoIdx = decoLayer[cy]?.[cx];
-    if (decoIdx !== undefined && decoIdx >= 0 && solidDeco.has(decoIdx)) return false;
+    if (decoIdx !== undefined && decoIdx >= 0 && solidDeco.has(decoIdx))
+      return false;
     return true;
   }
 
@@ -130,11 +151,12 @@ export class Player extends Phaser.GameObjects.Container {
     _delta: number,
   ): boolean {
     // Cardinal only — one direction at a time, matching classic retro games.
-    let dx = 0, dy = 0;
-    if      (cursors.left!.isDown  || wasd.A.isDown) dx = -1;
-    else if (cursors.right!.isDown || wasd.D.isDown) dx =  1;
-    else if (cursors.up!.isDown    || wasd.W.isDown) dy = -1;
-    else if (cursors.down!.isDown  || wasd.S.isDown) dy =  1;
+    let dx = 0,
+      dy = 0;
+    if (cursors.left!.isDown || wasd.A.isDown) dx = -1;
+    else if (cursors.right!.isDown || wasd.D.isDown) dx = 1;
+    else if (cursors.up!.isDown || wasd.W.isDown) dy = -1;
+    else if (cursors.down!.isDown || wasd.S.isDown) dy = 1;
 
     // Always record so onComplete can chain the next step.
     this.inputDir = { dx, dy };
