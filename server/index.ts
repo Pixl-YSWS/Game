@@ -932,9 +932,12 @@ io.on("connection", (socket) => {
   });
 });
 
-const PORT = process.env.PORT ?? 3001;
+const PORT = Number(process.env.PORT ?? 3001);
+// Bind to 0.0.0.0 (not localhost) so the platform's router can reach the
+// container — required by hosts like Railway, where binding to 127.0.0.1
+// surfaces as "Application failed to respond".
 migrateLegacyJson().then(() => {
-  httpServer.listen(PORT, () => {
-    console.log(`Game server on http://localhost:${PORT}`);
+  httpServer.listen(PORT, "0.0.0.0", () => {
+    console.log(`Game server listening on 0.0.0.0:${PORT}`);
   });
 });
