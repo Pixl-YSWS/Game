@@ -48,6 +48,12 @@ jobs:
           echo '{"version":3}' > .vercel/output/config.json
 
       - name: Deploy to Vercel
-        run: bunx vercel deploy --prebuilt --prod --token "$VERCEL_TOKEN"
+        run: |
+          if [ -z "$VERCEL_TOKEN" ]; then
+            echo "::error::VERCEL_TOKEN is empty. Add it under Settings → Secrets and variables → Actions → *Repository secrets* (not Environment secrets, not Variables)."
+            exit 1
+          fi
+          echo "VERCEL_TOKEN length: ${#VERCEL_TOKEN} (should be ~24, alphanumeric only)"
+          bunx vercel deploy --prebuilt --prod --token "$VERCEL_TOKEN"
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
