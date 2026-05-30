@@ -4,6 +4,11 @@ import { playUiSound } from "../ui/UIKit";
 
 export interface MenuButton {
   container: Phaser.GameObjects.Container;
+  // The actual interactive game object (the nineslice background). Input lives
+  // here, not on the container — a Container has no Origin component, so making
+  // it interactive gives Phaser an `undefined` displayOrigin and the hit test
+  // collapses to a tiny region near the centre.
+  hit: Phaser.GameObjects.GameObject;
   label: Phaser.GameObjects.Text;
   setText(text: string): void;
   setFocused(v: boolean): void;
@@ -47,11 +52,9 @@ export function makeMenuButton(
 
   const container = scene.add.container(x, y, [bg, label]);
   container.setSize(w, h);
-  container.setInteractive({
-    hitArea: new Phaser.Geom.Rectangle(-w / 2, -h / 2, w, h),
-    hitAreaCallback: Phaser.Geom.Rectangle.Contains,
-    cursor: CURSORS.pointer,
-  });
+  // Input lives on the nineslice (it has an Origin, so the hit test is correct
+  // across the whole button); the default hit area already covers its full size.
+  bg.setInteractive({ cursor: CURSORS.pointer });
 
   let hovering = false;
   let pressed = false;
@@ -73,9 +76,9 @@ export function makeMenuButton(
     if (enabled) onClick();
   };
 
-  container.on("pointerover", () => { hovering = true; render(); });
-  container.on("pointerout", () => { hovering = false; pressed = false; render(); });
-  container.on("pointerdown", () => {
+  bg.on("pointerover", () => { hovering = true; render(); });
+  bg.on("pointerout", () => { hovering = false; pressed = false; render(); });
+  bg.on("pointerdown", () => {
     pressed = true;
     render();
     playUiSound(scene, "sfx-click");
@@ -83,7 +86,7 @@ export function makeMenuButton(
   // A pointerup ON the object means it was released over it, so a press that
   // started here is a real click — no fragile "hovering" gate (that was the
   // bug: the first click before any mouse-move was being dropped).
-  container.on("pointerup", () => {
+  bg.on("pointerup", () => {
     if (!pressed) return;
     pressed = false;
     render();
@@ -92,6 +95,7 @@ export function makeMenuButton(
 
   return {
     container,
+    hit: bg,
     label,
     setText(t: string) {
       label.setText(t);
@@ -132,7 +136,7 @@ export function attachMenuNav(scene: Phaser.Scene, buttons: MenuButton[]) {
   buttons[idx].setFocused(true);
 
   buttons.forEach((b, i) => {
-    b.container.on("pointerover", () => {
+    b.hit.on("pointerover", () => {
       if (i !== idx) setFocus(i, false);
     });
   });

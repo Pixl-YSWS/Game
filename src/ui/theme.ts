@@ -1,10 +1,13 @@
 // Central place for fonts, colours and cursors so the whole game shares one
-// look. Swapped from "Press Start 2P" to the bundled Kenney Future family.
+// look. Body text uses the bundled Kenney Future family; only panel/scene
+// titles use the Pixelify Sans web font (loaded from index.html).
 
 /** Primary UI font (all-caps blocky). Used everywhere via Phaser text styles. */
 export const FONT = "Kenney Future";
 /** Condensed variant — handy for chat / dialogue where line length matters. */
 export const FONT_NARROW = "Kenney Future Narrow";
+/** Title font — Pixelify Sans. Reserved for scene/panel headings only. */
+export const FONT_TITLE = "Pixelify Sans";
 /** System emoji font stack — for item glyphs (Kenney has no emoji coverage). */
 export const FONT_EMOJI =
   '"Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji", sans-serif';
@@ -93,9 +96,10 @@ export async function buildCursors(scale = CURSOR_SCALE): Promise<void> {
 }
 
 /**
- * Load the Kenney fonts before the game boots so the very first text rendered
+ * Load every UI font before the game boots so the very first text rendered
  * (the BootScene loading label) already uses them — otherwise Phaser caches
- * glyphs in the fallback font and never refreshes.
+ * glyphs in the fallback font at the wrong metrics and centred text ends up
+ * mis-aligned.
  */
 export async function preloadFonts(): Promise<void> {
   if (!("fonts" in document)) return;
@@ -103,7 +107,11 @@ export async function preloadFonts(): Promise<void> {
     await Promise.all([
       (document as Document).fonts.load(`16px "${FONT}"`),
       (document as Document).fonts.load(`16px "${FONT_NARROW}"`),
+      (document as Document).fonts.load(`400 16px "${FONT_TITLE}"`),
+      (document as Document).fonts.load(`700 16px "${FONT_TITLE}"`),
     ]);
+    // Wait for any in-flight font loads kicked off by the stylesheet, too.
+    await (document as Document).fonts.ready;
   } catch {
     // Non-fatal: text just falls back to a system font.
   }

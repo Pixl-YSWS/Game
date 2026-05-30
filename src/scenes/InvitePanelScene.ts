@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import { makeMenuButton, type MenuButton } from "../utils/MenuButton";
-import { FONT, FONT_NARROW, COLORS } from "../ui/theme";
+import { FONT, FONT_TITLE, FONT_NARROW, COLORS } from "../ui/theme";
 import { panel } from "../ui/UIKit";
 import { gameSocket } from "../network/socket";
 import type { PlayerDirEntry } from "../types/network";
@@ -67,7 +67,7 @@ export class InvitePanelScene extends Phaser.Scene {
     panel(this, W / 2, H / 2, panelW, panelH, "ui-panel-dark");
 
     this.add
-      .text(W / 2, py + 28, "INVITE TO VILLAGE", { fontFamily: FONT, fontSize: "18px", color: "#f0a500" })
+      .text(W / 2, py + 28, "INVITE TO VILLAGE", { fontFamily: FONT_TITLE, fontSize: "18px", color: "#f0a500" })
       .setOrigin(0.5);
 
     // DOM search input (mirrors the chat box input styling).

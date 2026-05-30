@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import { makeMenuButton } from "../utils/MenuButton";
-import { FONT, FONT_NARROW, FONT_EMOJI, COLORS } from "../ui/theme";
+import { FONT_TITLE, FONT_NARROW, FONT_EMOJI, COLORS } from "../ui/theme";
 import { panel } from "../ui/UIKit";
 import { gameSocket } from "../network/socket";
 import { getShopItem } from "../shop/catalog";
@@ -57,7 +57,7 @@ export class InventoryScene extends Phaser.Scene {
     panel(this, W / 2, H / 2, panelW, panelH, "ui-panel-dark");
 
     this.add
-      .text(W / 2, py + 28, "INVENTORY", { fontFamily: FONT, fontSize: "18px", color: "#f0a500" })
+      .text(W / 2, py + 28, "INVENTORY", { fontFamily: FONT_TITLE, fontSize: "18px", color: "#f0a500" })
       .setOrigin(0.5);
 
     this.hintText = this.add

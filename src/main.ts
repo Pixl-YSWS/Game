@@ -9,7 +9,7 @@ if (m) {
   history.replaceState(null, "", window.location.pathname + window.location.search);
 }
 
-// Make sure the Kenney fonts are ready and the enlarged cursors are rasterised
+// Make sure the Pixelify Sans font is ready and the enlarged cursors are rasterised
 // before Phaser renders text / creates interactive objects, then boot the
 // game. Dynamic import keeps game construction after the awaits.
 Promise.allSettled([preloadFonts(), buildCursors()]).finally(() => {

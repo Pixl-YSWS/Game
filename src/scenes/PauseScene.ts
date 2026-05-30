@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import { makeMenuButton, attachMenuNav } from "../utils/MenuButton";
-import { FONT } from "../ui/theme";
+import { FONT, FONT_TITLE } from "../ui/theme";
 import { panel } from "../ui/UIKit";
 import { gameSocket } from "../network/socket";
 
@@ -32,7 +32,7 @@ export class PauseScene extends Phaser.Scene {
 
     this.add
       .text(W / 2, H / 2 - 130, "PAUSED", {
-        fontFamily: FONT,
+        fontFamily: FONT_TITLE,
         fontSize: "30px",
         color: "#f0a500",
       })

@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import { makeMenuButton, type MenuButton } from "../utils/MenuButton";
-import { FONT } from "../ui/theme";
+import { FONT_TITLE } from "../ui/theme";
 import { panel } from "../ui/UIKit";
 import { loadSettings, saveSettings, ZOOM_OPTIONS } from "../data/Settings";
 
@@ -50,7 +50,7 @@ export class SettingsScene extends Phaser.Scene {
 
     this.add
       .text(W / 2, py + 34, "SETTINGS", {
-        fontFamily: FONT,
+        fontFamily: FONT_TITLE,
         fontSize: "20px",
         color: "#f0a500",
       })

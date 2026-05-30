@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import { Button, panel } from "../ui/UIKit";
-import { FONT, COLORS } from "../ui/theme";
+import { FONT, FONT_TITLE, COLORS } from "../ui/theme";
 import { CHAR_BASES } from "../entities/Player";
 import { getCharIndex, setCharIndex } from "../network/playerIdentity";
 import { gameSocket } from "../network/socket";
@@ -43,7 +43,7 @@ export class CharacterScene extends Phaser.Scene {
 
     this.add
       .text(W / 2, H / 2 - 92, "CHOOSE YOUR LOOK", {
-        fontFamily: FONT,
+        fontFamily: FONT_TITLE,
         fontSize: "18px",
         color: "#f0a500",
       })

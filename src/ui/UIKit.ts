@@ -71,24 +71,24 @@ export class Button extends Phaser.GameObjects.Container {
 
     this.add([this.bg, this.label]);
     this.setSize(w, h);
-    this.setInteractive({
-      hitArea: new Phaser.Geom.Rectangle(-w / 2, -h / 2, w, h),
-      hitAreaCallback: Phaser.Geom.Rectangle.Contains,
-      cursor: CURSORS.pointer,
-    });
+    // Input lives on the nineslice, not the container: a Container has no Origin
+    // component, so making it interactive feeds Phaser an undefined displayOrigin
+    // and the hit area shrinks to the centre. The nineslice's default hit area
+    // already spans its full size.
+    this.bg.setInteractive({ cursor: CURSORS.pointer });
 
-    this.on("pointerover", () => this.enabled && this.bg.setTint(0xeaf4ff));
-    this.on("pointerout", () => {
+    this.bg.on("pointerover", () => this.enabled && this.bg.setTint(0xeaf4ff));
+    this.bg.on("pointerout", () => {
       this.bg.clearTint();
       this.bg.setTexture(this.upTex);
     });
-    this.on("pointerdown", () => {
+    this.bg.on("pointerdown", () => {
       if (!this.enabled) return;
       this.bg.setTexture(this.downTex);
       this.label.setY(0);
       playUiSound(scene, "sfx-click");
     });
-    this.on("pointerup", () => {
+    this.bg.on("pointerup", () => {
       if (!this.enabled) return;
       this.bg.setTexture(this.upTex);
       this.label.setY(-3);

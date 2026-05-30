@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import { makeMenuButton, attachMenuNav, type MenuButton } from "../utils/MenuButton";
-import { FONT, COLORS } from "../ui/theme";
+import { FONT, FONT_TITLE, COLORS } from "../ui/theme";
 import { getAccountName, getSessionToken, clearSession } from "../network/playerIdentity";
 import { gameSocket, SERVER_URL } from "../network/socket";
 import type { WorldRef } from "../types/network";
@@ -34,7 +34,7 @@ export class MainMenuScene extends Phaser.Scene {
     // Title.
     const title = this.add
       .text(W / 2, H / 2 - 140, "PIXLGAME", {
-        fontFamily: FONT,
+        fontFamily: FONT_TITLE,
         fontSize: "40px",
         color: "#f0a500",
       })

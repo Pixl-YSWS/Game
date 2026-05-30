@@ -221,13 +221,18 @@ export class UIScene extends Phaser.Scene {
     EMOTES.forEach((e, i) => {
       const cx = x + 8 + i * cell + cell / 2;
       const cy = y + 8 + cell / 2;
-      const btn = this.add
-        .text(cx, cy, e.glyph, { fontSize: "22px", fontFamily: FONT })
+      const glyph = this.add
+        .text(cx, cy, e.glyph, { fontSize: "22px", fontFamily: FONT_EMOJI })
+        .setOrigin(0.5);
+      // A full-cell hit zone so the whole 40px square is clickable — a plain
+      // Text only registers clicks over the glyph's tight bounds.
+      const hit = this.add
+        .zone(cx, cy, cell, cell)
         .setOrigin(0.5)
         .setInteractive({ cursor: CURSORS.pointer });
-      btn.on("pointerover", () => btn.setScale(1.2));
-      btn.on("pointerout", () => btn.setScale(1));
-      btn.on("pointerdown", () => {
+      hit.on("pointerover", () => glyph.setScale(1.2));
+      hit.on("pointerout", () => glyph.setScale(1));
+      hit.on("pointerdown", () => {
         gameSocket.sendEmote(e.key);
         playUiSound(this, "sfx-tap", 0.3);
       });

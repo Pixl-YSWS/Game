@@ -90,6 +90,11 @@ export class ChatBox {
     this.dom.setVisible(true);
     this.hint.setVisible(false);
     this.inputEl.value = "";
+    // Phaser only flips the DOM node to `display:block` during its next render
+    // pass, and focus() is a no-op on a `display:none` element — so reveal it
+    // now (matching what the renderer will do anyway) before focusing,
+    // otherwise the field opens unfocused and the player has to click it.
+    this.inputEl.style.display = "block";
     this.inputEl.focus();
     // While typing, keep the whole log fully visible.
     for (const l of this.lines) {
@@ -118,6 +123,7 @@ export class ChatBox {
     if (!this.active) return;
     this.active = false;
     this.dom.setVisible(false);
+    this.inputEl.style.display = "none";
     this.hint.setVisible(true);
     this.inputEl.blur();
     // Restart the fade countdown on existing lines.

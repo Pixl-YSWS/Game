@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import { Button, panel } from "../ui/UIKit";
-import { FONT, COLORS } from "../ui/theme";
+import { FONT, FONT_TITLE, COLORS } from "../ui/theme";
 import { SERVER_URL } from "../network/socket";
 import { setSessionToken, setAccountId, setAccountName } from "../network/playerIdentity";
 
@@ -41,7 +41,7 @@ export class LoginScene extends Phaser.Scene {
 
     const title = this.add
       .text(W / 2, cy - 150, "PIXLGAME", {
-        fontFamily: FONT,
+        fontFamily: FONT_TITLE,
         fontSize: "38px",
         color: "#f0a500",
       })
