@@ -49,7 +49,10 @@ function currentDayT(): number {
 }
 
 // ── Seed persistence (SQLite) ────────────────────────────────────
-const DATA_DIR = join(dirname(fileURLToPath(import.meta.url)), "data");
+// DATA_DIR defaults to a folder next to the code for local dev, but on a
+// host like Railway set DATA_DIR to a mounted volume (e.g. /data) so the
+// database survives redeploys instead of living on the ephemeral filesystem.
+const DATA_DIR = process.env.DATA_DIR ?? join(dirname(fileURLToPath(import.meta.url)), "data");
 mkdirSync(DATA_DIR, { recursive: true });
 
 const db = new Database(join(DATA_DIR, "players.db"));
@@ -224,6 +227,11 @@ const selectAcceptedVillages = db.query<{ from_id: string; from_name: string }, 
 const hasAcceptedVillage = db.query<{ n: number }, [string, string]>(
   "SELECT COUNT(*) AS n FROM notifications WHERE recipient_id = ? AND from_id = ? AND type = 'village_invite' AND status = 'accepted'",
 );
+// Create the auth schema (the `accounts` table) up front so the prepared
+// statements below can compile against it on a fresh database. The returned
+// router is mounted later where the Express app is set up.
+const auth = setupAuth(db);
+
 // Account directory for the invite search panel.
 const selectAllAccounts = db.query<{ account_id: string; name: string }, []>(
   "SELECT account_id, name FROM accounts ORDER BY name COLLATE NOCASE",
@@ -384,7 +392,8 @@ const app = express();
 app.use(cors());
 
 // Hack Club OAuth routes (/auth/login, /auth/callback, /auth/verify).
-const auth = setupAuth(db);
+// `auth` is created earlier (so its schema exists before prepared statements
+// compile); here we just mount its router.
 app.use("/auth", auth.router);
 
 // Villages this account may visit (from accepted invites), for the main menu.
