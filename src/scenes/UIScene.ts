@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import { DialogueBox } from "../ui/DialogueBox";
 import { ChatBox } from "../ui/ChatBox";
-import { FONT, COLORS, CURSORS } from "../ui/theme";
+import { FONT, FONT_EMOJI, COLORS, CURSORS } from "../ui/theme";
 import { panel, playUiSound } from "../ui/UIKit";
 import { EMOTES } from "../ui/emotes";
 import { gameSocket } from "../network/socket";
@@ -16,9 +16,11 @@ export class UIScene extends Phaser.Scene {
   private box?: DialogueBox;
   private chat?: ChatBox;
   private statusText?: Phaser.GameObjects.Text;
+  private statusBg?: Phaser.GameObjects.Rectangle;
   private coordText?: Phaser.GameObjects.Text;
   private pixelText?: Phaser.GameObjects.Text;
   private timeText?: Phaser.GameObjects.Text;
+  private timeIcon?: Phaser.GameObjects.Text;
   private heartIcons: Phaser.GameObjects.Graphics[] = [];
   private hp = 10;
   private hpMax = 10;
@@ -47,42 +49,8 @@ export class UIScene extends Phaser.Scene {
       .setOrigin(0)
       .setDepth(-10);
 
-    // ── HUD panel (top-left) ───────────────────────────────────────
-    panel(this, 12, 10, 230, 116, "ui-panel-dark").setOrigin(0, 0).setAlpha(0.95);
-    const baseX = 26;
-
-    this.statusText = this.add.text(baseX, 22, "", {
-      fontFamily: FONT,
-      fontSize: "10px",
-      color: COLORS.text,
-    });
-
-    const heartsY = 44;
-    for (let i = 0; i < this.hpMax; i++) {
-      const g = this.add.graphics();
-      g.x = baseX + i * 14;
-      g.y = heartsY;
-      this.heartIcons.push(g);
-    }
-    this.refreshHearts();
-
-    this.coordText = this.add.text(baseX, heartsY + 22, "", {
-      fontFamily: FONT,
-      fontSize: "10px",
-      color: COLORS.textDim,
-    });
-
-    this.pixelText = this.add.text(baseX, heartsY + 40, "0p", {
-      fontFamily: FONT,
-      fontSize: "11px",
-      color: COLORS.accent,
-    });
-
-    this.timeText = this.add.text(baseX + 92, heartsY + 40, "", {
-      fontFamily: FONT,
-      fontSize: "10px",
-      color: "#aabbff",
-    });
+    this.buildPlayerCard();
+    this.buildStatusBar();
 
     this.box = new DialogueBox(this);
     this.chat = new ChatBox(this);
@@ -105,25 +73,79 @@ export class UIScene extends Phaser.Scene {
     return t / this.dayLengthMs;
   }
 
+  // ── Player card (top-left): hearts + wallet + day/night ───────────
+  private buildPlayerCard() {
+    const X = 12, Y = 12, W = 188, H = 62;
+    panel(this, X, Y, W, H, "ui-panel-dark").setOrigin(0, 0).setAlpha(0.96);
+    const baseX = X + 15;
+
+    // Hearts row.
+    const heartsY = Y + 13;
+    for (let i = 0; i < this.hpMax; i++) {
+      const g = this.add.graphics();
+      g.x = baseX + i * 13;
+      g.y = heartsY;
+      this.heartIcons.push(g);
+    }
+    this.refreshHearts();
+
+    // Wallet + clock row, vertically centred on one line.
+    const rowY = Y + 44;
+    this.add.text(baseX, rowY, "🪙", { fontFamily: FONT_EMOJI, fontSize: "14px" }).setOrigin(0, 0.5);
+    this.pixelText = this.add
+      .text(baseX + 20, rowY, "0", { fontFamily: FONT, fontSize: "14px", color: COLORS.accent })
+      .setOrigin(0, 0.5)
+      .setResolution(3);
+
+    this.timeIcon = this.add
+      .text(X + W - 70, rowY, "☀", { fontFamily: FONT_EMOJI, fontSize: "13px" })
+      .setOrigin(0, 0.5);
+    this.timeText = this.add
+      .text(X + W - 52, rowY, "", { fontFamily: FONT, fontSize: "9px", color: "#aabbff" })
+      .setOrigin(0, 0.5)
+      .setResolution(3);
+
+    // Subtle coordinate readout tucked under the card.
+    this.coordText = this.add
+      .text(X + 2, Y + H + 4, "", { fontFamily: FONT, fontSize: "8px", color: COLORS.textDim })
+      .setAlpha(0.5);
+  }
+
+  // ── Status / controls bar (top-centre) ────────────────────────────
+  private buildStatusBar() {
+    const y = 16;
+    this.statusBg = this.add
+      .rectangle(this.scale.width / 2, y, 10, 22, 0x0a0f1c, 0.62)
+      .setStrokeStyle(1, 0xffffff, 0.14)
+      .setOrigin(0.5)
+      .setVisible(false);
+    this.statusText = this.add
+      .text(this.scale.width / 2, y, "", { fontFamily: FONT, fontSize: "9px", color: COLORS.text })
+      .setOrigin(0.5)
+      .setResolution(3);
+  }
+
   // ── Invite + inbox buttons (top-right) ────────────────────────────
   private buildSocialButtons() {
     const world = () => this.scene.get("WorldScene") as
       | (Phaser.Scene & { openInvitePanel: () => void; openInbox: () => void; openInventory: () => void })
       | undefined;
 
-    // Laid out right-to-left from the top-right corner.
-    let x = this.scale.width - 12;
-    const inboxBtn = this.pill(x, 22, "✉ Inbox", () => world()?.openInbox());
-    x -= inboxBtn.width + 8;
-    const bagBtn = this.pill(x, 22, "🎒 Bag", () => world()?.openInventory());
-    x -= bagBtn.width + 8;
-    this.pill(x, 22, "✦ Invite", () => world()?.openInvitePanel());
-    // Anchor the unread badge to the inbox button's top-right corner.
-    const bx = inboxBtn.x + inboxBtn.width / 2 - 4;
-    const by = inboxBtn.y - inboxBtn.height / 2 + 2;
-    this.badgeBg = this.add.circle(bx, by, 9, 0xe5484d).setDepth(60).setVisible(false);
+    // Uniform square icon buttons, laid out right-to-left from the corner.
+    const SIZE = 38, GAP = 8, cy = 12 + SIZE / 2;
+    let x = this.scale.width - 12 - SIZE / 2;
+    const inboxBtn = this.iconButton(x, cy, "✉", "Inbox  [N]", () => world()?.openInbox());
+    x -= SIZE + GAP;
+    this.iconButton(x, cy, "🎒", "Bag  [B]", () => world()?.openInventory());
+    x -= SIZE + GAP;
+    this.iconButton(x, cy, "✦", "Invite  [I]", () => world()?.openInvitePanel());
+
+    // Unread badge pinned to the inbox button's top-right corner.
+    const bx = inboxBtn.x + SIZE / 2 - 4;
+    const by = inboxBtn.y - SIZE / 2 + 4;
+    this.badgeBg = this.add.circle(bx, by, 8, 0xe5484d).setStrokeStyle(1.5, 0x0a0f1c).setDepth(60).setVisible(false);
     this.badgeText = this.add
-      .text(bx, by, "", { fontFamily: FONT, fontSize: "10px", color: "#ffffff" })
+      .text(bx, by, "", { fontFamily: FONT, fontSize: "9px", color: "#ffffff" })
       .setOrigin(0.5)
       .setResolution(3)
       .setDepth(61)
@@ -131,25 +153,42 @@ export class UIScene extends Phaser.Scene {
     this.refreshBadge();
   }
 
-  // A small rounded HUD button: panel-backed label, hand cursor, hover tint.
-  // Returns the backing rectangle (origin centre) so callers can anchor to it.
-  private pill(rightX: number, y: number, label: string, onClick: () => void) {
-    const text = this.add
-      .text(0, 0, label, { fontFamily: FONT, fontSize: "10px", color: COLORS.text })
-      .setOrigin(0.5)
-      .setResolution(3);
-    const w = text.width + 22;
-    const h = 26;
-    const cx = rightX - w / 2;
+  // A square, panel-backed icon button with a hover tooltip + tint/scale.
+  private iconButton(cx: number, cy: number, glyph: string, tip: string, onClick: () => void) {
+    const SIZE = 38;
     const bg = this.add
-      .nineslice(cx, y, "ui-panel-dark", undefined, w, h, 20, 20, 20, 20)
+      .nineslice(cx, cy, "ui-panel-dark", undefined, SIZE, SIZE, 16, 16, 16, 16)
       .setOrigin(0.5)
-      .setAlpha(0.95)
+      .setAlpha(0.96)
+      .setDepth(50)
       .setInteractive({ cursor: CURSORS.pointer });
-    text.setPosition(cx, y).setDepth(51);
-    bg.setDepth(50);
-    bg.on("pointerover", () => bg.setTint(0xffe08a));
-    bg.on("pointerout", () => bg.clearTint());
+    const icon = this.add
+      .text(cx, cy, glyph, { fontFamily: FONT_EMOJI, fontSize: "17px" })
+      .setOrigin(0.5)
+      .setDepth(51);
+    // Tooltip below the button, shown on hover.
+    const tooltip = this.add
+      .text(cx, cy + SIZE / 2 + 6, tip, {
+        fontFamily: FONT,
+        fontSize: "8px",
+        color: COLORS.text,
+        backgroundColor: "#0a0f1ccc",
+        padding: { x: 5, y: 3 },
+      })
+      .setOrigin(0.5, 0)
+      .setDepth(62)
+      .setVisible(false);
+
+    bg.on("pointerover", () => {
+      bg.setTint(0xffe08a).setScale(1.08);
+      icon.setScale(1.08);
+      tooltip.setVisible(true);
+    });
+    bg.on("pointerout", () => {
+      bg.clearTint().setScale(1);
+      icon.setScale(1);
+      tooltip.setVisible(false);
+    });
     bg.on("pointerdown", () => {
       playUiSound(this, "sfx-tap", 0.3);
       onClick();
@@ -217,13 +256,20 @@ export class UIScene extends Phaser.Scene {
     if (this.timeText) {
       const label = phase < 0.25 ? "Night" : phase < 0.5 ? "Morning" : phase < 0.75 ? "Day" : "Evening";
       this.timeText.setText(label);
+      // Sun during the bright half (morning/day), moon otherwise.
+      this.timeIcon?.setText(phase >= 0.25 && phase < 0.75 ? "☀" : "🌙");
     }
   }
 
   // ── HUD setters (called by WorldScene) ───────────────────────────
 
   setStatus(text: string) {
-    this.statusText?.setText(text);
+    if (!this.statusText) return;
+    this.statusText.setText(text);
+    // Size the backing bar to the text so the centred pill always fits.
+    const show = text.length > 0;
+    this.statusText.setVisible(show);
+    this.statusBg?.setVisible(show).setSize(this.statusText.width + 26, 24);
   }
 
   setCoords(cx: number, cy: number) {
@@ -255,7 +301,8 @@ export class UIScene extends Phaser.Scene {
 
   setWallet(pixels: number, delta: number) {
     this.pixels = pixels;
-    this.pixelText?.setText(`${this.pixels}p`);
+    // Coin icon precedes the number, so no "p" suffix needed.
+    this.pixelText?.setText(`${this.pixels}`);
     if (delta > 0 && this.pixelText) {
       this.flashTween?.stop();
       this.pixelText.setScale(1.6);
