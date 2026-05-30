@@ -75,9 +75,9 @@ function clone(layer: number[][]): number[][] {
 // arrangement while keeping the overall village layout coherent.
 export function generateMap(
   seed: number,
-  options: { houses?: boolean; sharedHouse?: boolean } = {},
+  options: { houses?: boolean; sharedHouse?: boolean; portal?: "spawn" | "bottomRight" } = {},
 ): MapDef {
-  const { houses = true, sharedHouse = false } = options;
+  const { houses = true, sharedHouse = false, portal: portalKind } = options;
   const rng = seededRng(seed);
   const preset = PRESETS[ri(rng, PRESETS.length)];
 
@@ -200,10 +200,33 @@ export function generateMap(
     }
   }
 
-  const npcs = placeVillagers(preset, ground, deco, rng);
+  // Decide where the world-switch portal sits, snapping the requested anchor
+  // to the nearest walkable, non-door tile. Computed before villagers so one
+  // doesn't spawn on top of the portal.
+  const doorSet = new Set(doors.map(d => `${d.cx},${d.cy}`));
+  const portalWalkable = (c: number, r: number) => {
+    if (c < 0 || r < 0 || c >= preset.cols || r >= preset.rows) return false;
+    if (doorSet.has(`${c},${r}`)) return false;
+    const g = ground[r]?.[c];
+    if (g === undefined || !preset.walkableGround.has(g)) return false;
+    const d = deco[r]?.[c];
+    return !(d !== undefined && d >= 0 && preset.solidDeco.has(d));
+  };
+  let portal: { cx: number; cy: number } | undefined;
+  if (portalKind) {
+    const anchor =
+      portalKind === "bottomRight"
+        ? { cx: preset.cols - 3, cy: preset.rows - 3 }
+        : { cx: preset.spawn.cx + 2, cy: preset.spawn.cy + 2 };
+    portal = nearestWalkable(anchor, portalWalkable, preset.cols, preset.rows);
+  }
+
+  const reserved = portal ? new Set([`${portal.cx},${portal.cy}`]) : undefined;
+  const npcs = placeVillagers(preset, ground, deco, rng, reserved);
 
   return {
     doors,
+    portal,
     key: `world_${seed}`,
     cols: preset.cols,
     rows: preset.rows,
@@ -254,13 +277,37 @@ const VILLAGER_TEMPLATES: Omit<NpcDef, "cx" | "cy">[] = [
   },
 ];
 
+// Expanding-ring search outward from `anchor` for the first tile that passes
+// `ok`. Deterministic, so a fixed anchor always resolves to the same tile.
+function nearestWalkable(
+  anchor: { cx: number; cy: number },
+  ok: (c: number, r: number) => boolean,
+  cols: number,
+  rows: number,
+): { cx: number; cy: number } | undefined {
+  const maxR = Math.max(cols, rows);
+  for (let radius = 0; radius <= maxR; radius++) {
+    for (let dy = -radius; dy <= radius; dy++) {
+      for (let dx = -radius; dx <= radius; dx++) {
+        // Only the ring at exactly `radius` (Chebyshev) is new this pass.
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== radius) continue;
+        const c = anchor.cx + dx;
+        const r = anchor.cy + dy;
+        if (ok(c, r)) return { cx: c, cy: r };
+      }
+    }
+  }
+  return undefined;
+}
+
 function placeVillagers(
   preset: { cols: number; rows: number; spawn: { cx: number; cy: number }; walkableGround: ReadonlySet<number>; solidDeco: ReadonlySet<number> },
   ground: number[][],
   deco: number[][],
   rng: () => number,
+  reserved?: ReadonlySet<string>,
 ): NpcDef[] {
-  const occupied = new Set<string>();
+  const occupied = new Set<string>(reserved);
   const npcs: NpcDef[] = [];
 
   const walkable = (c: number, r: number) => {

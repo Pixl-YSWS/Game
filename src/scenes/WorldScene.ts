@@ -32,6 +32,13 @@ export class WorldScene extends Phaser.Scene {
   private mapDef?: MapDef;
   private loadingText?: Phaser.GameObjects.Text;
   private connErrorText?: Phaser.GameObjects.Text;
+  // Full-screen "loading" overlay shown while a world switch is in flight.
+  private loadingOverlay?: Phaser.GameObjects.Rectangle;
+  private loadingOverlayText?: Phaser.GameObjects.Text;
+  // When the loading overlay was shown, so a fast world switch still lingers
+  // long enough to read as a loading screen rather than an instant teleport.
+  private loadingShownAt = 0;
+  private static readonly MIN_LOADING_MS = 1000;
   private remotePlayers = new Map<string, Player>();
   private lastSentCx = -1;
   private lastSentCy = -1;
@@ -49,7 +56,6 @@ export class WorldScene extends Phaser.Scene {
     D: Phaser.Input.Keyboard.Key;
   };
   private hotkeys!: {
-    O: Phaser.Input.Keyboard.Key;
     I: Phaser.Input.Keyboard.Key;
     N: Phaser.Input.Keyboard.Key;
     B: Phaser.Input.Keyboard.Key;
@@ -76,6 +82,14 @@ export class WorldScene extends Phaser.Scene {
   }[] = [];
   // Transparent click targets over each door tile (mouse + hand cursor).
   private doorZones: Phaser.GameObjects.Zone[] = [];
+
+  // World-switch portal: a drawn glowing pad, a bobbing "E" prompt, and a
+  // clickable zone. `portalTile` is the tile players activate from; the
+  // visuals are rebuilt on every world switch.
+  private portalTile?: { cx: number; cy: number };
+  private portalObjects: Phaser.GameObjects.GameObject[] = [];
+  private portalLabel?: Phaser.GameObjects.Text;
+  private portalTween?: Phaser.Tweens.Tween;
 
   private npcs: Npc[] = [];
   // Same shape as door indicators, but anchored above each NPC and shown
@@ -117,7 +131,6 @@ export class WorldScene extends Phaser.Scene {
       D: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.D),
     };
     this.hotkeys = {
-      O: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.O),
       I: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.I),
       N: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.N),
       B: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.B),
@@ -179,6 +192,8 @@ export class WorldScene extends Phaser.Scene {
 
     this.events.once("shutdown", () => {
       this.clearDoorIndicators();
+      this.clearPortal();
+      this.hideLoadingOverlay();
       this.clearHouseObjects();
       this.cancelPlacement();
       this.clearNpcs();
@@ -241,7 +256,7 @@ export class WorldScene extends Phaser.Scene {
 
     // Movement is locked while a dialogue line or the chat input is open —
     // feeds inputs into a no-op so any held key gets cleared rather than queued.
-    if (!this.ui?.isDialogueOpen && !this.ui?.isChatOpen) {
+    if (!this.ui?.isDialogueOpen && !this.ui?.isChatOpen && !this.loadingOverlay) {
       this.localPlayer.handleInput(this.cursors, this.wasd, delta);
     }
 
@@ -254,6 +269,7 @@ export class WorldScene extends Phaser.Scene {
 
     this.refreshDoorPrompt();
     this.refreshNpcPrompt();
+    this.refreshPortalPrompt();
     if (cx !== this.lastTileCx || cy !== this.lastTileCy) {
       this.lastTileCx = cx;
       this.lastTileCy = cy;
@@ -281,15 +297,6 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private bindKeyHandlers() {
-    // O — toggle between your village and the shared open world. From the
-    // shared house this also kicks you back out to the open world.
-    this.hotkeys.O.on("down", () => {
-      if (this.world.kind === "openworld") {
-        gameSocket.enterWorld({ kind: "village", ownerPlayerId: getAccountId() });
-      } else {
-        gameSocket.enterWorld({ kind: "openworld" });
-      }
-    });
     // I — open the searchable invite panel (same as the HUD button).
     this.hotkeys.I.on("down", () => this.openInvitePanel());
     // N — open the notifications inbox (invites land here).
@@ -309,8 +316,33 @@ export class WorldScene extends Phaser.Scene {
         return;
       }
       const { cx, cy } = this.localPlayer;
-      if (this.doorTiles.has(`${cx},${cy}`)) this.enterHouse(cx, cy);
+      if (this.doorTiles.has(`${cx},${cy}`)) {
+        this.enterHouse(cx, cy);
+        return;
+      }
+      if (this.isAdjacentToPortal(cx, cy)) this.usePortal();
     });
+  }
+
+  // True when the player is on or 4-connected-adjacent to the portal tile.
+  private isAdjacentToPortal(cx: number, cy: number): boolean {
+    if (!this.portalTile) return false;
+    const dx = Math.abs(this.portalTile.cx - cx);
+    const dy = Math.abs(this.portalTile.cy - cy);
+    return dx + dy <= 1;
+  }
+
+  // Activate the portal: open world → your village, anywhere else → open world.
+  // Mirrors the destination logic the old O hotkey used. A loading overlay
+  // covers the gap until the server streams back the new world.
+  private usePortal() {
+    if (this.world.kind === "openworld") {
+      this.showLoadingOverlay("Entering your village…");
+      gameSocket.enterWorld({ kind: "village", ownerPlayerId: getAccountId() });
+    } else {
+      this.showLoadingOverlay("Returning to the open world…");
+      gameSocket.enterWorld({ kind: "openworld" });
+    }
   }
 
   // Shared by the E key and clicking an NPC. Opens the shop for merchants,
@@ -482,6 +514,79 @@ export class WorldScene extends Phaser.Scene {
     }
   }
 
+  // Draw the world-switch portal: a glowing pad that pulses, plus a bobbing
+  // "E" prompt and a clickable zone. Rebuilt on every world change.
+  private rebuildPortal() {
+    this.clearPortal();
+    this.portalTile = this.mapDef?.portal;
+    if (!this.portalTile) return;
+
+    const { x, y } = cartToIso(this.portalTile.cx, this.portalTile.cy);
+    const cx = x + TILE_W / 2;
+    const cy = y + TILE_H / 2;
+    const depth = this.portalTile.cy + 1;
+
+    // Layered ellipses read as a glowing teleport pad even without art.
+    const glow = this.add.ellipse(cx, cy, TILE_W * 1.6, TILE_H * 1.0, 0x66ccff, 0.25).setDepth(depth);
+    const ring = this.add.ellipse(cx, cy, TILE_W * 1.1, TILE_H * 0.7, 0xaa66ff, 0.5).setDepth(depth);
+    const core = this.add.ellipse(cx, cy, TILE_W * 0.6, TILE_H * 0.4, 0xffffff, 0.85).setDepth(depth);
+    this.portalObjects.push(glow, ring, core);
+    this.portalTween = this.tweens.add({
+      targets: [glow, ring],
+      scaleX: 1.25,
+      scaleY: 1.25,
+      alpha: { from: 0.6, to: 0.2 },
+      duration: 900,
+      ease: "Sine.easeInOut",
+      yoyo: true,
+      repeat: -1,
+    });
+
+    this.portalLabel = this.add
+      .text(cx, y - 4, "E", {
+        fontFamily: FONT,
+        fontSize: "8px",
+        color: "#ffff66",
+        stroke: "#000000",
+        strokeThickness: 3,
+      })
+      .setOrigin(0.5, 1)
+      .setDepth(9999)
+      .setVisible(false);
+
+    const zone = this.add
+      .zone(cx, cy, TILE_W, TILE_H)
+      .setInteractive({ cursor: CURSORS.pointer });
+    zone.on("pointerdown", () => {
+      if (!this.localPlayer) return;
+      if (this.ui?.isChatOpen || this.ui?.isDialogueOpen) return;
+      if (!this.isAdjacentToPortal(this.localPlayer.cx, this.localPlayer.cy)) {
+        this.flashStatus("Walk to the portal first");
+        return;
+      }
+      this.usePortal();
+    });
+    this.portalObjects.push(zone);
+  }
+
+  private clearPortal() {
+    this.portalTween?.stop();
+    this.portalTween = undefined;
+    this.portalLabel?.destroy();
+    this.portalLabel = undefined;
+    for (const o of this.portalObjects) o.destroy();
+    this.portalObjects.length = 0;
+    this.portalTile = undefined;
+  }
+
+  private refreshPortalPrompt() {
+    if (!this.portalLabel || !this.localPlayer) return;
+    const visible =
+      !this.ui?.isDialogueOpen &&
+      this.isAdjacentToPortal(this.localPlayer.cx, this.localPlayer.cy);
+    this.portalLabel.setVisible(visible);
+  }
+
   private enterHouse(doorCx: number, doorCy: number) {
     // In the open world, doors lead to the shared multiplayer house. Inside
     // the house, the same door tile takes you back out to the open world.
@@ -515,6 +620,7 @@ export class WorldScene extends Phaser.Scene {
     for (const remote of this.remotePlayers.values()) remote.destroy();
     this.remotePlayers.clear();
     this.clearDoorIndicators();
+    this.clearPortal();
     this.clearHouseObjects();
     this.cancelPlacement();
 
@@ -526,10 +632,14 @@ export class WorldScene extends Phaser.Scene {
             // The open world gets a single house whose door leads into the
             // shared multiplayer house.
             sharedHouse: state.world.kind === "openworld",
+            // Portal back/forth: near spawn in the open world, fixed
+            // bottom-right in a village.
+            portal: state.world.kind === "openworld" ? "spawn" : "bottomRight",
           });
     this.isoMap = new IsoMap(this, this.mapDef);
     this.isoMap.build();
     this.rebuildDoorIndicators();
+    this.rebuildPortal();
     this.rebuildNpcs();
     this.ui?.closeDialogue();
 
@@ -566,20 +676,72 @@ export class WorldScene extends Phaser.Scene {
 
     this.loadingText?.destroy();
     this.loadingText = undefined;
+    this.scheduleHideLoadingOverlay();
     this.refreshStatus();
+  }
+
+  // Full-screen dim + message shown while a portal world switch is in flight,
+  // torn down once the new world finishes building (see rebuildWorld).
+  private showLoadingOverlay(message: string) {
+    if (!this.loadingOverlay) {
+      this.loadingOverlay = this.add
+        .rectangle(
+          this.scale.width / 2,
+          this.scale.height / 2,
+          this.scale.width,
+          this.scale.height,
+          0x000000,
+          0.7,
+        )
+        .setScrollFactor(0)
+        .setDepth(100001);
+    }
+    if (!this.loadingOverlayText) {
+      this.loadingOverlayText = this.add
+        .text(this.scale.width / 2, this.scale.height / 2, "", {
+          fontFamily: FONT,
+          fontSize: "12px",
+          color: "#ffffff",
+        })
+        .setOrigin(0.5)
+        .setScrollFactor(0)
+        .setDepth(100002);
+    }
+    this.loadingOverlayText.setText(message);
+    this.loadingShownAt = this.time.now;
+  }
+
+  // Hide the overlay, but keep it up for at least MIN_LOADING_MS so a fast
+  // (effectively instant) world build still shows a loading screen. The new
+  // world is already built behind it — we're just holding the curtain.
+  private scheduleHideLoadingOverlay() {
+    if (!this.loadingOverlay) return;
+    const remaining = WorldScene.MIN_LOADING_MS - (this.time.now - this.loadingShownAt);
+    if (remaining <= 0) {
+      this.hideLoadingOverlay();
+      return;
+    }
+    this.time.delayedCall(remaining, () => this.hideLoadingOverlay());
+  }
+
+  private hideLoadingOverlay() {
+    this.loadingOverlay?.destroy();
+    this.loadingOverlay = undefined;
+    this.loadingOverlayText?.destroy();
+    this.loadingOverlayText = undefined;
   }
 
   private refreshStatus() {
     if (!this.ui) return;
     let label: string;
     if (this.world.kind === "openworld") {
-      label = "Open World  [E] house  [O] village  [N] inbox";
+      label = "Open World  [E] house/portal  [N] inbox";
     } else if (this.world.kind === "house") {
       label = "Shared House  walk through the doorway to exit";
     } else if (this.world.ownerPlayerId === getAccountId()) {
-      label = "Your Village  [O] open world  [Shift] run";
+      label = "Your Village  [E] portal to open world  [Shift] run";
     } else {
-      label = "Visiting Village  [O] open world  [Shift] run";
+      label = "Visiting Village  [E] portal to open world  [Shift] run";
     }
     this.ui.setStatus(label);
   }

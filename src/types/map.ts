@@ -33,6 +33,8 @@ export interface MapDef {
   spawnPoint: { cx: number; cy: number };
   // Tile positions where walking triggers entering a house interior.
   doors: Array<{ cx: number; cy: number }>;
+  // Tile where activating the portal switches worlds (open world ⇄ village).
+  portal?: { cx: number; cy: number };
   // Static NPCs that live in this map.
   npcs: NpcDef[];
 }
