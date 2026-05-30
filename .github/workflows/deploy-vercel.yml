@@ -1,0 +1,53 @@
+name: Deploy game to Vercel
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Prebuilt deploy: the repo can stay PRIVATE because Vercel never connects to
+# it. GitHub Actions (which has full private access) builds the static client,
+# then ships the finished `dist/` to Vercel via the CLI + a token. Vercel only
+# ever sees the built output, so its "no private repos on Hobby" Git-integration
+# limit doesn't apply — and the game.pixl.rsvp domain still lives on Vercel.
+
+concurrency:
+  group: vercel-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      # Project the prebuilt output is pushed to. Add these as repo secrets:
+      #   Settings → Secrets and variables → Actions.
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - run: bun install --frozen-lockfile
+
+      # Vite inlines VITE_* at build time, so the server URL is baked in here.
+      - name: Build client
+        run: bun run build
+        env:
+          VITE_SERVER_URL: https://server.pixl.rsvp
+
+      # Wrap the static build in Vercel's Build Output API layout so we can use
+      # --prebuilt and skip Vercel-side build config entirely.
+      - name: Package prebuilt output
+        run: |
+          rm -rf .vercel/output
+          mkdir -p .vercel/output/static
+          cp -r dist/. .vercel/output/static/
+          echo '{"version":3}' > .vercel/output/config.json
+
+      - name: Deploy to Vercel
+        run: bunx vercel deploy --prebuilt --prod --token "$VERCEL_TOKEN"
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}

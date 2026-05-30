@@ -19,6 +19,9 @@ dist-ssr
 
 .claude
 
+# Vercel CLI link state (org/project ids live in repo secrets instead)
+.vercel
+
 server/data/
 
 # Editor directories and files
@@ -31,3 +34,4 @@ server/data/
 *.njsproj
 *.sln
 *.sw?
+.env*
