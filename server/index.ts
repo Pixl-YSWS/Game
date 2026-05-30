@@ -391,6 +391,12 @@ function mapFor(world: WorldRef) {
 const app = express();
 app.use(cors());
 
+// Lightweight health/landing route so hitting the server root returns 200
+// (used as a reachability check and by platform healthchecks).
+app.get("/", (_req, res) => {
+  res.json({ ok: true, service: "pixl-game-server" });
+});
+
 // Hack Club OAuth routes (/auth/login, /auth/callback, /auth/verify).
 // `auth` is created earlier (so its schema exists before prepared statements
 // compile); here we just mount its router.
