@@ -72,8 +72,35 @@ export interface DayCycle {
   serverNow: number;
 }
 
+// Moderation role. `null` = a normal player. Sub-admins can mute/unmute;
+// full admins can also promote/remove sub-admins.
+export type ModRole = "admin" | "subadmin" | null;
+
+// One row in the admin panel's people list.
+export interface AdminEntry {
+  accountId: string;
+  name: string;
+  role: Exclude<ModRole, null>;
+}
+export interface MuteEntry {
+  accountId: string;
+  name: string;
+  reason?: string;
+}
+// An online player as seen by the admin panel (with their mod status).
+export interface AdminPlayerEntry {
+  accountId: string;
+  name: string;
+  role: ModRole;
+  muted: boolean;
+}
+
 export interface ServerToClientEvents {
-  init: (data: { id: string; accountId: string; name: string; char: number; verified: boolean; world: WorldState; pixels: number; unread: number; dayCycle: DayCycle }) => void;
+  init: (data: { id: string; accountId: string; name: string; char: number; verified: boolean; role: ModRole; world: WorldState; pixels: number; unread: number; dayCycle: DayCycle }) => void;
+  // A short moderation message shown to one player (e.g. "You have been muted").
+  "mod:notice": (data: { text: string }) => void;
+  // Snapshot for the admin panel (in response to admin:list).
+  "admin:data": (data: { admins: AdminEntry[]; mutes: MuteEntry[]; online: AdminPlayerEntry[] }) => void;
   "world:state": (data: WorldState) => void;
   "player:join": (state: PlayerState) => void;
   "player:move": (data: { id: string; cx: number; cy: number }) => void;
@@ -152,6 +179,15 @@ export interface ClientToServerEvents {
   "house:place": (payload: { itemId: string; cx: number; cy: number }) => void;
   // Pick a placed item back up (returns it to your inventory).
   "house:remove": (payload: { id: number }) => void;
+
+  // ── Admin / moderation (server validates the caller's role) ──────────
+  // Request the admin-panel snapshot (responds with admin:data).
+  "admin:list": () => void;
+  // Mute / unmute an account from world chat (admin or sub-admin).
+  "admin:mute": (payload: { accountId: string; reason?: string }) => void;
+  "admin:unmute": (payload: { accountId: string }) => void;
+  // Promote to sub-admin or demote back to a normal player (full admin only).
+  "admin:setRole": (payload: { accountId: string; role: "subadmin" | "none" }) => void;
 }
 
 export type MovePayload = { cx: number; cy: number };

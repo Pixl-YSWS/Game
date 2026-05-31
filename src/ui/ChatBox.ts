@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import { gameSocket } from "../network/socket";
-import { FONT_NARROW, COLORS } from "./theme";
+import { COLORS } from "./theme";
 import { playUiSound } from "./UIKit";
 import type { ChatMessage } from "../types/network";
 
@@ -9,22 +9,32 @@ export function formatChatBubble(text: string): string {
   return text.startsWith("/me ") ? text.slice(4) : text;
 }
 
-const MAX_LINES = 7;
+const MAX_LINES = 9;
 const LINE_TTL = 11000; // ms a line stays before fading when chat is closed
-const LINE_H = 18;
+const LINE_GAP = 4; // vertical gap between stacked chat lines
+// Monocraft — a Minecraft look-alike that reads like a real MC chat log, far
+// easier on the eyes at small sizes than the blocky all-caps UI font. Falls
+// back to Pixelify Sans until Monocraft.ttf is dropped into public/assets/fonts.
+const CHAT_FONT = '"Monocraft", "Pixelify Sans", "Trebuchet MS", sans-serif';
 
-// Bottom-left world chat: a fading scrollback log plus a DOM <input> that
-// appears when the player presses Enter / T. Lives inside the UIScene.
+// Bottom-left world chat, styled after Minecraft: each line sits on its own
+// translucent dark strip so it stays legible over any background, with a DOM
+// <input> bar that appears when the player presses Enter / T. Lives inside the
+// UIScene.
 export class ChatBox {
   private scene: Phaser.Scene;
-  private lines: { text: Phaser.GameObjects.Text; fade?: Phaser.Time.TimerEvent }[] = [];
+  private lines: {
+    text: Phaser.GameObjects.Text;
+    bg: Phaser.GameObjects.Rectangle;
+    fade?: Phaser.Time.TimerEvent;
+  }[] = [];
   private dom: Phaser.GameObjects.DOMElement;
   private inputEl: HTMLInputElement;
   private hint: Phaser.GameObjects.Text;
   private active = false;
   private unread = 0;
-  private readonly x = 14;
-  private readonly inputY: number;
+  private readonly x = 12;
+  private inputY: number;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -32,8 +42,8 @@ export class ChatBox {
 
     this.hint = scene.add
       .text(this.x, this.inputY - 2, "Press  Enter  to chat", {
-        fontFamily: FONT_NARROW,
-        fontSize: "12px",
+        fontFamily: CHAT_FONT,
+        fontSize: "13px",
         color: COLORS.textDim,
         stroke: "#000000",
         strokeThickness: 3,
@@ -52,16 +62,17 @@ export class ChatBox {
     this.inputEl.maxLength = 160;
     this.inputEl.placeholder = "Say something…";
     Object.assign(this.inputEl.style, {
-      width: "380px",
+      width: `${this.inputWidth()}px`,
       padding: "7px 10px",
-      font: '14px "Kenney Future Narrow", monospace',
+      font: `15px ${CHAT_FONT}`,
       color: "#ffffff",
-      background: "rgba(10,15,28,0.88)",
-      border: "2px solid #ffd166",
-      borderRadius: "6px",
+      background: "rgba(0,0,0,0.55)",
+      border: "1px solid rgba(255,255,255,0.25)",
+      borderRadius: "0",
       outline: "none",
     } as Partial<CSSStyleDeclaration>);
     this.dom.setVisible(false);
+    this.inputEl.style.display = "none";
 
     // Keep keystrokes from leaking to Phaser (which would move the player or
     // trigger hotkeys while the player is typing).
@@ -100,7 +111,7 @@ export class ChatBox {
     for (const l of this.lines) {
       l.fade?.remove();
       l.fade = undefined;
-      l.text.setAlpha(1);
+      this.setLineAlpha(l, 1);
     }
   }
 
@@ -143,12 +154,13 @@ export class ChatBox {
     const display = action
       ? `✦ ${msg.name} ${msg.text.slice(4)}`
       : `${msg.name}: ${msg.text}`;
-    const color = action ? COLORS.good : mine ? COLORS.accent : COLORS.text;
+    // All chat lines in white for max legibility; /me actions stay green.
+    const color = action ? COLORS.good : COLORS.text;
 
     const text = this.scene.add
       .text(this.x, 0, display, {
-        fontFamily: FONT_NARROW,
-        fontSize: "13px",
+        fontFamily: CHAT_FONT,
+        fontSize: "15px",
         color,
         stroke: "#000000",
         strokeThickness: 3,
@@ -158,16 +170,32 @@ export class ChatBox {
       .setResolution(3)
       .setScrollFactor(0);
 
-    const line = { text } as { text: Phaser.GameObjects.Text; fade?: Phaser.Time.TimerEvent };
+    // Minecraft-style translucent strip behind the line, with a faint outline
+    // so each message stays separated from the world (and its neighbours).
+    // Added before the text is referenced for layout; drawn behind it.
+    const bg = this.scene.add
+      .rectangle(this.x - 4, 0, text.width + 8, text.height + 2, 0x000000, 0.6)
+      .setStrokeStyle(1, 0xffffff, 0.1)
+      .setOrigin(0, 1)
+      .setScrollFactor(0);
+    // Keep the strip behind the glyphs.
+    bg.setDepth(text.depth - 1);
+
+    const line = { text, bg } as {
+      text: Phaser.GameObjects.Text;
+      bg: Phaser.GameObjects.Rectangle;
+      fade?: Phaser.Time.TimerEvent;
+    };
     this.lines.push(line);
     while (this.lines.length > MAX_LINES) {
       const old = this.lines.shift()!;
       old.fade?.remove();
       old.text.destroy();
+      old.bg.destroy();
     }
     this.reflow();
     if (this.active) {
-      line.text.setAlpha(1);
+      this.setLineAlpha(line, 1);
     } else {
       this.scheduleFade(line);
       // Incoming chatter while closed: blip + bump the unread badge.
@@ -179,20 +207,59 @@ export class ChatBox {
     }
   }
 
-  private scheduleFade(line: { text: Phaser.GameObjects.Text; fade?: Phaser.Time.TimerEvent }) {
+  // Set both the text and its backing strip alpha together (the strip stays a
+  // touch more transparent than the text).
+  private setLineAlpha(
+    line: { text: Phaser.GameObjects.Text; bg: Phaser.GameObjects.Rectangle },
+    a: number,
+  ) {
+    line.text.setAlpha(a);
+    line.bg.setAlpha(a);
+  }
+
+  private scheduleFade(line: {
+    text: Phaser.GameObjects.Text;
+    bg: Phaser.GameObjects.Rectangle;
+    fade?: Phaser.Time.TimerEvent;
+  }) {
     line.fade?.remove();
-    line.text.setAlpha(1);
+    this.setLineAlpha(line, 1);
     line.fade = this.scene.time.delayedCall(LINE_TTL, () => {
-      this.scene.tweens.add({ targets: line.text, alpha: 0.0, duration: 600 });
+      this.scene.tweens.add({
+        targets: [line.text, line.bg],
+        alpha: 0,
+        duration: 600,
+      });
     });
   }
 
-  // Stack lines upward from just above the input.
+  // Chat input width, capped to the viewport so it never runs off-screen on
+  // narrow windows (and shrinks with the canvas under the RESIZE scale mode).
+  private inputWidth(): number {
+    return Math.min(440, this.scene.scale.width - this.x * 2);
+  }
+
+  // Re-anchor to the bottom-left after a canvas resize (window drag /
+  // fullscreen toggle): the input width and every line's Y depend on the
+  // current viewport size.
+  relayout() {
+    this.inputY = this.scene.scale.height - 16;
+    this.inputEl.style.width = `${this.inputWidth()}px`;
+    this.hint.setY(this.inputY - 2);
+    this.dom.setY(this.inputY);
+    this.reflow();
+  }
+
+  // Stack lines upward from just above the input. Each line is offset by its
+  // own measured height (not a fixed step), so a wrapped multi-line message
+  // pushes the ones above it up instead of overlapping them.
   private reflow() {
-    const baseY = this.inputY - 34;
-    for (let i = 0; i < this.lines.length; i++) {
-      const fromBottom = this.lines.length - 1 - i;
-      this.lines[i].text.setY(baseY - fromBottom * LINE_H);
+    let bottom = this.inputY - 34;
+    for (let i = this.lines.length - 1; i >= 0; i--) {
+      const line = this.lines[i];
+      line.text.setY(bottom);
+      line.bg.setY(bottom + 1);
+      bottom -= line.text.height + LINE_GAP;
     }
   }
 }

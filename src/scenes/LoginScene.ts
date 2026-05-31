@@ -97,6 +97,10 @@ export class LoginScene extends Phaser.Scene {
       borderRadius: "6px",
       outline: "none",
     } as Partial<CSSStyleDeclaration>);
+    // The width is set via CSS *after* creation, so Phaser's cached size (used
+    // to apply the origin-0.5 offset) is stale and the field renders off-centre.
+    // Re-measure now that the real width is in place.
+    input.updateSize();
     this.guestInput.addEventListener("keydown", (e) => {
       e.stopPropagation();
       if (e.key === "Enter") this.joinAsGuest();

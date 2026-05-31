@@ -159,6 +159,20 @@ class GameSocket {
     this.socket?.emit("house:remove", { id });
   }
 
+  // ── Admin / moderation ──────────────────────────────────────────
+  requestAdminData() {
+    this.socket?.emit("admin:list");
+  }
+  adminMute(accountId: string, reason?: string) {
+    this.socket?.emit("admin:mute", { accountId, reason });
+  }
+  adminUnmute(accountId: string) {
+    this.socket?.emit("admin:unmute", { accountId });
+  }
+  adminSetRole(accountId: string, role: "subadmin" | "none") {
+    this.socket?.emit("admin:setRole", { accountId, role });
+  }
+
   get id(): string | undefined {
     return this.socket?.id;
   }

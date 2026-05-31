@@ -3,6 +3,7 @@ import { IsoMap } from "../world/IsoMap";
 import { Player } from "../entities/Player";
 import { TILE_H } from "../utils/IsoUtils";
 import type { MapDef } from "../types/map";
+import { getKeybinds } from "../data/Settings";
 
 // 16:9 aspect so the map exactly fills the 1280×720 canvas — no letterbox.
 const COLS = 32;
@@ -71,6 +72,9 @@ export class InteriorScene extends Phaser.Scene {
     S: Phaser.Input.Keyboard.Key;
     D: Phaser.Input.Keyboard.Key;
   };
+  // Held direction from the on-screen mobile D-pad (set by UIScene).
+  private touchDir = { dx: 0, dy: 0 };
+  private controlKeys: Phaser.Input.Keyboard.Key[] = [];
   private exiting = false;
 
   constructor() {
@@ -83,13 +87,11 @@ export class InteriorScene extends Phaser.Scene {
   }
 
   create() {
-    this.cursors = this.input.keyboard!.createCursorKeys();
-    this.wasd = {
-      W: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.W),
-      A: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.A),
-      S: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.S),
-      D: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.D),
-    };
+    this.applyKeybinds();
+    // Rebuild movement keys when returning from a paused state (the player may
+    // have just remapped controls in Settings).
+    this.events.on("resume", this.applyKeybinds, this);
+    this.events.once("shutdown", () => this.events.off("resume", this.applyKeybinds, this));
 
     this.mapDef = makeInteriorMap();
     const isoMap = new IsoMap(this, this.mapDef);
@@ -118,9 +120,37 @@ export class InteriorScene extends Phaser.Scene {
     });
   }
 
+  // (Re)build movement keys from the saved keybinds (arrows stay on as fixed
+  // alternates; the run key drives sprint). Tears down prior keys so remapping
+  // applies on resume.
+  private applyKeybinds() {
+    const kb = this.input.keyboard;
+    if (!kb) return;
+    for (const key of this.controlKeys) kb.removeKey(key, true, true);
+    this.controlKeys.length = 0;
+    const b = getKeybinds();
+    const k = (code: string) => {
+      const key = kb.addKey(code, true);
+      this.controlKeys.push(key);
+      return key;
+    };
+    this.cursors = {
+      up: k("UP"), down: k("DOWN"), left: k("LEFT"), right: k("RIGHT"),
+      space: k("SPACE"), shift: k(b.run),
+    } as Phaser.Types.Input.Keyboard.CursorKeys;
+    this.wasd = { W: k(b.up), A: k(b.left), S: k(b.down), D: k(b.right) };
+  }
+
+  // Held direction from the on-screen mobile D-pad (UIScene calls this). An
+  // interior is exited just by walking onto the door tile, so there's no
+  // separate mobile interact action to wire up here.
+  setTouchDir(dx: number, dy: number) {
+    this.touchDir = { dx, dy };
+  }
+
   update(_time: number, delta: number) {
     if (!this.localPlayer) return;
-    this.localPlayer.handleInput(this.cursors, this.wasd, delta);
+    this.localPlayer.handleInput(this.cursors, this.wasd, delta, this.touchDir);
     this.localPlayer.setDepth(Math.floor(this.localPlayer.y / TILE_H) + 1.5);
 
     if (this.exiting) return;

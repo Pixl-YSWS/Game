@@ -1,13 +1,17 @@
 import Phaser from "phaser";
 import { DialogueBox } from "../ui/DialogueBox";
 import { ChatBox } from "../ui/ChatBox";
-import { FONT, FONT_EMOJI, COLORS, CURSORS } from "../ui/theme";
+import { FONT, FONT_EMOJI, FONT_CHAT, FONT_TITLE, COLORS, CURSORS } from "../ui/theme";
 import { panel, playUiSound } from "../ui/UIKit";
 import { EMOTES } from "../ui/emotes";
 import { gameSocket } from "../network/socket";
+import { getAccountId } from "../network/playerIdentity";
 import { loadSettings } from "../data/Settings";
 import { musicEngine } from "../audio/MusicEngine";
-import type { ChatMessage } from "../types/network";
+import type { ChatMessage, PlayerDirEntry, ModRole } from "../types/network";
+
+// A HUD object we can nudge by (dx, dy) on resize.
+type Movable = Phaser.GameObjects.GameObject & Phaser.GameObjects.Components.Transform;
 
 // Single UI scene running on top of WorldScene / InteriorScene. Its camera
 // is at zoom 1 with no scroll, so every UI element sits at fixed canvas
@@ -30,6 +34,26 @@ export class UIScene extends Phaser.Scene {
   private unread = 0;
   private badgeBg?: Phaser.GameObjects.Arc;
   private badgeText?: Phaser.GameObjects.Text;
+
+  // Tab player list (online players only). Held open while Tab is down.
+  private playerListOpen = false;
+  private latestPlayers: PlayerDirEntry[] = [];
+  private playerListObjects: Phaser.GameObjects.GameObject[] = [];
+
+  // Corner-anchored HUD groups, tracked so they can be shifted as a unit when
+  // the canvas resizes (RESIZE scale mode / fullscreen). We record the canvas
+  // size they were last laid out against and slide the whole group by the
+  // delta — no per-element re-layout needed.
+  private socialObjects: Movable[] = [];
+  private emoteObjects: Movable[] = [];
+  private socialBaseW = 0;
+  private emoteBaseW = 0;
+  private emoteBaseH = 0;
+
+  // Moderation: our own role + the HUD shield button (built lazily once we
+  // learn we're staff, then shown/hidden as the role changes).
+  private adminRole: ModRole = null;
+  private adminBtn?: { bg: Phaser.GameObjects.NineSlice; icon: Phaser.GameObjects.Text; tooltip: Phaser.GameObjects.Text };
 
   // Night overlay + day-cycle anchor. The overlay sits at depth -10 so all
   // HUD elements and the dialogue panel render above it.
@@ -56,6 +80,7 @@ export class UIScene extends Phaser.Scene {
     this.chat = new ChatBox(this);
     this.buildEmoteBar();
     this.buildSocialButtons();
+    this.buildMobileControls();
 
     // Procedural background music, gated on the sound setting and the day
     // cycle. Resume the audio context on the first input (autoplay policy).
@@ -63,8 +88,47 @@ export class UIScene extends Phaser.Scene {
     musicEngine.setEnabled(loadSettings().soundEnabled);
     this.input.once("pointerdown", () => musicEngine.resume());
     this.input.keyboard?.once("keydown", () => musicEngine.resume());
-    this.events.once("shutdown", () => musicEngine.stop());
+
+    // Live roster for the Tab player list (filtered to online on render).
+    gameSocket.on("players:list", this.onPlayersList);
+
+    // Reflow the HUD whenever the canvas resizes (fullscreen / window drag).
+    this.scale.on("resize", this.layout, this);
+    this.events.once("shutdown", () => {
+      musicEngine.stop();
+      gameSocket.off("players:list", this.onPlayersList);
+      this.scale.off("resize", this.layout, this);
+    });
   }
+
+  // Slide the corner-anchored HUD groups to match the new canvas size, and
+  // re-anchor the centred / edge-bound widgets. Called on every resize.
+  private layout = (gameSize: Phaser.Structs.Size) => {
+    const w = gameSize.width;
+    const h = gameSize.height;
+    this.nightOverlay?.setSize(w, h);
+    this.statusBg?.setX(w / 2);
+    this.statusText?.setX(w / 2);
+
+    const sdx = w - this.socialBaseW;
+    if (sdx !== 0) {
+      for (const o of this.socialObjects) o.x += sdx;
+      this.socialBaseW = w;
+    }
+    const edx = w - this.emoteBaseW;
+    const edy = h - this.emoteBaseH;
+    if (edx !== 0 || edy !== 0) {
+      for (const o of this.emoteObjects) {
+        o.x += edx;
+        o.y += edy;
+      }
+      this.emoteBaseW = w;
+      this.emoteBaseH = h;
+    }
+
+    this.chat?.relayout();
+    if (this.playerListOpen) this.renderPlayerList();
+  };
 
   // Current day/night phase, 0..1 (0 = midnight). 0.5 when not yet synced.
   private dayPhase(): number {
@@ -132,6 +196,7 @@ export class UIScene extends Phaser.Scene {
       | undefined;
 
     // Uniform square icon buttons, laid out right-to-left from the corner.
+    this.socialBaseW = this.scale.width;
     const SIZE = 38, GAP = 8, cy = 12 + SIZE / 2;
     let x = this.scale.width - 12 - SIZE / 2;
     const inboxBtn = this.iconButton(x, cy, "✉", "Inbox  [N]", () => world()?.openInbox());
@@ -150,6 +215,7 @@ export class UIScene extends Phaser.Scene {
       .setResolution(3)
       .setDepth(61)
       .setVisible(false);
+    this.socialObjects.push(this.badgeBg, this.badgeText);
     this.refreshBadge();
   }
 
@@ -193,7 +259,57 @@ export class UIScene extends Phaser.Scene {
       playUiSound(this, "sfx-tap", 0.3);
       onClick();
     });
+    this.socialObjects.push(bg, icon, tooltip);
     return bg;
+  }
+
+  // ── Admin / moderation ────────────────────────────────────────────
+
+  // Set our moderation role (from init / live role changes). Builds the HUD
+  // shield button on first staff role, then toggles its visibility.
+  setAdminRole(role: ModRole) {
+    this.adminRole = role;
+    if (role && !this.adminBtn) this.buildAdminButton();
+    const show = role !== null;
+    this.adminBtn?.bg.setVisible(show).setActive(show);
+    this.adminBtn?.icon.setVisible(show);
+    if (!show) this.adminBtn?.tooltip.setVisible(false);
+  }
+
+  // A shield button to the left of the other corner buttons (4th slot).
+  private buildAdminButton() {
+    const SIZE = 38, GAP = 8;
+    const x = this.scale.width - 12 - SIZE / 2 - 3 * (SIZE + GAP);
+    const cy = 12 + SIZE / 2;
+    const bg = this.add
+      .nineslice(x, cy, "ui-panel-dark", undefined, SIZE, SIZE, 16, 16, 16, 16)
+      .setOrigin(0.5)
+      .setAlpha(0.96)
+      .setDepth(50)
+      .setInteractive({ cursor: CURSORS.pointer });
+    const icon = this.add.text(x, cy, "🛡", { fontFamily: FONT_EMOJI, fontSize: "17px" }).setOrigin(0.5).setDepth(51);
+    const tooltip = this.add
+      .text(x, cy + SIZE / 2 + 6, "Admin", {
+        fontFamily: FONT, fontSize: "8px", color: COLORS.text, backgroundColor: "#0a0f1ccc", padding: { x: 5, y: 3 },
+      })
+      .setOrigin(0.5, 0)
+      .setDepth(62)
+      .setVisible(false);
+    bg.on("pointerover", () => { bg.setTint(0xffe08a).setScale(1.08); icon.setScale(1.08); tooltip.setVisible(true); });
+    bg.on("pointerout", () => { bg.clearTint().setScale(1); icon.setScale(1); tooltip.setVisible(false); });
+    bg.on("pointerdown", () => {
+      playUiSound(this, "sfx-tap", 0.3);
+      this.openAdmin();
+    });
+    this.socialObjects.push(bg, icon, tooltip);
+    this.adminBtn = { bg, icon, tooltip };
+  }
+
+  private openAdmin() {
+    if (this.adminRole === null) return;
+    if (this.scene.isActive("AdminScene")) return;
+    const from = this.scene.isActive("InteriorScene") ? "InteriorScene" : "WorldScene";
+    this.scene.launch("AdminScene", { from, role: this.adminRole });
   }
 
   // Public: refresh the unread badge from the server count.
@@ -216,7 +332,10 @@ export class UIScene extends Phaser.Scene {
     const h = cell + 16;
     const x = this.scale.width - w - 12;
     const y = this.scale.height - h - 12;
-    panel(this, x, y, w, h, "ui-panel-dark").setOrigin(0, 0).setAlpha(0.95);
+    this.emoteBaseW = this.scale.width;
+    this.emoteBaseH = this.scale.height;
+    const barPanel = panel(this, x, y, w, h, "ui-panel-dark").setOrigin(0, 0).setAlpha(0.95);
+    this.emoteObjects.push(barPanel);
 
     EMOTES.forEach((e, i) => {
       const cx = x + 8 + i * cell + cell / 2;
@@ -230,12 +349,110 @@ export class UIScene extends Phaser.Scene {
         .zone(cx, cy, cell, cell)
         .setOrigin(0.5)
         .setInteractive({ cursor: CURSORS.pointer });
+      this.emoteObjects.push(glyph, hit);
       hit.on("pointerover", () => glyph.setScale(1.2));
       hit.on("pointerout", () => glyph.setScale(1));
       hit.on("pointerdown", () => {
         gameSocket.sendEmote(e.key);
         playUiSound(this, "sfx-tap", 0.3);
       });
+    });
+  }
+
+  // ── Mobile touch controls ─────────────────────────────────────────
+
+  // The active gameplay scene (open world or house interior) that the
+  // on-screen controls should drive.
+  private gameScene():
+    | (Phaser.Scene & { setTouchDir(dx: number, dy: number): void; mobileInteract?: () => void })
+    | undefined {
+    for (const key of ["InteriorScene", "WorldScene"]) {
+      const s = this.scene.get(key) as
+        | (Phaser.Scene & { setTouchDir?: (dx: number, dy: number) => void; mobileInteract?: () => void })
+        | undefined;
+      if (s && this.scene.isActive(key) && typeof s.setTouchDir === "function") {
+        return s as Phaser.Scene & { setTouchDir(dx: number, dy: number): void; mobileInteract?: () => void };
+      }
+    }
+    return undefined;
+  }
+
+  // A movement D-pad (bottom-left) plus interact + chat buttons (bottom-right),
+  // shown only on coarse-pointer (touch) devices so desktop play is unchanged.
+  private buildMobileControls() {
+    const coarse =
+      (typeof window !== "undefined" && !!window.matchMedia?.("(pointer: coarse)").matches) ||
+      (navigator?.maxTouchPoints ?? 0) > 0;
+    if (!coarse) return;
+
+    const W = this.scale.width;
+    const H = this.scale.height;
+
+    // Sits above the bottom-left chat log/input bar so the two don't fight.
+    const cx = 96;
+    const cy = H - 156;
+    const GAP = 60;
+    const dpad = (bx: number, by: number, glyph: string, dx: number, dy: number) => {
+      const SIZE = 62;
+      const bg = this.add
+        .nineslice(bx, by, "ui-panel-dark", undefined, SIZE, SIZE, 16, 16, 16, 16)
+        .setOrigin(0.5)
+        .setAlpha(0.82)
+        .setDepth(70)
+        .setInteractive();
+      this.add
+        .text(bx, by, glyph, { fontFamily: FONT_EMOJI, fontSize: "22px" })
+        .setOrigin(0.5)
+        .setDepth(71);
+      const press = () => {
+        bg.setTint(0xffe08a);
+        this.gameScene()?.setTouchDir(dx, dy);
+      };
+      const release = () => {
+        bg.clearTint();
+        this.gameScene()?.setTouchDir(0, 0);
+      };
+      bg.on("pointerdown", press);
+      bg.on("pointerup", release);
+      bg.on("pointerout", release);
+      bg.on("pointerupoutside", release);
+    };
+    dpad(cx, cy - GAP, "⬆️", 0, -1);
+    dpad(cx, cy + GAP, "⬇️", 0, 1);
+    dpad(cx - GAP, cy, "⬅️", -1, 0);
+    dpad(cx + GAP, cy, "➡️", 1, 0);
+
+    // Interact (E) and open-chat, stacked above the emote bar.
+    this.touchActionButton(W - 70, H - 150, "✋", () => this.gameScene()?.mobileInteract?.());
+    this.touchActionButton(W - 150, H - 110, "💬", () => {
+      if (!this.isDialogueOpen) this.openChat();
+    });
+  }
+
+  // A round tap button used by the mobile action cluster.
+  private touchActionButton(bx: number, by: number, glyph: string, onTap: () => void) {
+    const bg = this.add
+      .circle(bx, by, 34, 0x0a0f1c, 0.82)
+      .setStrokeStyle(2, 0xffffff, 0.22)
+      .setDepth(70)
+      .setInteractive();
+    const ic = this.add
+      .text(bx, by, glyph, { fontFamily: FONT_EMOJI, fontSize: "24px" })
+      .setOrigin(0.5)
+      .setDepth(71);
+    bg.on("pointerdown", () => {
+      bg.setScale(0.92);
+      ic.setScale(0.92);
+    });
+    bg.on("pointerup", () => {
+      bg.setScale(1);
+      ic.setScale(1);
+      onTap();
+      playUiSound(this, "sfx-tap", 0.3);
+    });
+    bg.on("pointerout", () => {
+      bg.setScale(1);
+      ic.setScale(1);
     });
   }
 
@@ -345,6 +562,109 @@ export class UIScene extends Phaser.Scene {
   }
   addChatMessage(msg: ChatMessage) {
     this.chat?.addMessage(msg);
+  }
+
+  // ── Tab player list ──────────────────────────────────────────────
+
+  get isPlayerListOpen(): boolean {
+    return this.playerListOpen;
+  }
+
+  // Show the online-player roster (held open while Tab is down). Asks the
+  // server for a fresh directory; renders immediately from the last snapshot.
+  showPlayerList() {
+    if (this.playerListOpen) return;
+    this.playerListOpen = true;
+    gameSocket.requestPlayers();
+    this.renderPlayerList();
+  }
+
+  hidePlayerList() {
+    if (!this.playerListOpen) return;
+    this.playerListOpen = false;
+    this.destroyPlayerList();
+  }
+
+  private onPlayersList = (data: { players: PlayerDirEntry[] }) => {
+    this.latestPlayers = data.players;
+    if (this.playerListOpen) this.renderPlayerList();
+  };
+
+  private destroyPlayerList() {
+    for (const o of this.playerListObjects) o.destroy();
+    this.playerListObjects.length = 0;
+  }
+
+  private renderPlayerList() {
+    if (!this.playerListOpen) return;
+    this.destroyPlayerList();
+
+    const W = this.scale.width;
+    const H = this.scale.height;
+    const online = this.latestPlayers
+      .filter((p) => p.online)
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    const rowH = 26;
+    const headerH = 46;
+    const panelW = 320;
+    const bodyH = Math.max(rowH, online.length * rowH);
+    const panelH = headerH + bodyH + 18;
+    const cx = W / 2;
+    const cy = H / 2;
+    const top = cy - panelH / 2;
+    const left = cx - panelW / 2;
+
+    const dim = this.add
+      .rectangle(0, 0, W, H, 0x000000, 0.4)
+      .setOrigin(0)
+      .setDepth(20000);
+    const box = this.add
+      .nineslice(cx, cy, "ui-panel-dark", undefined, panelW, panelH, 20, 20, 20, 20)
+      .setOrigin(0.5)
+      .setAlpha(0.98)
+      .setDepth(20001);
+    const title = this.add
+      .text(cx, top + 24, `PLAYERS ONLINE  (${online.length})`, {
+        fontFamily: FONT_TITLE,
+        fontSize: "15px",
+        color: COLORS.accent,
+      })
+      .setOrigin(0.5)
+      .setResolution(3)
+      .setDepth(20002);
+    this.playerListObjects.push(dim, box, title);
+
+    if (online.length === 0) {
+      const empty = this.add
+        .text(cx, top + headerH + rowH / 2, "No one online", {
+          fontFamily: FONT_CHAT,
+          fontSize: "14px",
+          color: COLORS.textDim,
+        })
+        .setOrigin(0.5)
+        .setResolution(3)
+        .setDepth(20002);
+      this.playerListObjects.push(empty);
+      return;
+    }
+
+    const myId = getAccountId();
+    online.forEach((p, i) => {
+      const ry = top + headerH + i * rowH + rowH / 2;
+      const dot = this.add.circle(left + 28, ry, 4, 0x4ade80).setDepth(20002);
+      const mine = p.accountId === myId;
+      const name = this.add
+        .text(left + 44, ry, mine ? `${p.name}  (you)` : p.name, {
+          fontFamily: FONT_CHAT,
+          fontSize: "15px",
+          color: mine ? COLORS.accent : COLORS.text,
+        })
+        .setOrigin(0, 0.5)
+        .setResolution(3)
+        .setDepth(20002);
+      this.playerListObjects.push(dot, name);
+    });
   }
 
   // ── Internals ────────────────────────────────────────────────────

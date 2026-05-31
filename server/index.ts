@@ -21,6 +21,8 @@ import { generateMap } from "../src/world/MapGen.ts";
 import { makeHouseInterior } from "../src/world/HouseMap.ts";
 import { getShopItem } from "../src/shop/catalog.ts";
 import { setupAuth, type Account } from "./auth.ts";
+import { censorChat } from "./moderation.ts";
+import type { ModRole, AdminEntry, MuteEntry, AdminPlayerEntry } from "../src/types/network.ts";
 
 // Fixed seed for the shared open world. Anything stable & distinct from
 // the player-id-derived seeds is fine; spelling something out makes it
@@ -239,6 +241,72 @@ const selectAllAccounts = db.query<{ account_id: string; name: string }, []>(
 const selectAccountName = db.query<{ name: string }, [string]>(
   "SELECT name FROM accounts WHERE account_id = ?",
 );
+
+// ── Moderation: admin roles + chat mutes ─────────────────────────
+// Built-in root admin: this account is auto-granted "admin" on login and can
+// never be demoted/muted. Extra root admins can be added via ADMIN_EMAILS
+// (comma-separated) without touching code.
+const ROOT_ADMIN_EMAILS = new Set(
+  ["riditjangra09@gmail.com", ...(process.env.ADMIN_EMAILS ?? "").split(",")]
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean),
+);
+
+db.run(`
+  CREATE TABLE IF NOT EXISTS admins (
+    account_id TEXT PRIMARY KEY,
+    role       TEXT NOT NULL,
+    added_by   TEXT,
+    created_at INTEGER NOT NULL
+  )
+`);
+db.run(`
+  CREATE TABLE IF NOT EXISTS mutes (
+    account_id TEXT PRIMARY KEY,
+    reason     TEXT,
+    muted_by   TEXT,
+    created_at INTEGER NOT NULL
+  )
+`);
+const selectRole = db.query<{ role: string }, [string]>(
+  "SELECT role FROM admins WHERE account_id = ?",
+);
+const upsertRole = db.query<unknown, [string, string, string, number]>(
+  "INSERT INTO admins (account_id, role, added_by, created_at) VALUES (?, ?, ?, ?) " +
+    "ON CONFLICT(account_id) DO UPDATE SET role = excluded.role",
+);
+const deleteRole = db.query<unknown, [string]>("DELETE FROM admins WHERE account_id = ?");
+const selectAdmins = db.query<{ account_id: string; role: string }, []>(
+  "SELECT account_id, role FROM admins ORDER BY role, account_id",
+);
+const isMutedRow = db.query<{ n: number }, [string]>(
+  "SELECT COUNT(*) AS n FROM mutes WHERE account_id = ?",
+);
+const upsertMute = db.query<unknown, [string, string | null, string, number]>(
+  "INSERT INTO mutes (account_id, reason, muted_by, created_at) VALUES (?, ?, ?, ?) " +
+    "ON CONFLICT(account_id) DO UPDATE SET reason = excluded.reason, muted_by = excluded.muted_by",
+);
+const deleteMute = db.query<unknown, [string]>("DELETE FROM mutes WHERE account_id = ?");
+const selectMutes = db.query<{ account_id: string; reason: string | null }, []>(
+  "SELECT account_id, reason FROM mutes ORDER BY created_at DESC",
+);
+
+function roleOf(accountId: string): ModRole {
+  const r = selectRole.get(accountId)?.role;
+  return r === "admin" || r === "subadmin" ? r : null;
+}
+function isMuted(accountId: string): boolean {
+  return (isMutedRow.get(accountId)?.n ?? 0) > 0;
+}
+// Auto-grant the built-in root admin on login, by email.
+function ensureRootAdmin(account: Account) {
+  if (!account.email) return;
+  if (!ROOT_ADMIN_EMAILS.has(account.email.toLowerCase())) return;
+  if (roleOf(account.accountId) !== "admin") {
+    upsertRole.run(account.accountId, "admin", "root", Date.now());
+    console.log(`[admin] root admin granted to ${account.name} (${account.accountId})`);
+  }
+}
 
 function unreadCount(playerId: string): number {
   return countUnread.get(playerId)?.n ?? 0;
@@ -576,6 +644,8 @@ io.on("connection", (socket) => {
   // Guaranteed by the io.use() auth middleware above.
   const account = (socket.data as { account: Account }).account;
   const playerId = account.accountId;
+  // Auto-grant the built-in root admin (by email) the first time they connect.
+  ensureRootAdmin(account);
 
   // Single session per account: a fresh login kicks any older live socket.
   const prevSocketId = liveByAccount.get(playerId);
@@ -645,6 +715,7 @@ io.on("connection", (socket) => {
     name: account.name,
     char: state.char,
     verified: state.verified,
+    role: roleOf(playerId),
     world: worldStateFor(state),
     pixels: state.pixels,
     unread: unreadCount(playerId),
@@ -885,6 +956,11 @@ io.on("connection", (socket) => {
     // huge payloads to everyone in the room.
     const clean = text.replace(/[\x00-\x1f]/g, " ").trim().slice(0, 160);
     if (!clean) return;
+    // Muted players can't broadcast — tell only them so it isn't silent.
+    if (isMuted(player.playerId)) {
+      socket.emit("mod:notice", { text: "You are muted and can't send messages." });
+      return;
+    }
     // Simple rate limit: max ~3 messages/sec per socket.
     const now = Date.now();
     const last = chatLast.get(socket.id) ?? 0;
@@ -893,8 +969,86 @@ io.on("connection", (socket) => {
     io.to(worldKey(player.world)).emit("chat:message", {
       id: socket.id,
       name: player.name,
-      text: clean,
+      text: censorChat(clean), // mask blocked words before anyone sees them
     });
+  });
+
+  // ── Admin / moderation ───────────────────────────────────────────
+  // Resolve the live socket of an account, if online, for live notices.
+  const noticeTo = (accountId: string, text: string) => {
+    const sid = socketIdForAccount(accountId);
+    if (sid) io.to(sid).emit("mod:notice", { text });
+  };
+
+  // Build + send the admin-panel snapshot to a privileged caller.
+  const sendAdminData = () => {
+    const admins: AdminEntry[] = selectAdmins.all().map((r) => ({
+      accountId: r.account_id,
+      name: nameForAccount(r.account_id) ?? r.account_id,
+      role: r.role === "admin" ? "admin" : "subadmin",
+    }));
+    const mutes: MuteEntry[] = selectMutes.all().map((r) => ({
+      accountId: r.account_id,
+      name: nameForAccount(r.account_id) ?? r.account_id,
+      reason: r.reason ?? undefined,
+    }));
+    // Distinct online accounts (a player may have one live socket each).
+    const seen = new Set<string>();
+    const online: AdminPlayerEntry[] = [];
+    for (const p of players.values()) {
+      if (seen.has(p.playerId)) continue;
+      seen.add(p.playerId);
+      online.push({
+        accountId: p.playerId,
+        name: p.name,
+        role: roleOf(p.playerId),
+        muted: isMuted(p.playerId),
+      });
+    }
+    online.sort((a, b) => a.name.localeCompare(b.name));
+    socket.emit("admin:data", { admins, mutes, online });
+  };
+
+  socket.on("admin:list", () => {
+    const me = players.get(socket.id);
+    if (!me || roleOf(me.playerId) === null) return;
+    sendAdminData();
+  });
+
+  socket.on("admin:mute", ({ accountId, reason }) => {
+    const me = players.get(socket.id);
+    if (!me || roleOf(me.playerId) === null) return; // admin or sub-admin
+    if (typeof accountId !== "string" || !accountId) return;
+    if (accountId === me.playerId) return; // can't mute yourself
+    if (roleOf(accountId) !== null) return; // mods can't mute other mods
+    upsertMute.run(accountId, typeof reason === "string" ? reason.slice(0, 120) : null, me.playerId, Date.now());
+    noticeTo(accountId, "You have been muted by a moderator.");
+    sendAdminData();
+  });
+
+  socket.on("admin:unmute", ({ accountId }) => {
+    const me = players.get(socket.id);
+    if (!me || roleOf(me.playerId) === null) return;
+    if (typeof accountId !== "string" || !accountId) return;
+    deleteMute.run(accountId);
+    noticeTo(accountId, "You have been unmuted.");
+    sendAdminData();
+  });
+
+  socket.on("admin:setRole", ({ accountId, role }) => {
+    const me = players.get(socket.id);
+    if (!me || roleOf(me.playerId) !== "admin") return; // only full admins
+    if (typeof accountId !== "string" || !accountId || accountId === me.playerId) return;
+    // Never let a sub-admin action touch a full admin (protects root).
+    if (roleOf(accountId) === "admin") return;
+    if (role === "subadmin") {
+      upsertRole.run(accountId, "subadmin", me.playerId, Date.now());
+      noticeTo(accountId, "You are now a sub-admin (moderator).");
+    } else {
+      deleteRole.run(accountId);
+      noticeTo(accountId, "Your moderator role was removed.");
+    }
+    sendAdminData();
   });
 
   socket.on("emote:send", ({ emote }) => {

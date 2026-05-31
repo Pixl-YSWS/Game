@@ -2,7 +2,10 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
     <title>PixlGame</title>
     <!-- ── Pixelify Sans (Google Fonts) — used for titles only ──────── -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -23,22 +26,38 @@
         src: url("/assets/kenney_ui-pack/Font/Kenney%20Future%20Narrow.ttf") format("truetype");
         font-display: block;
       }
+      /* ── Monocraft (Minecraft-style chat font) ──────────────────────
+         Download Monocraft.ttf from github.com/IdreesInc/Monocraft and drop
+         it here. Until then chat falls back to Pixelify Sans (font-display
+         swap = no invisible-text flash while loading). */
+      @font-face {
+        font-family: "Monocraft";
+        src: url("/assets/fonts/Monocraft.ttf") format("truetype");
+        font-display: swap;
+      }
 
       * {
         margin: 0;
         padding: 0;
         box-sizing: border-box;
       }
+      html,
       body {
         background: #0d0d0d;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        width: 100vw;
-        height: 100vh;
+        width: 100%;
+        height: 100%;
         overflow: hidden;
+        /* Stop mobile browsers from scrolling / pull-to-refresh on drag. */
+        touch-action: none;
+        overscroll-behavior: none;
         /* Default custom pixel cursor across the whole page. */
         cursor: url("/assets/kenney_cursor-pixel-pack/Tiles/tile_0026.png") 1 1, auto;
+      }
+      /* Fill the viewport so Phaser's FIT scale mode has a full-size parent to
+         scale the canvas into (and centre it within). */
+      #game-container {
+        width: 100vw;
+        height: 100vh;
       }
       #game-container canvas {
         display: block;

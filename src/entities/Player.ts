@@ -276,6 +276,9 @@ export class Player extends Phaser.GameObjects.Container {
       D: Phaser.Input.Keyboard.Key;
     },
     _delta: number,
+    // Optional held direction from the on-screen mobile D-pad. Used only when
+    // no key is pressed, so a keyboard always wins if both are active.
+    touch?: { dx: number; dy: number },
   ): boolean {
     // Hold Shift to sprint. createCursorKeys() exposes the Shift key, so this
     // works for both arrow-key and WASD movement.
@@ -288,6 +291,12 @@ export class Player extends Phaser.GameObjects.Container {
     else if (cursors.right!.isDown || wasd.D.isDown) dx = 1;
     else if (cursors.up!.isDown || wasd.W.isDown) dy = -1;
     else if (cursors.down!.isDown || wasd.S.isDown) dy = 1;
+
+    // Fall back to the touch D-pad when the keyboard is idle.
+    if (dx === 0 && dy === 0 && touch && (touch.dx !== 0 || touch.dy !== 0)) {
+      dx = touch.dx;
+      dy = touch.dy;
+    }
 
     // Always record so onComplete can chain the next step.
     this.inputDir = { dx, dy };

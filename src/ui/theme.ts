@@ -8,6 +8,10 @@ export const FONT = "Kenney Future";
 export const FONT_NARROW = "Kenney Future Narrow";
 /** Title font — Pixelify Sans. Reserved for scene/panel headings only. */
 export const FONT_TITLE = "Pixelify Sans";
+/** Chat / small-body font — Monocraft (a Minecraft look-alike), falling back
+ *  to Pixelify Sans until Monocraft.ttf is added to public/assets/fonts.
+ *  Used where the blocky all-caps Kenney font is too dense to read small. */
+export const FONT_CHAT = '"Monocraft", "Pixelify Sans", sans-serif';
 /** System emoji font stack — for item glyphs (Kenney has no emoji coverage). */
 export const FONT_EMOJI =
   '"Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji", sans-serif';
@@ -103,6 +107,9 @@ export async function buildCursors(scale = CURSOR_SCALE): Promise<void> {
  */
 export async function preloadFonts(): Promise<void> {
   if (!("fonts" in document)) return;
+  // Monocraft is optional (added by the user); load it best-effort so a missing
+  // file never blocks the others — chat just falls back to Pixelify Sans.
+  (document as Document).fonts.load(`16px "Monocraft"`).catch(() => {});
   try {
     await Promise.all([
       (document as Document).fonts.load(`16px "${FONT}"`),

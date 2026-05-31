@@ -19,7 +19,7 @@ import {
   getCharIndex,
   setCharIndex,
 } from "../network/playerIdentity";
-import { loadSettings } from "../data/Settings";
+import { loadSettings, getKeybinds } from "../data/Settings";
 import { UIScene } from "./UIScene";
 import { CURSORS, FONT } from "../ui/theme";
 import { emoteGlyph } from "../ui/emotes";
@@ -55,12 +55,11 @@ export class WorldScene extends Phaser.Scene {
     S: Phaser.Input.Keyboard.Key;
     D: Phaser.Input.Keyboard.Key;
   };
-  private hotkeys!: {
-    I: Phaser.Input.Keyboard.Key;
-    N: Phaser.Input.Keyboard.Key;
-    B: Phaser.Input.Keyboard.Key;
-    E: Phaser.Input.Keyboard.Key;
-  };
+  // Held direction from the on-screen mobile D-pad (set by UIScene).
+  private touchDir = { dx: 0, dy: 0 };
+  // All dynamically-bound keys (movement + hotkeys), tracked so they can be
+  // torn down and rebuilt when the player remaps controls in Settings.
+  private controlKeys: Phaser.Input.Keyboard.Key[] = [];
 
   // Furniture placed in the shared house, keyed by object id.
   private houseObjects = new Map<number, Phaser.GameObjects.Text>();
@@ -123,23 +122,11 @@ export class WorldScene extends Phaser.Scene {
   }
 
   create() {
-    this.cursors = this.input.keyboard!.createCursorKeys();
-    this.wasd = {
-      W: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.W),
-      A: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.A),
-      S: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.S),
-      D: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.D),
-    };
-    this.hotkeys = {
-      I: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.I),
-      N: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.N),
-      B: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.B),
-      E: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.E),
-    };
-
     this.input.on("wheel", (_: unknown, __: unknown, ___: unknown, deltaY: number) => {
       const cam = this.cameras.main;
-      cam.setZoom(Phaser.Math.Clamp(cam.zoom - deltaY * 0.001, 1, 6));
+      // Min 3× so the player can't zoom out far enough to see past the map
+      // edges / empty space; max 8× for a close look.
+      cam.setZoom(Phaser.Math.Clamp(cam.zoom - deltaY * 0.001, 3, 8));
     });
 
     this.loadingText = this.add
@@ -155,7 +142,10 @@ export class WorldScene extends Phaser.Scene {
       this.scene.launch("UIScene");
     }
     this.ui = this.scene.get("UIScene") as UIScene;
-    this.bindKeyHandlers();
+    this.applyKeybinds();
+    // Rebuild the keys whenever we come back from a paused state (e.g. the
+    // player just remapped controls in the Settings overlay).
+    this.events.on("resume", this.applyKeybinds, this);
     this.connectMultiplayer();
 
     this.input.keyboard!.on("keydown-ESC", () => {
@@ -180,15 +170,9 @@ export class WorldScene extends Phaser.Scene {
       this.cancelPlacement();
     });
 
-    // Enter / T open the chat input. While it's open the DOM input swallows
-    // keystrokes (see ChatBox), so these only fire when chat is closed.
-    const openChat = () => {
-      if (this.ui && !this.ui.isChatOpen && !this.ui.isDialogueOpen) {
-        this.ui.openChat();
-      }
-    };
-    this.input.keyboard!.on("keydown-ENTER", openChat);
-    this.input.keyboard!.on("keydown-T", openChat);
+    // Keep the centred overlays (loading / connection error) glued to the
+    // middle of the canvas when the window resizes or fullscreen toggles.
+    this.scale.on("resize", this.onResize, this);
 
     this.events.once("shutdown", () => {
       this.clearDoorIndicators();
@@ -199,10 +183,68 @@ export class WorldScene extends Phaser.Scene {
       this.clearNpcs();
       this.clearConnError();
       this.ui?.closeDialogue();
+      this.scale.off("resize", this.onResize, this);
+      this.events.off("resume", this.applyKeybinds, this);
       this.scene.stop("UIScene");
       this.ui = undefined;
       gameSocket.clearHandlers();
     });
+  }
+
+  // (Re)build every remappable key from the saved keybinds. Safe to call again
+  // at any time — it tears down the previously-created keys first, so remapping
+  // in Settings takes effect the moment the player returns to the game.
+  private applyKeybinds() {
+    const kb = this.input.keyboard;
+    if (!kb) return;
+    for (const key of this.controlKeys) kb.removeKey(key, true, true);
+    this.controlKeys.length = 0;
+
+    const b = getKeybinds();
+    const k = (code: string) => {
+      const key = kb.addKey(code, true); // capture so the page doesn't react
+      this.controlKeys.push(key);
+      return key;
+    };
+
+    // Movement: the bound keys fill the W/A/S/D slots; arrow keys stay on as
+    // fixed alternates; the run key drives sprint via cursors.shift.
+    this.cursors = {
+      up: k("UP"), down: k("DOWN"), left: k("LEFT"), right: k("RIGHT"),
+      space: k("SPACE"), shift: k(b.run),
+    } as Phaser.Types.Input.Keyboard.CursorKeys;
+    this.wasd = { W: k(b.up), A: k(b.left), S: k(b.down), D: k(b.right) };
+
+    // Action hotkeys.
+    k(b.interact).on("down", () => this.mobileInteract());
+    k(b.invite).on("down", () => this.openInvitePanel());
+    k(b.inbox).on("down", () => this.openInbox());
+    k(b.bag).on("down", () => this.openInventory());
+
+    // Chat opens on the bound key (Enter by default); T is always an alternate.
+    const openChat = () => {
+      if (this.ui && !this.ui.isChatOpen && !this.ui.isDialogueOpen) this.ui.openChat();
+    };
+    k(b.chat).on("down", openChat);
+    if (b.chat !== "T") k("T").on("down", openChat);
+
+    // Players list: hold to show (Minecraft-style).
+    const players = k(b.players);
+    players.on("down", () => {
+      if (!this.ui?.isChatOpen && !this.ui?.isDialogueOpen) this.ui?.showPlayerList();
+    });
+    players.on("up", () => this.ui?.hidePlayerList());
+  }
+
+  // Recentre the full-screen overlays after a canvas resize. The world camera
+  // follows the player and is resized by Phaser automatically under RESIZE.
+  private onResize(gameSize: Phaser.Structs.Size) {
+    const w = gameSize.width;
+    const h = gameSize.height;
+    this.loadingText?.setPosition(w / 2, h / 2);
+    this.connErrorText?.setPosition(w / 2, h / 2);
+    this.loadingOverlay?.setPosition(w / 2, h / 2).setSize(w, h);
+    this.loadingOverlayText?.setPosition(w / 2, h / 2);
   }
 
   private openPause() {
@@ -257,7 +299,7 @@ export class WorldScene extends Phaser.Scene {
     // Movement is locked while a dialogue line or the chat input is open —
     // feeds inputs into a no-op so any held key gets cleared rather than queued.
     if (!this.ui?.isDialogueOpen && !this.ui?.isChatOpen && !this.loadingOverlay) {
-      this.localPlayer.handleInput(this.cursors, this.wasd, delta);
+      this.localPlayer.handleInput(this.cursors, this.wasd, delta, this.touchDir);
     }
 
     const { cx, cy } = this.localPlayer;
@@ -296,32 +338,30 @@ export class WorldScene extends Phaser.Scene {
     }
   }
 
-  private bindKeyHandlers() {
-    // I — open the searchable invite panel (same as the HUD button).
-    this.hotkeys.I.on("down", () => this.openInvitePanel());
-    // N — open the notifications inbox (invites land here).
-    this.hotkeys.N.on("down", () => this.openInbox());
-    // B — open the inventory bag.
-    this.hotkeys.B.on("down", () => this.openInventory());
-    // E — advance dialogue, talk to an adjacent NPC, or enter a house door.
-    this.hotkeys.E.on("down", () => {
-      if (!this.localPlayer) return;
-      if (this.ui?.isDialogueOpen) {
-        this.ui.advanceDialogue();
-        return;
-      }
-      const npc = this.adjacentNpc();
-      if (npc) {
-        this.interactWithNpc(npc);
-        return;
-      }
-      const { cx, cy } = this.localPlayer;
-      if (this.doorTiles.has(`${cx},${cy}`)) {
-        this.enterHouse(cx, cy);
-        return;
-      }
-      if (this.isAdjacentToPortal(cx, cy)) this.usePortal();
-    });
+  // Held direction from the on-screen mobile D-pad (UIScene calls this).
+  setTouchDir(dx: number, dy: number) {
+    this.touchDir = { dx, dy };
+  }
+
+  // The "E" interaction, exposed so the mobile action button can trigger it:
+  // advance dialogue, talk to an adjacent NPC, enter a house door, or portal.
+  mobileInteract() {
+    if (!this.localPlayer) return;
+    if (this.ui?.isDialogueOpen) {
+      this.ui.advanceDialogue();
+      return;
+    }
+    const npc = this.adjacentNpc();
+    if (npc) {
+      this.interactWithNpc(npc);
+      return;
+    }
+    const { cx, cy } = this.localPlayer;
+    if (this.doorTiles.has(`${cx},${cy}`)) {
+      this.enterHouse(cx, cy);
+      return;
+    }
+    if (this.isAdjacentToPortal(cx, cy)) this.usePortal();
   }
 
   // True when the player is on or 4-connected-adjacent to the portal tile.
@@ -735,13 +775,13 @@ export class WorldScene extends Phaser.Scene {
     if (!this.ui) return;
     let label: string;
     if (this.world.kind === "openworld") {
-      label = "Open World  [E] house/portal  [N] inbox";
+      label = "Open World  [E] house/portal  [N] inbox  [Tab] players";
     } else if (this.world.kind === "house") {
-      label = "Shared House  walk through the doorway to exit";
+      label = "Shared House  walk through the doorway to exit  [Tab] players";
     } else if (this.world.ownerPlayerId === getAccountId()) {
-      label = "Your Village  [E] portal to open world  [Shift] run";
+      label = "Your Village  [E] portal  [Tab] players";
     } else {
-      label = "Visiting Village  [E] portal to open world  [Shift] run";
+      label = "Visiting Village  [E] portal  [Tab] players";
     }
     this.ui.setStatus(label);
   }
@@ -780,10 +820,11 @@ export class WorldScene extends Phaser.Scene {
       this.returnToLogin("This account was opened somewhere else.", false);
     });
 
-    gameSocket.on("init", ({ accountId, name, char, verified, world, pixels, unread, dayCycle }) => {
+    gameSocket.on("init", ({ accountId, name, char, verified, role, world, pixels, unread, dayCycle }) => {
       setAccountId(accountId);
       setAccountName(name);
       this.myVerified = verified;
+      this.ui?.setAdminRole(role);
       // Reconcile any locally-chosen skin with the server's stored one: if the
       // player picked one before connecting, push it; otherwise adopt theirs.
       const pref = getCharIndex();
@@ -868,6 +909,15 @@ export class WorldScene extends Phaser.Scene {
 
     gameSocket.on("world:denied", ({ reason }) => {
       this.flashStatus(reason);
+    });
+
+    // Moderation notices (muted / unmuted / role changed) — show as a toast,
+    // and keep the admin button in sync if our own role just changed.
+    gameSocket.on("mod:notice", ({ text }) => {
+      this.flashStatus(text);
+      if (/sub-admin|moderator role/i.test(text)) {
+        this.ui?.setAdminRole(/now a sub-admin/i.test(text) ? "subadmin" : null);
+      }
     });
 
     // Shared-house furniture.
