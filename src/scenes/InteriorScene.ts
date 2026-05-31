@@ -151,7 +151,9 @@ export class InteriorScene extends Phaser.Scene {
   update(_time: number, delta: number) {
     if (!this.localPlayer) return;
     this.localPlayer.handleInput(this.cursors, this.wasd, delta, this.touchDir);
-    this.localPlayer.setDepth(Math.floor(this.localPlayer.y / TILE_H) + 1.5);
+    // Only re-depth on change — setDepth forces a full display-list sort.
+    const d = Math.floor(this.localPlayer.y / TILE_H) + 1.5;
+    if (this.localPlayer.depth !== d) this.localPlayer.setDepth(d);
 
     if (this.exiting) return;
     if (

@@ -645,7 +645,11 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private syncDepth(player: Player) {
-    player.setDepth(Math.floor(player.y / TILE_H) + 1.5);
+    // setDepth re-queues a full display-list depth-sort, so only call it when
+    // the depth actually changes (once per tile-row, not every frame) —
+    // otherwise the hundreds of static tile objects get re-sorted 60x/sec.
+    const d = Math.floor(player.y / TILE_H) + 1.5;
+    if (player.depth !== d) player.setDepth(d);
   }
 
   // ── World construction ────────────────────────────────────────────

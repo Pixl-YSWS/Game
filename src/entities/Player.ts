@@ -2,7 +2,7 @@ import Phaser from "phaser";
 import { cartToIso, TILE_W, TILE_H } from "../utils/IsoUtils";
 import type { PlayerState } from "../types/network";
 import type { MapDef } from "../types/map";
-import { FONT, FONT_NARROW, COLORS } from "../ui/theme";
+import { FONT_CHAT, FONT_EMOJI, COLORS } from "../ui/theme";
 
 export type { PlayerState };
 
@@ -99,7 +99,7 @@ export class Player extends Phaser.GameObjects.Container {
     this.nameTag = scene.add
       .text(0, -TILE_H - 2, verified ? `✓ ${state.name}` : state.name, {
         fontSize: "16px",
-        fontFamily: FONT,
+        fontFamily: FONT_CHAT,
         color: verified ? COLORS.good : "#ffffff",
         stroke: "#000000",
         strokeThickness: 5,
@@ -351,7 +351,8 @@ export class Player extends Phaser.GameObjects.Container {
     const isEmote = kind === "emote";
     const label = this.scene.add
       .text(0, 0, text, {
-        fontFamily: FONT_NARROW,
+        // Emotes are emoji (need the colour-emoji font); chat uses the pixel font.
+        fontFamily: isEmote ? FONT_EMOJI : FONT_CHAT,
         fontSize: isEmote ? "30px" : "15px",
         color: COLORS.text,
         align: "center",
@@ -360,21 +361,21 @@ export class Player extends Phaser.GameObjects.Container {
       .setOrigin(0.5)
       .setResolution(4);
 
-    const padX = 6;
-    const padY = 4;
-    const bg = this.scene.add
-      .rectangle(
-        0,
-        0,
-        label.width + padX * 2,
-        label.height + padY * 2,
-        0x0a0f1c,
-        0.82,
-      )
-      .setStrokeStyle(1, 0xffffff, 0.25)
-      .setOrigin(0.5);
+    // Emotes float as the bare emoji (no panel behind them); only chat lines
+    // get the dark speech-bubble box.
+    const children: Phaser.GameObjects.GameObject[] = [];
+    if (!isEmote) {
+      const padX = 6;
+      const padY = 4;
+      const bg = this.scene.add
+        .rectangle(0, 0, label.width + padX * 2, label.height + padY * 2, 0x0a0f1c, 0.82)
+        .setStrokeStyle(1, 0xffffff, 0.25)
+        .setOrigin(0.5);
+      children.push(bg);
+    }
+    children.push(label);
 
-    const bubble = this.scene.add.container(0, -TILE_H - 12, [bg, label]);
+    const bubble = this.scene.add.container(0, -TILE_H - 12, children);
     bubble.setDepth(100000);
     this.add(bubble);
     this.bubble = bubble;

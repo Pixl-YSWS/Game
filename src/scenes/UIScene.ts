@@ -25,6 +25,7 @@ export class UIScene extends Phaser.Scene {
   private pixelText?: Phaser.GameObjects.Text;
   private timeText?: Phaser.GameObjects.Text;
   private timeIcon?: Phaser.GameObjects.Text;
+  private lastTimeLabel = "";
   private heartIcons: Phaser.GameObjects.Graphics[] = [];
   private hp = 10;
   private hpMax = 10;
@@ -391,21 +392,25 @@ export class UIScene extends Phaser.Scene {
     // Sits above the bottom-left chat log/input bar so the two don't fight.
     const cx = 96;
     const cy = H - 156;
-    const GAP = 60;
+    const GAP = 58;
     const dpad = (bx: number, by: number, glyph: string, dx: number, dy: number) => {
-      const SIZE = 62;
+      const SIZE = 64;
       const bg = this.add
-        .nineslice(bx, by, "ui-panel-dark", undefined, SIZE, SIZE, 16, 16, 16, 16)
-        .setOrigin(0.5)
-        .setAlpha(0.82)
+        .image(bx, by, "ui-round")
+        .setDisplaySize(SIZE, SIZE)
+        .setAlpha(0.9)
         .setDepth(70)
         .setInteractive();
+      // Geometric triangle (not an emoji) so it stays crisp and box-free.
       this.add
-        .text(bx, by, glyph, { fontFamily: FONT_EMOJI, fontSize: "22px" })
+        .text(bx, by, glyph, {
+          fontFamily: FONT_CHAT, fontSize: "24px", color: "#ffffff",
+          stroke: "#000000", strokeThickness: 4,
+        })
         .setOrigin(0.5)
         .setDepth(71);
       const press = () => {
-        bg.setTint(0xffe08a);
+        bg.setTint(0xffd166);
         this.gameScene()?.setTouchDir(dx, dy);
       };
       const release = () => {
@@ -417,10 +422,10 @@ export class UIScene extends Phaser.Scene {
       bg.on("pointerout", release);
       bg.on("pointerupoutside", release);
     };
-    dpad(cx, cy - GAP, "⬆️", 0, -1);
-    dpad(cx, cy + GAP, "⬇️", 0, 1);
-    dpad(cx - GAP, cy, "⬅️", -1, 0);
-    dpad(cx + GAP, cy, "➡️", 1, 0);
+    dpad(cx, cy - GAP, "▲", 0, -1);
+    dpad(cx, cy + GAP, "▼", 0, 1);
+    dpad(cx - GAP, cy, "◀", -1, 0);
+    dpad(cx + GAP, cy, "▶", 1, 0);
 
     // Interact (E) and open-chat, stacked above the emote bar.
     this.touchActionButton(W - 70, H - 150, "✋", () => this.gameScene()?.mobileInteract?.());
@@ -432,28 +437,22 @@ export class UIScene extends Phaser.Scene {
   // A round tap button used by the mobile action cluster.
   private touchActionButton(bx: number, by: number, glyph: string, onTap: () => void) {
     const bg = this.add
-      .circle(bx, by, 34, 0x0a0f1c, 0.82)
-      .setStrokeStyle(2, 0xffffff, 0.22)
+      .image(bx, by, "ui-round")
+      .setDisplaySize(64, 64)
+      .setAlpha(0.9)
       .setDepth(70)
       .setInteractive();
-    const ic = this.add
-      .text(bx, by, glyph, { fontFamily: FONT_EMOJI, fontSize: "24px" })
+    this.add
+      .text(bx, by, glyph, { fontFamily: FONT_EMOJI, fontSize: "26px" })
       .setOrigin(0.5)
       .setDepth(71);
-    bg.on("pointerdown", () => {
-      bg.setScale(0.92);
-      ic.setScale(0.92);
-    });
+    bg.on("pointerdown", () => bg.setTint(0xffd166));
     bg.on("pointerup", () => {
-      bg.setScale(1);
-      ic.setScale(1);
+      bg.clearTint();
       onTap();
       playUiSound(this, "sfx-tap", 0.3);
     });
-    bg.on("pointerout", () => {
-      bg.setScale(1);
-      ic.setScale(1);
-    });
+    bg.on("pointerout", () => bg.clearTint());
   }
 
   setDayCycle(tNow: number, dayLengthMs: number, _serverNow: number) {
@@ -477,9 +476,13 @@ export class UIScene extends Phaser.Scene {
 
     if (this.timeText) {
       const label = phase < 0.25 ? "Night" : phase < 0.5 ? "Morning" : phase < 0.75 ? "Day" : "Evening";
-      this.timeText.setText(label);
-      // Sun during the bright half (morning/day), moon otherwise.
-      this.timeIcon?.setText(phase >= 0.25 && phase < 0.75 ? "☀" : "🌙");
+      // Avoid re-rasterising these labels every frame — only on change.
+      if (label !== this.lastTimeLabel) {
+        this.lastTimeLabel = label;
+        this.timeText.setText(label);
+        // Sun during the bright half (morning/day), moon otherwise.
+        this.timeIcon?.setText(phase >= 0.25 && phase < 0.75 ? "☀" : "🌙");
+      }
     }
   }
 
@@ -494,7 +497,14 @@ export class UIScene extends Phaser.Scene {
     this.statusBg?.setVisible(show).setSize(this.statusText.width + 26, 24);
   }
 
+  private lastCx = NaN;
+  private lastCy = NaN;
   setCoords(cx: number, cy: number) {
+    // setText re-rasterises the text texture; skip when the tile is unchanged
+    // (this is called every frame from WorldScene.update).
+    if (cx === this.lastCx && cy === this.lastCy) return;
+    this.lastCx = cx;
+    this.lastCy = cy;
     this.coordText?.setText(`X ${cx}  Y ${cy}`);
   }
 

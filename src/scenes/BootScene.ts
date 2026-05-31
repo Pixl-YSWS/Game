@@ -88,6 +88,11 @@ export class BootScene extends Phaser.Scene {
     this.load.image("ui-slide-fill", `${UI}/Blue/Default/slide_horizontal_color.png`);
     this.load.image("ui-slide-handle", `${UI}/Grey/Default/slide_hangle.png`);
 
+    // Round buttons for the on-screen mobile controls (D-pad + action buttons).
+    const ADV = "assets/kenney_ui-pack-adventure/PNG/Default";
+    this.load.image("ui-round", `${ADV}/round_grey.png`);
+    this.load.image("ui-round-down", `${ADV}/round_grey_dark.png`);
+
     // ── UI sounds ──────────────────────────────────────────────────
     this.load.audio("sfx-click", `${SND}/click-a.ogg`);
     this.load.audio("sfx-tap", `${SND}/tap-a.ogg`);
