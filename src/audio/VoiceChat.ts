@@ -37,9 +37,7 @@ interface PlayQueue {
 class VoiceChat {
   private stream?: MediaStream;
   private recorder?: MediaRecorder;
-  private chunks: Blob[] = [];
   private enabled = false;
-  private mime = "";
   private segTimer?: ReturnType<typeof setTimeout>;
   private sender?: (data: ArrayBuffer, mime: string) => void;
   private stateCb?: (on: boolean) => void;
@@ -52,11 +50,11 @@ class VoiceChat {
   // Too short adds per-segment overhead and audible seams; ~0.7s is a good
   // low-latency balance for a casual game.
   private static readonly SEGMENT_MS = 700;
-  // Keep playback pinned to the live edge: only one chunk may wait behind the
-  // one currently playing. If we fall further behind, drop the stale chunk(s)
-  // so latency can't drift upward over a long talk (we sacrifice a little
-  // completeness to stay near real-time).
-  private static readonly MAX_QUEUE = 1;
+  // Small jitter buffer: up to this many chunks may wait behind the one
+  // currently playing. A buffer of 1 (the old value) dropped audio at the
+  // slightest network hiccup, which is the main cause of choppy voice; 2 rides
+  // out normal jitter while still capping how far behind real-time we drift.
+  private static readonly MAX_QUEUE = 2;
 
   /** True if the browser can record audio at all (used to hide the mic UI). */
   get supported(): boolean {
@@ -132,44 +130,49 @@ class VoiceChat {
     return this.enable();
   }
 
-  // Record one segment; on stop, ship it and (if still on) loop into the next.
+  // Record one segment; on stop, ship it. The next segment's recorder is
+  // started *before* this one stops (see the timer below) so the mic is never
+  // left un-captured at a boundary — the old code recreated the recorder inside
+  // the async onstop, leaving a gap that clipped a slice of speech every cycle.
   private recordSegment() {
     // Auto-stop if voice got turned off in settings while the mic was live.
     if (!this.enabled || !this.stream || !loadSettings().voiceEnabled) {
       this.disable();
       return;
     }
-    this.chunks = [];
-    this.mime = pickMime();
+    // Per-segment local state so overlapping recorders never clobber each
+    // other's buffered chunks (the old shared this.chunks/this.mime were a
+    // race waiting to happen once segments can briefly coexist).
+    const mime = pickMime();
+    let recorder: MediaRecorder;
     try {
-      this.recorder = new MediaRecorder(
-        this.stream,
-        this.mime ? { mimeType: this.mime } : undefined,
-      );
+      recorder = new MediaRecorder(this.stream, mime ? { mimeType: mime } : undefined);
     } catch {
       this.disable();
       return;
     }
-    this.recorder.ondataavailable = (e) => {
-      if (e.data && e.data.size > 0) this.chunks.push(e.data);
+    const chunks: Blob[] = [];
+    recorder.ondataavailable = (e) => {
+      if (e.data && e.data.size > 0) chunks.push(e.data);
     };
-    this.recorder.onstop = () => {
-      void this.flush();
-      if (this.enabled) this.recordSegment();
-    };
-    this.recorder.start();
+    recorder.onstop = () => void this.flush(chunks, mime);
+    recorder.start();
+    this.recorder = recorder;
     this.segTimer = setTimeout(() => {
+      // Start the next recorder first, then stop this one. The two briefly
+      // overlap on the same stream — a few ms of duplicated audio is far less
+      // noticeable than the dropped audio a stop→recreate gap produced.
+      if (this.enabled) this.recordSegment();
       try {
-        this.recorder?.stop();
+        recorder.stop();
       } catch {
         /* ignore */
       }
     }, VoiceChat.SEGMENT_MS);
   }
 
-  private async flush() {
-    const blob = new Blob(this.chunks, { type: this.mime || "audio/webm" });
-    this.chunks = [];
+  private async flush(chunks: Blob[], mime: string) {
+    const blob = new Blob(chunks, { type: mime || "audio/webm" });
     // Drop near-silent blips and anything implausibly large (server caps too).
     if (blob.size < 1200 || blob.size > 800_000) return;
     try {

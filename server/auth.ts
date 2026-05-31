@@ -7,6 +7,12 @@ import { randomBytes } from "crypto";
 const AUTH_BASE = "https://auth.hackclub.com";
 const SCOPES = "openid profile email name slack_id";
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30; // 30 days
+// Sliding-session refresh: each time a token is verified we push its expiry
+// back out to a full TTL, but only once the session has aged past this much
+// (so we do at most ~one DB write per day per active player, not one per
+// socket connect/reconnect). The upshot is an active player never gets logged
+// out — only a session idle for the full 30 days lapses.
+const SESSION_REFRESH_AFTER_MS = 1000 * 60 * 60 * 24; // 1 day
 
 // All secrets + URLs come from the environment (Bun auto-loads .env).
 const CLIENT_ID = process.env.HACKCLUB_CLIENT_ID ?? "";
@@ -140,6 +146,11 @@ export function setupAuth(db: Database): AuthModule {
 
   const updateChar = db.query(
     `UPDATE accounts SET char_index = ?, updated_at = ? WHERE account_id = ?`,
+  );
+
+  // Slide a session's expiry forward (sliding-window auth — see verifySession).
+  const touchSession = db.query(
+    `UPDATE accounts SET session_expires_at = ?, updated_at = ? WHERE session_token = ?`,
   );
 
   const selectBySession = db.query<
@@ -309,7 +320,14 @@ export function setupAuth(db: Database): AuthModule {
     if (!token) return null;
     const row = selectBySession.get(token);
     if (!row) return null;
-    if (row.session_expires_at < Date.now()) return null;
+    const now = Date.now();
+    if (row.session_expires_at < now) return null;
+    // Sliding window: extend an actively-used session so a player who keeps
+    // playing never hits the 30-day wall. Throttled so we only write once the
+    // session has aged a day, not on every reconnect.
+    if (row.session_expires_at - now < SESSION_TTL_MS - SESSION_REFRESH_AFTER_MS) {
+      touchSession.run(now + SESSION_TTL_MS, now, token);
+    }
     return {
       accountId: row.account_id,
       name: row.name,
