@@ -30,15 +30,45 @@ export interface Account {
   verified: boolean;
 }
 
+interface Identity {
+  id?: string;
+  first_name?: string;
+  last_name?: string;
+  primary_email?: string;
+  slack_id?: string;
+  verification_status?: string;
+  // Possible Slack display-name / username fields. The /me response is
+  // "analogous to Slack's users.info", so one of these usually carries the
+  // handle the user actually goes by. We try them in order and fall back to
+  // their first name (never the full real name) for privacy.
+  username?: string;
+  slack_username?: string;
+  slack_display_name?: string;
+  display_name?: string;
+  slack_name?: string;
+  nickname?: string;
+  [key: string]: unknown;
+}
 interface MeResponse {
-  identity?: {
-    id?: string;
-    first_name?: string;
-    last_name?: string;
-    primary_email?: string;
-    slack_id?: string;
-    verification_status?: string;
-  };
+  identity?: Identity;
+}
+
+// Pick the most "handle-like" name available, preferring a Slack display name
+// over the user's real first/last name so people aren't forced to show it.
+function pickDisplayName(ident: Identity): string {
+  const slackName =
+    ident.username ||
+    ident.slack_username ||
+    ident.slack_display_name ||
+    ident.display_name ||
+    ident.slack_name ||
+    ident.nickname;
+  return (
+    (typeof slackName === "string" && slackName.trim()) ||
+    ident.first_name?.trim() || // first name only — not the full real name
+    ident.primary_email ||
+    "Hack Clubber"
+  );
 }
 
 // Number of selectable character skins — keep in sync with client CHAR_BASES.
@@ -209,10 +239,10 @@ export function setupAuth(db: Database): AuthModule {
         res.status(502).send("Hack Club profile had no id.");
         return;
       }
-      const name =
-        [ident.first_name, ident.last_name].filter(Boolean).join(" ").trim() ||
-        ident.primary_email ||
-        "Hack Clubber";
+      // One-time discovery log: shows which fields Hack Club actually returns,
+      // so we can pin the exact Slack-name field if our guesses miss it.
+      console.log("[auth] /me identity fields:", Object.keys(ident).join(", "));
+      const name = pickDisplayName(ident);
 
       const now = Date.now();
       const sessionToken = "sess_" + randomBytes(24).toString("hex");

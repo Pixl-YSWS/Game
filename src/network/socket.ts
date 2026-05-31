@@ -25,6 +25,11 @@ class GameSocket {
   private socket: Socket<ServerToClientEvents, ClientToServerEvents> | null = null;
   private handlers = new Map<string, Function[]>();
   private statusHandlers: StatusHandler[] = [];
+  // Chat lines typed while disconnected. Held here and flushed on reconnect so
+  // a brief internet drop delays a message instead of losing it. Capped so a
+  // long outage can't grow it without bound.
+  private chatQueue: string[] = [];
+  private static readonly CHAT_QUEUE_MAX = 50;
 
   connect() {
     if (this.socket?.connected) return;
@@ -32,13 +37,18 @@ class GameSocket {
     this.socket = io(SERVER_URL, {
       transports: ["websocket"],
       reconnection: true,
-      reconnectionAttempts: 5,
+      // Keep retrying indefinitely so a message queued during a long outage
+      // still goes out whenever the connection finally comes back.
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
       auth: { sessionToken: getSessionToken() },
     });
 
     this.socket.on("connect", () => {
       console.log("[Socket] connected:", this.socket!.id);
       this.emitStatus("connected");
+      this.flushChatQueue();
     });
 
     this.socket.on("disconnect", (reason) => {
@@ -54,7 +64,9 @@ class GameSocket {
       if (err.message === "unauthorized") {
         this.emitStatus("unauthorized", err.message);
       } else {
-        this.emitStatus("error", err.message);
+        // We retry forever now, so show a "reconnecting" state rather than a
+        // dead-end error — the socket keeps trying and will recover on its own.
+        this.emitStatus("disconnected", err.message);
       }
     });
 
@@ -112,8 +124,23 @@ class GameSocket {
     this.socket?.emit("shop:buy", { itemId });
   }
 
-  sendChat(text: string) {
-    this.socket?.emit("chat:send", { text });
+  // Returns true if the line was sent immediately, false if it was queued for
+  // delivery on the next reconnect (so the caller can show a "pending" hint).
+  sendChat(text: string): boolean {
+    if (this.socket?.connected) {
+      this.socket.emit("chat:send", { text });
+      return true;
+    }
+    if (this.chatQueue.length < GameSocket.CHAT_QUEUE_MAX) this.chatQueue.push(text);
+    return false;
+  }
+
+  // Send everything that piled up while offline, oldest first.
+  private flushChatQueue() {
+    if (!this.socket?.connected || this.chatQueue.length === 0) return;
+    const pending = this.chatQueue;
+    this.chatQueue = [];
+    for (const text of pending) this.socket.emit("chat:send", { text });
   }
 
   sendEmote(emote: string) {

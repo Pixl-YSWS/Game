@@ -143,9 +143,20 @@ export class ChatBox {
 
   private submit() {
     const text = this.inputEl.value.trim();
-    if (text) gameSocket.sendChat(text);
+    if (text) {
+      const sent = gameSocket.sendChat(text);
+      if (!sent) this.flashHint("Offline — message will send when you reconnect");
+    }
     this.inputEl.value = "";
     this.close();
+  }
+
+  // Briefly override the closed-chat hint (used to confirm a queued message).
+  private flashHint(msg: string) {
+    this.hint.setText(msg).setColor(COLORS.accent).setAlpha(0.95);
+    this.scene.time.delayedCall(3500, () => {
+      if (!this.active) this.updateHint();
+    });
   }
 
   addMessage(msg: ChatMessage) {
