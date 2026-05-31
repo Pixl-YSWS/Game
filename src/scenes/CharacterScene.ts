@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { Button, panel } from "../ui/UIKit";
+import { Button, panel, closeButton, fitModal } from "../ui/UIKit";
 import { FONT, FONT_TITLE, COLORS } from "../ui/theme";
 import { CHAR_BASES } from "../entities/Player";
 import { getCharIndex, setCharIndex } from "../network/playerIdentity";
@@ -34,12 +34,13 @@ export class CharacterScene extends Phaser.Scene {
     const W = this.scale.width;
     const H = this.scale.height;
 
-    this.add.rectangle(0, 0, W, H, 0x000000, 0.78).setOrigin(0);
     this.add.zone(0, 0, W, H).setOrigin(0).setInteractive();
 
     const panelW = 480;
     const panelH = 260;
     panel(this, W / 2, H / 2, panelW, panelH, "ui-panel-dark");
+    closeButton(this, W / 2 + panelW / 2 - 26, H / 2 - panelH / 2 + 24, () => this.scene.stop());
+    fitModal(this, panelW, panelH);
 
     this.add
       .text(W / 2, H / 2 - 92, "CHOOSE YOUR LOOK", {

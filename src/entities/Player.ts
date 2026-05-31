@@ -2,7 +2,8 @@ import Phaser from "phaser";
 import { cartToIso, TILE_W, TILE_H } from "../utils/IsoUtils";
 import type { PlayerState } from "../types/network";
 import type { MapDef } from "../types/map";
-import { FONT_CHAT, FONT_EMOJI, COLORS } from "../ui/theme";
+import { FONT_CHAT, COLORS, EMOTE_ATLAS } from "../ui/theme";
+import { emoteFrame } from "../ui/emotes";
 
 export type { PlayerState };
 
@@ -50,12 +51,19 @@ export class Player extends Phaser.GameObjects.Container {
   // Bubble shown above the head for chat lines / emotes (lazily created).
   private bubble?: Phaser.GameObjects.Container;
   private bubbleTimer?: Phaser.Time.TimerEvent;
+  // Mic icon shown above the head while this player is talking (lazily created).
+  private speakIcon?: Phaser.GameObjects.Image;
+  private speakTimer?: Phaser.Time.TimerEvent;
+  private speakTween?: Phaser.Tweens.Tween;
+  private speakBaseScale = 1;
   // Gentle breathing bob while standing still (looping); stopped while walking.
   private idleBob?: Phaser.Tweens.Tween;
   // Counts steps so footstep dust puffs on alternate tiles, not every one.
   private stepCount = 0;
   // True while Shift is held — the local player sprints (shorter step time).
   private running = false;
+  // Walk-speed multiplier (1 = normal). Set by admin /speed; divides step time.
+  private speedMul = 1;
   // Scene time of the last remote move, so remote interpolation can match the
   // sender's actual cadence (and so look right when a peer is sprinting).
   private lastRemoteMoveT = 0;
@@ -148,10 +156,14 @@ export class Player extends Phaser.GameObjects.Container {
     if (!this.canMoveToTile(cx, cy)) return false;
 
     const dx = cx - this.cx;
+    const dy = cy - this.cy;
     this.cx = cx;
     this.cy = cy;
     this.isMoving = true;
-    const dur = this.running ? RUN_STEP_MS : STEP_MS;
+    // Diagonal steps cover √2 the distance, so stretch their time to keep the
+    // felt speed even with cardinal steps. The /speed multiplier divides it.
+    const diag = dx !== 0 && dy !== 0 ? Math.SQRT2 : 1;
+    const dur = ((this.running ? RUN_STEP_MS : STEP_MS) * diag) / this.speedMul;
     this.startStepAnim(dx, dur);
 
     const { x, y } = cartToIso(cx, cy);
@@ -169,10 +181,11 @@ export class Player extends Phaser.GameObjects.Container {
         if (!this.scene) return;
         this.isMoving = false;
         // If the player is still holding a direction, chain the next step
-        // immediately — no gap between tiles, classic retro feel.
+        // immediately — no gap between tiles, classic retro feel. attemptStep
+        // handles diagonal wall-sliding.
         const { dx: hx, dy: hy } = this.inputDir;
         if (hx !== 0 || hy !== 0) {
-          this.moveToTile(this.cx + hx, this.cy + hy);
+          if (!this.attemptStep(hx, hy)) this.returnToIdle();
         } else {
           this.returnToIdle();
         }
@@ -255,6 +268,41 @@ export class Player extends Phaser.GameObjects.Container {
     });
   }
 
+  // Step by (dx, dy), which may be diagonal. If a diagonal is blocked, slide
+  // along whichever single axis is open (so you don't stick on wall corners).
+  private attemptStep(dx: number, dy: number): boolean {
+    if (dx === 0 && dy === 0) return false;
+    if (dx !== 0 && dy !== 0) {
+      if (this.canMoveToTile(this.cx + dx, this.cy + dy)) {
+        return this.moveToTile(this.cx + dx, this.cy + dy);
+      }
+      if (this.canMoveToTile(this.cx + dx, this.cy)) return this.moveToTile(this.cx + dx, this.cy);
+      if (this.canMoveToTile(this.cx, this.cy + dy)) return this.moveToTile(this.cx, this.cy + dy);
+      return false;
+    }
+    return this.moveToTile(this.cx + dx, this.cy + dy);
+  }
+
+  // Admin /speed: 1 = normal. Clamped to a sane range so movement stays usable.
+  setSpeedMultiplier(mul: number) {
+    this.speedMul = Phaser.Math.Clamp(mul, 0.25, 8);
+  }
+
+  // Admin /tp: snap straight to a tile (no walk tween) and report the new tile
+  // so the caller can sync the server + camera.
+  teleport(cx: number, cy: number): boolean {
+    const { cols, rows } = this.mapDef;
+    if (cx < 0 || cy < 0 || cx >= cols || cy >= rows) return false;
+    this.scene?.tweens.killTweensOf(this);
+    this.isMoving = false;
+    this.cx = cx;
+    this.cy = cy;
+    const { x, y } = cartToIso(cx, cy);
+    this.setPosition(x + TILE_W / 2, y + TILE_H / 2);
+    this.returnToIdle();
+    return true;
+  }
+
   private canMoveToTile(cx: number, cy: number): boolean {
     const { cols, rows, groundLayer, decoLayer, walkableGround, solidDeco } =
       this.mapDef;
@@ -284,12 +332,13 @@ export class Player extends Phaser.GameObjects.Container {
     // works for both arrow-key and WASD movement.
     this.running = !!cursors.shift?.isDown;
 
-    // Cardinal only — one direction at a time, matching classic retro games.
+    // Each axis is independent, so holding two keys walks diagonally; a blocked
+    // diagonal slides along the open axis (see attemptStep).
     let dx = 0,
       dy = 0;
     if (cursors.left!.isDown || wasd.A.isDown) dx = -1;
     else if (cursors.right!.isDown || wasd.D.isDown) dx = 1;
-    else if (cursors.up!.isDown || wasd.W.isDown) dy = -1;
+    if (cursors.up!.isDown || wasd.W.isDown) dy = -1;
     else if (cursors.down!.isDown || wasd.S.isDown) dy = 1;
 
     // Fall back to the touch D-pad when the keyboard is idle.
@@ -303,7 +352,44 @@ export class Player extends Phaser.GameObjects.Container {
 
     if (this.isMoving || (dx === 0 && dy === 0)) return false;
 
-    return this.moveToTile(this.cx + dx, this.cy + dy);
+    return this.attemptStep(dx, dy);
+  }
+
+  // Flash a mic icon above the head while this player is talking. Called each
+  // time a voice clip from them arrives; the icon lingers `ms` then hides.
+  // Idempotent: repeated calls only extend the hide timer — the pulse tween is
+  // created once against a fixed base scale, so it never compounds/grows.
+  showSpeaking(ms = 1600) {
+    if (!this.scene) return;
+    if (!this.speakIcon) {
+      this.speakIcon = this.scene.add
+        .image(0, -TILE_H - 11, "mc-icons", "icon_microphone")
+        // Small — world units are magnified ~3–4× by the camera zoom, so this
+        // reads about the size of the name tag rather than dwarfing the avatar.
+        .setDisplaySize(7, 7)
+        .setTint(0x7bdc8b);
+      this.speakBaseScale = this.speakIcon.scaleX;
+      this.add(this.speakIcon);
+    }
+    if (!this.speakIcon.visible) {
+      this.speakIcon.setVisible(true).setAlpha(1).setScale(this.speakBaseScale);
+      // Gentle pulse so it reads as "live" — absolute targets, made only once
+      // while visible, so it can't accumulate across calls.
+      this.speakTween = this.scene.tweens.add({
+        targets: this.speakIcon,
+        scaleX: this.speakBaseScale * 1.25,
+        scaleY: this.speakBaseScale * 1.25,
+        duration: 360,
+        yoyo: true,
+        repeat: -1,
+      });
+    }
+    this.speakTimer?.remove();
+    this.speakTimer = this.scene.time.delayedCall(ms, () => {
+      this.speakTween?.stop();
+      this.speakTween = undefined;
+      this.speakIcon?.setVisible(false).setScale(this.speakBaseScale);
+    });
   }
 
   destroy(fromScene?: boolean) {
@@ -314,6 +400,7 @@ export class Player extends Phaser.GameObjects.Container {
     this.scene?.tweens.killTweensOf(this.sprite);
     this.stopIdleBob();
     this.bubbleTimer?.remove();
+    this.speakTimer?.remove();
     this.inputDir = { dx: 0, dy: 0 };
     super.destroy(fromScene);
   }
@@ -342,38 +429,43 @@ export class Player extends Phaser.GameObjects.Container {
   }
 
   // Floating speech / emote bubble above the head. Used by chat and emotes.
-  // `kind` tweaks styling: a chat line vs a big emote glyph.
-  showBubble(text: string, kind: "chat" | "emote" = "chat") {
+  // For chat, `content` is the line of text; for emotes it's the emote key
+  // (resolved to a sprite from the Kenney emote pack).
+  showBubble(content: string, kind: "chat" | "emote" = "chat") {
     if (!this.scene) return;
     this.bubble?.destroy();
     this.bubbleTimer?.remove();
 
     const isEmote = kind === "emote";
-    const label = this.scene.add
-      .text(0, 0, text, {
-        // Emotes are emoji (need the colour-emoji font); chat uses the pixel font.
-        fontFamily: isEmote ? FONT_EMOJI : FONT_CHAT,
-        fontSize: isEmote ? "30px" : "15px",
-        color: COLORS.text,
-        align: "center",
-        wordWrap: { width: 130 },
-      })
-      .setOrigin(0.5)
-      .setResolution(4);
-
-    // Emotes float as the bare emoji (no panel behind them); only chat lines
-    // get the dark speech-bubble box.
     const children: Phaser.GameObjects.GameObject[] = [];
-    if (!isEmote) {
+
+    if (isEmote) {
+      // Emotes float as a bare pixel sprite (no panel behind them).
+      const sprite = this.scene.add
+        .image(0, 0, EMOTE_ATLAS, emoteFrame(content))
+        .setOrigin(0.5)
+        .setDisplaySize(28, 28);
+      children.push(sprite);
+    } else {
+      const label = this.scene.add
+        .text(0, 0, content, {
+          fontFamily: FONT_CHAT,
+          fontSize: "15px",
+          color: COLORS.text,
+          align: "center",
+          wordWrap: { width: 130 },
+        })
+        .setOrigin(0.5)
+        .setResolution(4);
+      // Chat lines get a dark speech-bubble box.
       const padX = 6;
       const padY = 4;
       const bg = this.scene.add
         .rectangle(0, 0, label.width + padX * 2, label.height + padY * 2, 0x0a0f1c, 0.82)
         .setStrokeStyle(1, 0xffffff, 0.25)
         .setOrigin(0.5);
-      children.push(bg);
+      children.push(bg, label);
     }
-    children.push(label);
 
     const bubble = this.scene.add.container(0, -TILE_H - 12, children);
     bubble.setDepth(100000);

@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import { makeMenuButton, type MenuButton } from "../utils/MenuButton";
 import { FONT_CHAT, FONT_TITLE, COLORS } from "../ui/theme";
-import { panel } from "../ui/UIKit";
+import { panel, closeButton, fitModal } from "../ui/UIKit";
 import {
   loadSettings,
   saveSettings,
@@ -29,10 +29,11 @@ const REMAP_ROWS: [ControlAction, string][] = [
   ["invite", "Invite"],
   ["inbox", "Inbox"],
   ["bag", "Bag"],
+  ["talk", "Toggle Mic"],
 ];
 
 // Friendly display for a stored Phaser key-code name.
-function prettyKey(name: string): string {
+export function prettyKey(name: string): string {
   const map: Record<string, string> = {
     UP: "↑", DOWN: "↓", LEFT: "←", RIGHT: "→",
     SHIFT: "Shift", SPACE: "Space", ENTER: "Enter", TAB: "Tab",
@@ -42,7 +43,7 @@ function prettyKey(name: string): string {
 
 // Map a raw keydown event to a storable Phaser key-code name, or null if it's
 // a key we don't allow binding to (modifiers alone, function keys, etc.).
-function eventToKeyName(e: KeyboardEvent): string | null {
+export function eventToKeyName(e: KeyboardEvent): string | null {
   if (e.key.length === 1 && /[a-z]/i.test(e.key)) return e.key.toUpperCase();
   if (e.key.length === 1 && /[0-9]/.test(e.key)) {
     return ["ZERO", "ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT", "NINE"][+e.key];
@@ -63,6 +64,7 @@ function eventToKeyName(e: KeyboardEvent): string | null {
 export class SettingsScene extends Phaser.Scene {
   private zoomBtn?: MenuButton;
   private soundBtn?: MenuButton;
+  private voiceBtn?: MenuButton;
   private fullscreenBtn?: MenuButton;
   private controlsObjects: Phaser.GameObjects.GameObject[] = [];
   // Per-action key buttons (so their labels can be refreshed after a rebind).
@@ -90,10 +92,8 @@ export class SettingsScene extends Phaser.Scene {
     const W = this.scale.width;
     const H = this.scale.height;
 
-    // Dim backdrop (this scene runs as an overlay when launched from pause).
-    const overlay = this.add.graphics();
-    overlay.fillStyle(0x000000, 0.78);
-    overlay.fillRect(0, 0, W, H);
+    // Dim backdrop is the modal camera background (see fitModal); this just
+    // blocks clicks from reaching the paused scene beneath.
     // Eat clicks so they don't reach buttons in the paused scene underneath.
     this.add
       .zone(0, 0, W, H)
@@ -102,9 +102,11 @@ export class SettingsScene extends Phaser.Scene {
 
     // Panel.
     const panelW = 380;
-    const panelH = 446;
+    const panelH = 504;
     const py = (H - panelH) / 2;
     panel(this, W / 2, H / 2, panelW, panelH, "ui-panel-dark");
+    closeButton(this, W / 2 + panelW / 2 - 26, py + 24, () => this.scene.stop());
+    fitModal(this, panelW, panelH);
 
     this.add
       .text(W / 2, py + 34, "SETTINGS", {
@@ -125,6 +127,11 @@ export class SettingsScene extends Phaser.Scene {
 
     this.soundBtn = makeMenuButton(this, cx, by, this.soundLabel(), {
       onClick: () => this.toggleSound(),
+    });
+    by += STEP;
+
+    this.voiceBtn = makeMenuButton(this, cx, by, this.voiceLabel(), {
+      onClick: () => this.toggleVoice(),
     });
     by += STEP;
 
@@ -290,5 +297,15 @@ export class SettingsScene extends Phaser.Scene {
     const s = loadSettings();
     saveSettings({ ...s, soundEnabled: !s.soundEnabled });
     this.soundBtn?.setText(this.soundLabel());
+  }
+
+  private voiceLabel(): string {
+    return `VOICE CHAT:  ${loadSettings().voiceEnabled ? "ON" : "OFF"}`;
+  }
+
+  private toggleVoice() {
+    const s = loadSettings();
+    saveSettings({ ...s, voiceEnabled: !s.voiceEnabled });
+    this.voiceBtn?.setText(this.voiceLabel());
   }
 }

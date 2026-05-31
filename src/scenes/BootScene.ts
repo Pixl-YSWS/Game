@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { FONT } from "../ui/theme";
+import { FONT, UI_ATLAS, EMOTE_ATLAS } from "../ui/theme";
 import { SERVER_URL } from "../network/socket";
 import {
   getSessionToken,
@@ -8,7 +8,6 @@ import {
   clearSession,
 } from "../network/playerIdentity";
 
-const UI = "assets/kenney_ui-pack/PNG";
 const SND = "assets/kenney_ui-pack/Sounds";
 
 export class BootScene extends Phaser.Scene {
@@ -69,29 +68,30 @@ export class BootScene extends Phaser.Scene {
       { frameWidth: 24, frameHeight: 24, spacing: 1 },
     );
 
-    // ── Kenney UI pack — nine-sliceable panels, buttons, controls ──
-    this.load.image("ui-panel", `${UI}/Grey/Default/button_square_flat.png`);
-    // Dark themed panel behind the HUD, dialogue, and menus: a wood panel with
-    // metal corner brackets from the adventure pack (the plain grey square read
-    // as a flat white box). 64×64 with ~18px decorative corners → inset 20.
-    this.load.image(
-      "ui-panel-dark",
-      "assets/kenney_ui-pack-adventure/PNG/Default/panel_brown_dark_corners_a.png",
+    // ── Kenney "UI pack — adventure" ──────────────────────────────
+    // One spritesheet atlas skins the whole HUD: panels, buttons, checkboxes,
+    // the slider, round mobile buttons and the close buttons. Logical "ui-*"
+    // names map to its frames via `uiFrame()` in src/ui/theme.ts.
+    const ADV = "assets/kenney_ui-pack-adventure/Spritesheet";
+    this.load.atlasXML(
+      UI_ATLAS,
+      `${ADV}/spritesheet-default.png`,
+      `${ADV}/spritesheet-default.xml`,
     );
-    this.load.image("ui-btn", `${UI}/Blue/Default/button_rectangle_depth_gloss.png`);
-    this.load.image("ui-btn-down", `${UI}/Blue/Default/button_rectangle_flat.png`);
-    this.load.image("ui-btn-grey", `${UI}/Grey/Default/button_rectangle_depth_gloss.png`);
-    this.load.image("ui-btn-grey-down", `${UI}/Grey/Default/button_rectangle_flat.png`);
-    this.load.image("ui-check-off", `${UI}/Grey/Default/check_square_grey.png`);
-    this.load.image("ui-check-on", `${UI}/Blue/Default/check_square_color_checkmark.png`);
-    this.load.image("ui-slide-track", `${UI}/Grey/Default/slide_horizontal_grey.png`);
-    this.load.image("ui-slide-fill", `${UI}/Blue/Default/slide_horizontal_color.png`);
-    this.load.image("ui-slide-handle", `${UI}/Grey/Default/slide_hangle.png`);
 
-    // Round buttons for the on-screen mobile controls (D-pad + action buttons).
-    const ADV = "assets/kenney_ui-pack-adventure/PNG/Default";
-    this.load.image("ui-round", `${ADV}/round_grey.png`);
-    this.load.image("ui-round-down", `${ADV}/round_grey_dark.png`);
+    // ── Kenney emote pack ──────────────────────────────────────────
+    // 16×16 pixel emote sprites shown above heads + in the emote bar.
+    this.load.atlasXML(
+      EMOTE_ATLAS,
+      "assets/kenny_emote_pack/Spritesheets/pixel_style1.png",
+      "assets/kenny_emote_pack/Spritesheets/pixel_style1.xml",
+    );
+
+    // ── Kenney mobile controls ─────────────────────────────────────
+    // Dark (style A) D-pad + action buttons, with the white icon set overlaid.
+    const MC = "assets/mobile-controls/Spritesheets";
+    this.load.atlasXML("mc", `${MC}/style-a-default.png`, `${MC}/style-a-default.xml`);
+    this.load.atlasXML("mc-icons", `${MC}/icons-default.png`, `${MC}/icons-default.xml`);
 
     // ── UI sounds ──────────────────────────────────────────────────
     this.load.audio("sfx-click", `${SND}/click-a.ogg`);

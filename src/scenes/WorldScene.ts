@@ -22,7 +22,6 @@ import {
 import { loadSettings, getKeybinds } from "../data/Settings";
 import { UIScene } from "./UIScene";
 import { CURSORS, FONT } from "../ui/theme";
-import { emoteGlyph } from "../ui/emotes";
 import { formatChatBubble } from "../ui/ChatBox";
 import { playUiSound } from "../ui/UIKit";
 
@@ -341,6 +340,26 @@ export class WorldScene extends Phaser.Scene {
   // Held direction from the on-screen mobile D-pad (UIScene calls this).
   setTouchDir(dx: number, dy: number) {
     this.touchDir = { dx, dy };
+  }
+
+  // ── Admin chat commands (wired from UIScene) ──────────────────────
+  // Local walk-speed multiplier (purely a movement feel — server doesn't
+  // track speed, so this never desyncs other players).
+  setSpeedMultiplier(mul: number) {
+    this.localPlayer?.setSpeedMultiplier(mul);
+  }
+
+  // Teleport the local player to a tile and tell the server its new position.
+  teleport(cx: number, cy: number): boolean {
+    if (!this.localPlayer?.teleport(cx, cy)) return false;
+    gameSocket.sendMove(this.localPlayer.cx, this.localPlayer.cy);
+    return true;
+  }
+
+  // Flash the mic indicator above whoever just sent a voice clip (HUD relays
+  // this on "player:voice").
+  showSpeaking(id: string) {
+    this.playerBySocketId(id)?.showSpeaking();
   }
 
   // The "E" interaction, exposed so the mobile action button can trigger it:
@@ -902,7 +921,7 @@ export class WorldScene extends Phaser.Scene {
     });
 
     gameSocket.on("player:emote", ({ id, emote }) => {
-      this.playerBySocketId(id)?.showBubble(emoteGlyph(emote), "emote");
+      this.playerBySocketId(id)?.showBubble(emote, "emote");
       if (id !== gameSocket.id) playUiSound(this, "sfx-switch", 0.25);
     });
 

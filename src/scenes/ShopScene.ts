@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import { makeMenuButton, type MenuButton } from "../utils/MenuButton";
 import { FONT, FONT_TITLE } from "../ui/theme";
-import { panel } from "../ui/UIKit";
+import { panel, closeButton, fitModal } from "../ui/UIKit";
 import { SHOP_CATALOG, type ShopItem } from "../shop/catalog";
 import { gameSocket } from "../network/socket";
 import { UIScene } from "./UIScene";
@@ -59,9 +59,8 @@ export class ShopScene extends Phaser.Scene {
       gameSocket.off("shop:result", this.onShopResult);
     });
 
-    const overlay = this.add.graphics();
-    overlay.fillStyle(0x000000, 0.78);
-    overlay.fillRect(0, 0, W, H);
+    // Block clicks from reaching the paused scene; the dim itself is the modal
+    // camera background (see fitModal), which covers any zoom level.
     this.add.zone(0, 0, W, H).setOrigin(0).setInteractive();
 
     // Keep the panel inside the canvas even on short screens.
@@ -70,6 +69,8 @@ export class ShopScene extends Phaser.Scene {
     const px = (W - panelW) / 2;
     const py = (H - panelH) / 2;
     panel(this, W / 2, H / 2, panelW, panelH, "ui-panel-dark");
+    closeButton(this, px + panelW - 26, py + 24, () => this.scene.stop());
+    fitModal(this, panelW, panelH);
 
     this.add
       .text(W / 2, py + 30, "SHOP", {

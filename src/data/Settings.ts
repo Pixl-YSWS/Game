@@ -4,7 +4,7 @@ const KEY = "pixlgame.settings.v1";
 // fixed alternates). Stored as Phaser key-code names (e.g. "W", "SHIFT", "UP").
 export type ControlAction =
   | "up" | "down" | "left" | "right" | "run"
-  | "interact" | "chat" | "players" | "invite" | "inbox" | "bag";
+  | "interact" | "chat" | "players" | "invite" | "inbox" | "bag" | "talk";
 
 export const DEFAULT_KEYBINDS: Record<ControlAction, string> = {
   up: "W",
@@ -18,17 +18,22 @@ export const DEFAULT_KEYBINDS: Record<ControlAction, string> = {
   invite: "I",
   inbox: "N",
   bag: "B",
+  // Hold to talk (push-to-talk voice chat).
+  talk: "V",
 };
 
 export interface GameSettings {
   defaultZoom: number;
   soundEnabled: boolean;
+  // Push-to-talk voice chat: gates both the mic and hearing others.
+  voiceEnabled: boolean;
   keybinds: Record<ControlAction, string>;
 }
 
 const DEFAULTS: GameSettings = {
   defaultZoom: 4,
   soundEnabled: true,
+  voiceEnabled: true,
   keybinds: { ...DEFAULT_KEYBINDS },
 };
 

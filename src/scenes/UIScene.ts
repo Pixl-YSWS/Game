@@ -1,17 +1,29 @@
 import Phaser from "phaser";
 import { DialogueBox } from "../ui/DialogueBox";
 import { ChatBox } from "../ui/ChatBox";
-import { FONT, FONT_EMOJI, FONT_CHAT, FONT_TITLE, COLORS, CURSORS } from "../ui/theme";
-import { panel, playUiSound } from "../ui/UIKit";
-import { EMOTES } from "../ui/emotes";
+import { FONT, FONT_EMOJI, FONT_CHAT, FONT_TITLE, COLORS, CURSORS, EMOTE_ATLAS } from "../ui/theme";
+import { panel, playUiSound, uiNineslice, uiImage } from "../ui/UIKit";
+import { EMOTES, QUICK_EMOTES } from "../ui/emotes";
 import { gameSocket } from "../network/socket";
 import { getAccountId } from "../network/playerIdentity";
-import { loadSettings } from "../data/Settings";
+import { loadSettings, getKeybinds } from "../data/Settings";
 import { musicEngine } from "../audio/MusicEngine";
+import { voiceChat } from "../audio/VoiceChat";
+import { eventToKeyName, prettyKey } from "./SettingsScene";
 import type { ChatMessage, PlayerDirEntry, ModRole } from "../types/network";
 
 // A HUD object we can nudge by (dx, dy) on resize.
 type Movable = Phaser.GameObjects.GameObject & Phaser.GameObjects.Components.Transform;
+
+// The active gameplay scene (WorldScene / InteriorScene), as far as the HUD
+// needs to drive it: mobile input, the E interaction, and admin chat commands.
+type GameplayScene = Phaser.Scene & {
+  setTouchDir(dx: number, dy: number): void;
+  mobileInteract?: () => void;
+  setSpeedMultiplier?: (mul: number) => void;
+  teleport?: (cx: number, cy: number) => boolean;
+  showSpeaking?: (id: string) => void;
+};
 
 // Single UI scene running on top of WorldScene / InteriorScene. Its camera
 // is at zoom 1 with no scroll, so every UI element sits at fixed canvas
@@ -45,11 +57,26 @@ export class UIScene extends Phaser.Scene {
   // the canvas resizes (RESIZE scale mode / fullscreen). We record the canvas
   // size they were last laid out against and slide the whole group by the
   // delta — no per-element re-layout needed.
+  // Size of the top-right corner icon buttons (admin / inbox / bag / invite)
+  // and the glyph inside them.
+  private readonly ICON_SIZE = 50;
+  private readonly ICON_ICON = 23;
+  private readonly ICON_GAP = 8;
+
   private socialObjects: Movable[] = [];
   private emoteObjects: Movable[] = [];
   private socialBaseW = 0;
   private emoteBaseW = 0;
   private emoteBaseH = 0;
+  // The expand-to-all popup above the quick emote bar.
+  private emotePopup?: Phaser.GameObjects.Container;
+  private emotePopupOpen = false;
+  // Repositioners for the on-screen mobile controls, run on every resize so the
+  // D-pad / action buttons follow the corners through an orientation flip.
+  private mobileReflow: ((w: number, h: number) => void)[] = [];
+  // Push-to-talk mic button.
+  private micBtn?: Phaser.GameObjects.Image;
+  private micBusy = false;
 
   // Moderation: our own role + the HUD shield button (built lazily once we
   // learn we're staff, then shown/hidden as the role changes).
@@ -79,7 +106,9 @@ export class UIScene extends Phaser.Scene {
 
     this.box = new DialogueBox(this);
     this.chat = new ChatBox(this);
+    this.chat.onCommand = (raw) => this.handleChatCommand(raw);
     this.buildEmoteBar();
+    this.buildVoiceButton();
     this.buildSocialButtons();
     this.buildMobileControls();
 
@@ -92,12 +121,16 @@ export class UIScene extends Phaser.Scene {
 
     // Live roster for the Tab player list (filtered to online on render).
     gameSocket.on("players:list", this.onPlayersList);
+    // Incoming push-to-talk voice from peers in the same world.
+    gameSocket.on("player:voice", this.onVoice);
 
     // Reflow the HUD whenever the canvas resizes (fullscreen / window drag).
     this.scale.on("resize", this.layout, this);
     this.events.once("shutdown", () => {
       musicEngine.stop();
+      voiceChat.release();
       gameSocket.off("players:list", this.onPlayersList);
+      gameSocket.off("player:voice", this.onVoice);
       this.scale.off("resize", this.layout, this);
     });
   }
@@ -198,7 +231,7 @@ export class UIScene extends Phaser.Scene {
 
     // Uniform square icon buttons, laid out right-to-left from the corner.
     this.socialBaseW = this.scale.width;
-    const SIZE = 38, GAP = 8, cy = 12 + SIZE / 2;
+    const SIZE = this.ICON_SIZE, GAP = this.ICON_GAP, cy = 12 + SIZE / 2;
     let x = this.scale.width - 12 - SIZE / 2;
     const inboxBtn = this.iconButton(x, cy, "✉", "Inbox  [N]", () => world()?.openInbox());
     x -= SIZE + GAP;
@@ -222,26 +255,26 @@ export class UIScene extends Phaser.Scene {
 
   // A square, panel-backed icon button with a hover tooltip + tint/scale.
   private iconButton(cx: number, cy: number, glyph: string, tip: string, onClick: () => void) {
-    const SIZE = 38;
-    const bg = this.add
-      .nineslice(cx, cy, "ui-panel-dark", undefined, SIZE, SIZE, 16, 16, 16, 16)
+    const SIZE = this.ICON_SIZE;
+    const bg = uiNineslice(this, cx, cy, "ui-panel-dark", SIZE, SIZE, 16)
       .setOrigin(0.5)
       .setAlpha(0.96)
       .setDepth(50)
       .setInteractive({ cursor: CURSORS.pointer });
     const icon = this.add
-      .text(cx, cy, glyph, { fontFamily: FONT_EMOJI, fontSize: "17px" })
+      .text(cx, cy, glyph, { fontFamily: FONT_EMOJI, fontSize: `${this.ICON_ICON}px` })
       .setOrigin(0.5)
       .setDepth(51);
     // Tooltip below the button, shown on hover.
     const tooltip = this.add
       .text(cx, cy + SIZE / 2 + 6, tip, {
         fontFamily: FONT,
-        fontSize: "8px",
+        fontSize: "12px",
         color: COLORS.text,
         backgroundColor: "#0a0f1ccc",
-        padding: { x: 5, y: 3 },
+        padding: { x: 6, y: 4 },
       })
+      .setResolution(3)
       .setOrigin(0.5, 0)
       .setDepth(62)
       .setVisible(false);
@@ -279,20 +312,20 @@ export class UIScene extends Phaser.Scene {
 
   // A shield button to the left of the other corner buttons (4th slot).
   private buildAdminButton() {
-    const SIZE = 38, GAP = 8;
+    const SIZE = this.ICON_SIZE, GAP = this.ICON_GAP;
     const x = this.scale.width - 12 - SIZE / 2 - 3 * (SIZE + GAP);
     const cy = 12 + SIZE / 2;
-    const bg = this.add
-      .nineslice(x, cy, "ui-panel-dark", undefined, SIZE, SIZE, 16, 16, 16, 16)
+    const bg = uiNineslice(this, x, cy, "ui-panel-dark", SIZE, SIZE, 16)
       .setOrigin(0.5)
       .setAlpha(0.96)
       .setDepth(50)
       .setInteractive({ cursor: CURSORS.pointer });
-    const icon = this.add.text(x, cy, "🛡", { fontFamily: FONT_EMOJI, fontSize: "17px" }).setOrigin(0.5).setDepth(51);
+    const icon = this.add.text(x, cy, "🛡", { fontFamily: FONT_EMOJI, fontSize: `${this.ICON_ICON}px` }).setOrigin(0.5).setDepth(51);
     const tooltip = this.add
       .text(x, cy + SIZE / 2 + 6, "Admin", {
-        fontFamily: FONT, fontSize: "8px", color: COLORS.text, backgroundColor: "#0a0f1ccc", padding: { x: 5, y: 3 },
+        fontFamily: FONT, fontSize: "12px", color: COLORS.text, backgroundColor: "#0a0f1ccc", padding: { x: 6, y: 4 },
       })
+      .setResolution(3)
       .setOrigin(0.5, 0)
       .setDepth(62)
       .setVisible(false);
@@ -326,10 +359,13 @@ export class UIScene extends Phaser.Scene {
   }
 
   // ── Emote bar (bottom-right) ──────────────────────────────────────
+  // A compact bar of the first few emotes plus a "•••" button that toggles a
+  // popup grid with the whole set. The grid also toggles on the C key.
   private buildEmoteBar() {
-    const n = EMOTES.length;
     const cell = 40;
-    const w = n * cell + 16;
+    // Quick emotes + one expand button.
+    const cells = QUICK_EMOTES.length + 1;
+    const w = cells * cell + 16;
     const h = cell + 16;
     const x = this.scale.width - w - 12;
     const y = this.scale.height - h - 12;
@@ -338,44 +374,268 @@ export class UIScene extends Phaser.Scene {
     const barPanel = panel(this, x, y, w, h, "ui-panel-dark").setOrigin(0, 0).setAlpha(0.95);
     this.emoteObjects.push(barPanel);
 
-    EMOTES.forEach((e, i) => {
+    QUICK_EMOTES.forEach((e, i) => {
       const cx = x + 8 + i * cell + cell / 2;
       const cy = y + 8 + cell / 2;
-      const glyph = this.add
-        .text(cx, cy, e.glyph, { fontSize: "22px", fontFamily: FONT_EMOJI })
-        .setOrigin(0.5);
-      // A full-cell hit zone so the whole 40px square is clickable — a plain
-      // Text only registers clicks over the glyph's tight bounds.
-      const hit = this.add
-        .zone(cx, cy, cell, cell)
-        .setOrigin(0.5)
-        .setInteractive({ cursor: CURSORS.pointer });
-      this.emoteObjects.push(glyph, hit);
-      hit.on("pointerover", () => glyph.setScale(1.2));
-      hit.on("pointerout", () => glyph.setScale(1));
-      hit.on("pointerdown", () => {
-        gameSocket.sendEmote(e.key);
-        playUiSound(this, "sfx-tap", 0.3);
-      });
+      this.emoteObjects.push(...this.emoteIcon(cx, cy, e.frame, () => this.sendEmote(e.key)));
+    });
+
+    // Expand / collapse the full emote grid (last cell).
+    const ex = x + 8 + QUICK_EMOTES.length * cell + cell / 2;
+    const ey = y + 8 + cell / 2;
+    const moreBg = uiImage(this, ex, ey, "ui-round")
+      .setDisplaySize(cell - 6, cell - 6)
+      .setInteractive({ cursor: CURSORS.pointer });
+    const moreIcon = this.add
+      .text(ex, ey - 1, "•••", { fontFamily: FONT, fontSize: "16px", color: COLORS.text })
+      .setOrigin(0.5);
+    moreBg.on("pointerover", () => moreBg.setTint(0xfff2cc));
+    moreBg.on("pointerout", () => moreBg.clearTint());
+    moreBg.on("pointerdown", () => {
+      playUiSound(this, "sfx-tap", 0.3);
+      this.toggleEmotePopup();
+    });
+    this.emoteObjects.push(moreBg, moreIcon);
+
+    // Keyboard shortcut: C toggles the full grid (ignored while typing/dialogue).
+    this.input.keyboard?.on("keydown-C", () => {
+      if (this.isChatOpen || this.isDialogueOpen) return;
+      this.toggleEmotePopup();
     });
   }
+
+  // One emote button: a sprite that scales on hover and fires `onClick`. Returns
+  // [icon, hitZone] so callers can register them for resize reflow.
+  private emoteIcon(
+    cx: number,
+    cy: number,
+    frame: string,
+    onClick: () => void,
+    size = 28,
+  ): Movable[] {
+    const icon = this.add
+      .image(cx, cy, EMOTE_ATLAS, frame)
+      .setOrigin(0.5)
+      .setDisplaySize(size, size);
+    // A full-cell hit zone so the whole square is clickable, not just the sprite.
+    const hit = this.add
+      .zone(cx, cy, size + 12, size + 12)
+      .setOrigin(0.5)
+      .setInteractive({ cursor: CURSORS.pointer });
+    hit.on("pointerover", () => icon.setDisplaySize(size * 1.25, size * 1.25));
+    hit.on("pointerout", () => icon.setDisplaySize(size, size));
+    hit.on("pointerdown", onClick);
+    return [icon, hit];
+  }
+
+  private sendEmote(key: string) {
+    gameSocket.sendEmote(key);
+    playUiSound(this, "sfx-tap", 0.3);
+  }
+
+  private toggleEmotePopup() {
+    if (this.emotePopupOpen) {
+      if (this.emotePopup) {
+        // Drop it from the reflow list before destroying so the resize handler
+        // never touches a dead object.
+        const i = this.emoteObjects.indexOf(this.emotePopup);
+        if (i >= 0) this.emoteObjects.splice(i, 1);
+        this.emotePopup.destroy();
+      }
+      this.emotePopup = undefined;
+      this.emotePopupOpen = false;
+      return;
+    }
+    this.buildEmotePopup();
+    this.emotePopupOpen = true;
+  }
+
+  // Grid of every emote, floating just above the quick bar (bottom-right).
+  private buildEmotePopup() {
+    const cell = 44;
+    const cols = 5;
+    const rows = Math.ceil(EMOTES.length / cols);
+    const padX = 10;
+    const titleH = 22;
+    const w = cols * cell + padX * 2;
+    const h = rows * cell + padX + titleH;
+    // Align the popup's right edge with the quick bar and sit it above the bar.
+    const right = this.scale.width - 12;
+    const bottom = this.scale.height - 12 - (40 + 16) - 8;
+    const x = right - w;
+    const y = bottom - h;
+
+    const container = this.add.container(0, 0).setDepth(60);
+    const bg = panel(this, x, y, w, h, "ui-panel-dark").setOrigin(0, 0).setAlpha(0.98);
+    const title = this.add
+      .text(x + w / 2, y + 12, "EMOTES", { fontFamily: FONT_TITLE, fontSize: "12px", color: COLORS.accent })
+      .setOrigin(0.5);
+    container.add([bg, title]);
+
+    EMOTES.forEach((e, i) => {
+      const cx = x + padX + (i % cols) * cell + cell / 2;
+      const cy = y + titleH + padX + Math.floor(i / cols) * cell + cell / 2 - 4;
+      const [icon, hit] = this.emoteIcon(
+        cx,
+        cy,
+        e.frame,
+        () => {
+          this.sendEmote(e.key);
+          this.toggleEmotePopup();
+        },
+        32,
+      );
+      container.add([icon, hit]);
+    });
+
+    this.emotePopup = container;
+    this.emoteObjects.push(container);
+  }
+
+  // ── Voice chat (toggle mic) ───────────────────────────────────────
+  // A round mic button on the bottom row, left of the emote bar. Click it (or
+  // press the bound key, default V) to toggle the mic on/off; while on it
+  // streams audio chunks to the world. Skipped if the browser can't record.
+  private buildVoiceButton() {
+    if (!voiceChat.supported) return;
+    voiceChat.setSender((data, mime) => gameSocket.sendVoiceClip(data, mime));
+    // Keep the button in sync with the real mic state (incl. auto-off on error).
+    voiceChat.onStateChange((on) => this.setMicActive(on));
+
+    const SIZE = 48;
+    // Bottom row, just left of the quick emote bar (which is QUICK_EMOTES+1
+    // cells of 40 + 16 padding wide, pinned 12 from the right).
+    const emoteBarW = (QUICK_EMOTES.length + 1) * 40 + 16;
+    const cx = this.scale.width - 12 - emoteBarW - 8 - SIZE / 2;
+    const cy = this.scale.height - 12 - SIZE / 2 - 4;
+
+    const bg = uiImage(this, cx, cy, "ui-round")
+      .setDisplaySize(SIZE, SIZE)
+      .setAlpha(0.95)
+      .setDepth(50)
+      .setInteractive({ cursor: CURSORS.pointer });
+    const icon = this.add
+      .image(cx, cy, "mc-icons", "icon_microphone")
+      .setDisplaySize(26, 26)
+      .setDepth(51);
+    this.micBtn = bg;
+
+    // Hover tooltip showing the toggle key, like the other corner buttons.
+    const tip = this.add
+      .text(cx, cy - SIZE / 2 - 6, `Mic  [${prettyKey(getKeybinds().talk)}]`, {
+        fontFamily: FONT,
+        fontSize: "12px",
+        color: COLORS.text,
+        backgroundColor: "#0a0f1ccc",
+        padding: { x: 6, y: 4 },
+      })
+      .setResolution(3)
+      .setOrigin(0.5, 1)
+      .setDepth(62)
+      .setVisible(false);
+
+    bg.on("pointerover", () => {
+      tip.setText(`Mic  [${prettyKey(getKeybinds().talk)}]`).setVisible(true);
+      if (!voiceChat.isEnabled) bg.setTint(0xfff2cc);
+    });
+    bg.on("pointerout", () => {
+      tip.setVisible(false);
+      this.setMicActive(voiceChat.isEnabled);
+    });
+    bg.on("pointerdown", () => this.toggleMic());
+
+    // Keyboard toggle on the bound key (default V), ignored while typing /
+    // in a dialogue. Matching the live keybind means a remap takes effect at
+    // once without re-registering. `e.repeat` skips key-held auto-repeats.
+    this.input.keyboard?.on("keydown", (e: KeyboardEvent) => {
+      if (e.repeat || this.isChatOpen || this.isDialogueOpen) return;
+      // Only while actually in the world (not behind a paused menu / Settings).
+      if (!this.gameScene()) return;
+      if (eventToKeyName(e) === getKeybinds().talk) this.toggleMic();
+    });
+
+    this.emoteObjects.push(bg, icon, tip);
+  }
+
+  private async toggleMic() {
+    if (this.micBusy) return;
+    this.micBusy = true;
+    const wasOn = voiceChat.isEnabled;
+    const on = await voiceChat.toggle();
+    this.micBusy = false;
+    this.setMicActive(on);
+    if (!wasOn && !on) {
+      // Couldn't turn on — denied/unavailable mic, or voice off in Settings.
+      this.chat?.addSystem(
+        loadSettings().voiceEnabled ? "Microphone unavailable." : "Voice is off (Settings).",
+      );
+    } else {
+      this.chat?.addSystem(on ? "Mic on — you're live." : "Mic off.");
+    }
+  }
+
+  private setMicActive(on: boolean) {
+    if (on) this.micBtn?.setTint(0xff6b6b);
+    else this.micBtn?.clearTint();
+  }
+
+  private onVoice = ({ id, data, mime }: { id: string; data: ArrayBuffer; mime: string }) => {
+    voiceChat.play(id, data, mime);
+    this.gameScene()?.showSpeaking?.(id);
+  };
 
   // ── Mobile touch controls ─────────────────────────────────────────
 
   // The active gameplay scene (open world or house interior) that the
   // on-screen controls should drive.
-  private gameScene():
-    | (Phaser.Scene & { setTouchDir(dx: number, dy: number): void; mobileInteract?: () => void })
-    | undefined {
+  private gameScene(): GameplayScene | undefined {
     for (const key of ["InteriorScene", "WorldScene"]) {
-      const s = this.scene.get(key) as
-        | (Phaser.Scene & { setTouchDir?: (dx: number, dy: number) => void; mobileInteract?: () => void })
-        | undefined;
+      const s = this.scene.get(key) as GameplayScene | undefined;
       if (s && this.scene.isActive(key) && typeof s.setTouchDir === "function") {
-        return s as Phaser.Scene & { setTouchDir(dx: number, dy: number): void; mobileInteract?: () => void };
+        return s;
       }
     }
     return undefined;
+  }
+
+  // Handle a slash-command typed in chat. Returns true if recognised (so the
+  // chat box swallows it instead of broadcasting). Admin-only commands are
+  // gated on our own moderation role. There is deliberately NO command that
+  // grants pixels — the currency stays fully server-authoritative.
+  private handleChatCommand(raw: string): boolean {
+    const parts = raw.slice(1).trim().split(/\s+/);
+    const cmd = (parts[0] ?? "").toLowerCase();
+    const isAdmin = this.adminRole === "admin" || this.adminRole === "subadmin";
+    const say = (t: string) => this.chat?.addSystem(t);
+
+    switch (cmd) {
+      case "help":
+        say(
+          isAdmin
+            ? "Commands: /help, /speed <1-8|reset>, /tp <x> <y>"
+            : "Commands: /help. (Some commands are staff-only.)",
+        );
+        return true;
+      case "speed": {
+        if (!isAdmin) return say("You don't have permission to use /speed."), true;
+        const arg = (parts[1] ?? "").toLowerCase();
+        const n = arg === "reset" ? 1 : Number(arg);
+        if (!Number.isFinite(n) || n < 1 || n > 8) return say("Usage: /speed <1-8|reset>"), true;
+        this.gameScene()?.setSpeedMultiplier?.(n);
+        return say(`Walk speed set to ${n}×.`), true;
+      }
+      case "tp": {
+        if (!isAdmin) return say("You don't have permission to use /tp."), true;
+        const x = Number(parts[1]);
+        const y = Number(parts[2]);
+        if (!Number.isInteger(x) || !Number.isInteger(y)) return say("Usage: /tp <x> <y>"), true;
+        const ok = this.gameScene()?.teleport?.(x, y);
+        return say(ok ? `Teleported to ${x}, ${y}.` : "Can't teleport there."), true;
+      }
+      default:
+        // Unknown slash text (e.g. "/me waves") falls through to normal chat.
+        return false;
+    }
   }
 
   // A movement D-pad (bottom-left) plus interact + chat buttons (bottom-right),
@@ -386,29 +646,23 @@ export class UIScene extends Phaser.Scene {
       (navigator?.maxTouchPoints ?? 0) > 0;
     if (!coarse) return;
 
-    const W = this.scale.width;
-    const H = this.scale.height;
-
-    // Sits above the bottom-left chat log/input bar so the two don't fight.
-    const cx = 96;
-    const cy = H - 156;
     const GAP = 58;
-    const dpad = (bx: number, by: number, glyph: string, dx: number, dy: number) => {
+    // D-pad cluster centre, anchored to the bottom-left corner (above the chat
+    // log/input bar). Action cluster is anchored to the bottom-right corner.
+    const clusterX = 96;
+    const clusterDY = -156; // cluster centre Y relative to the bottom edge
+
+    // Directional pad pieces from the Kenney mobile-controls pack — each element
+    // already has its arrow baked in, so no separate glyph is needed. `ox/oy` is
+    // the offset from the cluster centre so the pad can follow a resize.
+    const dpad = (ox: number, oy: number, frame: string, dx: number, dy: number) => {
       const SIZE = 64;
       const bg = this.add
-        .image(bx, by, "ui-round")
+        .image(0, 0, "mc", frame)
         .setDisplaySize(SIZE, SIZE)
-        .setAlpha(0.9)
+        .setAlpha(0.92)
         .setDepth(70)
         .setInteractive();
-      // Geometric triangle (not an emoji) so it stays crisp and box-free.
-      this.add
-        .text(bx, by, glyph, {
-          fontFamily: FONT_CHAT, fontSize: "24px", color: "#ffffff",
-          stroke: "#000000", strokeThickness: 4,
-        })
-        .setOrigin(0.5)
-        .setDepth(71);
       const press = () => {
         bg.setTint(0xffd166);
         this.gameScene()?.setTouchDir(dx, dy);
@@ -421,38 +675,57 @@ export class UIScene extends Phaser.Scene {
       bg.on("pointerup", release);
       bg.on("pointerout", release);
       bg.on("pointerupoutside", release);
+      this.mobileReflow.push((_w, h) => bg.setPosition(clusterX + ox, h + clusterDY + oy));
     };
-    dpad(cx, cy - GAP, "▲", 0, -1);
-    dpad(cx, cy + GAP, "▼", 0, 1);
-    dpad(cx - GAP, cy, "◀", -1, 0);
-    dpad(cx + GAP, cy, "▶", 1, 0);
+    dpad(0, -GAP, "dpad_element_north", 0, -1);
+    dpad(0, GAP, "dpad_element_south", 0, 1);
+    dpad(-GAP, 0, "dpad_element_west", -1, 0);
+    dpad(GAP, 0, "dpad_element_east", 1, 0);
 
-    // Interact (E) and open-chat, stacked above the emote bar.
-    this.touchActionButton(W - 70, H - 150, "✋", () => this.gameScene()?.mobileInteract?.());
-    this.touchActionButton(W - 150, H - 110, "💬", () => {
+    // Interact (E) and open-chat, anchored to the bottom-right corner.
+    this.touchActionButton(-70, -150, "icon_hand", () => this.gameScene()?.mobileInteract?.());
+    this.touchActionButton(-150, -110, "icon_talk", () => {
       if (!this.isDialogueOpen) this.openChat();
     });
+
+    // Initial layout + keep it glued to the corners through resizes / rotations.
+    const run = () => this.mobileReflow.forEach((f) => f(this.scale.width, this.scale.height));
+    run();
+    this.scale.on("resize", run);
+    this.events.once("shutdown", () => this.scale.off("resize", run));
   }
 
-  // A round tap button used by the mobile action cluster.
-  private touchActionButton(bx: number, by: number, glyph: string, onTap: () => void) {
+  // A round tap button (mobile-controls circle + white icon) for the action
+  // cluster. `rx/ry` is the offset from the bottom-right corner.
+  private touchActionButton(rx: number, ry: number, iconFrame: string, onTap: () => void) {
     const bg = this.add
-      .image(bx, by, "ui-round")
+      .image(0, 0, "mc", "button_circle")
       .setDisplaySize(64, 64)
-      .setAlpha(0.9)
+      .setAlpha(0.92)
       .setDepth(70)
       .setInteractive();
-    this.add
-      .text(bx, by, glyph, { fontFamily: FONT_EMOJI, fontSize: "26px" })
-      .setOrigin(0.5)
+    const icon = this.add
+      .image(0, 0, "mc-icons", iconFrame)
+      .setDisplaySize(34, 34)
       .setDepth(71);
-    bg.on("pointerdown", () => bg.setTint(0xffd166));
+    bg.on("pointerdown", () => {
+      bg.setTint(0xffd166);
+      icon.setTint(0x333333);
+    });
     bg.on("pointerup", () => {
       bg.clearTint();
+      icon.clearTint();
       onTap();
       playUiSound(this, "sfx-tap", 0.3);
     });
-    bg.on("pointerout", () => bg.clearTint());
+    bg.on("pointerout", () => {
+      bg.clearTint();
+      icon.clearTint();
+    });
+    this.mobileReflow.push((w, h) => {
+      bg.setPosition(w + rx, h + ry);
+      icon.setPosition(w + rx, h + ry);
+    });
   }
 
   setDayCycle(tNow: number, dayLengthMs: number, _serverNow: number) {
@@ -629,8 +902,7 @@ export class UIScene extends Phaser.Scene {
       .rectangle(0, 0, W, H, 0x000000, 0.4)
       .setOrigin(0)
       .setDepth(20000);
-    const box = this.add
-      .nineslice(cx, cy, "ui-panel-dark", undefined, panelW, panelH, 20, 20, 20, 20)
+    const box = uiNineslice(this, cx, cy, "ui-panel-dark", panelW, panelH, 20)
       .setOrigin(0.5)
       .setAlpha(0.98)
       .setDepth(20001);

@@ -4,6 +4,7 @@ import { Player } from "../entities/Player";
 import { TILE_H } from "../utils/IsoUtils";
 import type { MapDef } from "../types/map";
 import { getKeybinds } from "../data/Settings";
+import { gameSocket } from "../network/socket";
 
 // 16:9 aspect so the map exactly fills the 1280×720 canvas — no letterbox.
 const COLS = 32;
@@ -146,6 +147,17 @@ export class InteriorScene extends Phaser.Scene {
   // separate mobile interact action to wire up here.
   setTouchDir(dx: number, dy: number) {
     this.touchDir = { dx, dy };
+  }
+
+  // Admin chat commands (wired from UIScene).
+  setSpeedMultiplier(mul: number) {
+    this.localPlayer?.setSpeedMultiplier(mul);
+  }
+
+  teleport(cx: number, cy: number): boolean {
+    if (!this.localPlayer?.teleport(cx, cy)) return false;
+    gameSocket.sendMove(this.localPlayer.cx, this.localPlayer.cy);
+    return true;
   }
 
   update(_time: number, delta: number) {

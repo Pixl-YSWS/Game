@@ -1,6 +1,6 @@
 import Phaser from "phaser";
-import { FONT, CURSORS } from "../ui/theme";
-import { playUiSound } from "../ui/UIKit";
+import { FONT, CURSORS, COLORS } from "../ui/theme";
+import { playUiSound, uiNineslice } from "../ui/UIKit";
 
 export interface MenuButton {
   container: Phaser.GameObjects.Container;
@@ -38,15 +38,13 @@ export function makeMenuButton(
 ): MenuButton {
   const w = opts.width ?? 268;
   const h = opts.height ?? 54;
-  const upTex = opts.variant === "grey" ? "ui-btn-grey" : "ui-btn";
-  const downTex = opts.variant === "grey" ? "ui-btn-grey-down" : "ui-btn-down";
+  const tex = opts.variant === "grey" ? "ui-btn-grey" : "ui-btn";
 
-  const bg = scene.add
-    .nineslice(0, 0, upTex, undefined, w, h, 22, 22, 16, 20)
-    .setOrigin(0.5);
+  // Adventure button sprite is 48×24 with ~8px rounded corners → inset 8.
+  const bg = uiNineslice(scene, 0, 0, tex, w, h, 8).setOrigin(0.5);
   const fontSize = Phaser.Math.Clamp(Math.floor(h * 0.3), 11, 16);
   const label = scene.add
-    .text(0, -2, text, { fontFamily: FONT, fontSize: `${fontSize}px`, color: "#ffffff" })
+    .text(0, -2, text, { fontFamily: FONT, fontSize: `${fontSize}px`, color: COLORS.textDark })
     .setOrigin(0.5)
     .setResolution(4);
 
@@ -63,9 +61,10 @@ export function makeMenuButton(
   let onClick = opts.onClick;
 
   const render = () => {
-    bg.setTexture(pressed ? downTex : upTex);
-    if (focused) bg.setTint(0xffe08a);
-    else if (hovering) bg.setTint(0xeaf4ff);
+    // One sprite, no pressed variant — convey state with tint/scale/nudge.
+    if (pressed) bg.setTint(0xd8c298);
+    else if (focused) bg.setTint(0xffe08a);
+    else if (hovering) bg.setTint(0xfff2cc);
     else bg.clearTint();
     container.setScale(focused ? 1.05 : 1);
     container.setAlpha(enabled ? 1 : 0.5);

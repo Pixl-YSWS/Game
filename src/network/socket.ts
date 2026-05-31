@@ -147,6 +147,11 @@ class GameSocket {
     this.socket?.emit("emote:send", { emote });
   }
 
+  // Send a push-to-talk voice clip (binary) to everyone in the current world.
+  sendVoiceClip(data: ArrayBuffer, mime: string) {
+    this.socket?.emit("voice:clip", { data, mime });
+  }
+
   setCharacter(char: number) {
     this.socket?.emit("character:set", { char });
   }

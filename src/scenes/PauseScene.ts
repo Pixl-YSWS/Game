@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import { makeMenuButton, attachMenuNav } from "../utils/MenuButton";
 import { FONT, FONT_TITLE } from "../ui/theme";
-import { panel } from "../ui/UIKit";
+import { panel, closeButton, fitModal } from "../ui/UIKit";
 import { gameSocket } from "../network/socket";
 
 interface PauseInit {
@@ -23,12 +23,13 @@ export class PauseScene extends Phaser.Scene {
     const W = this.scale.width;
     const H = this.scale.height;
 
-    const overlay = this.add.graphics();
-    overlay.fillStyle(0x000000, 0.7);
-    overlay.fillRect(0, 0, W, H);
+    // Block clicks reaching the paused scene; dimming is the camera background.
+    this.add.zone(0, 0, W, H).setOrigin(0).setInteractive();
 
     // Menu panel.
     panel(this, W / 2, H / 2 - 6, 380, 380, "ui-panel-dark");
+    closeButton(this, W / 2 + 190 - 26, H / 2 - 6 - 190 + 24, () => this.resume());
+    fitModal(this, 400, 400, 24, 0.7);
 
     this.add
       .text(W / 2, H / 2 - 130, "PAUSED", {

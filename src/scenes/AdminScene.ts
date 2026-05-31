@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import { makeMenuButton, type MenuButton } from "../utils/MenuButton";
 import { FONT_TITLE, FONT_CHAT, COLORS } from "../ui/theme";
-import { panel } from "../ui/UIKit";
+import { panel, closeButton, fitModal } from "../ui/UIKit";
 import { gameSocket } from "../network/socket";
 import type { ModRole, AdminEntry, MuteEntry, AdminPlayerEntry } from "../types/network";
 
@@ -56,7 +56,6 @@ export class AdminScene extends Phaser.Scene {
       gameSocket.off("admin:data", this.onData);
     });
 
-    this.add.graphics().fillStyle(0x000000, 0.8).fillRect(0, 0, W, H);
     this.add.zone(0, 0, W, H).setOrigin(0).setInteractive();
 
     const panelW = 540;
@@ -64,6 +63,8 @@ export class AdminScene extends Phaser.Scene {
     const px = (W - panelW) / 2;
     const py = (H - panelH) / 2;
     panel(this, W / 2, H / 2, panelW, panelH, "ui-panel-dark");
+    closeButton(this, px + panelW - 26, py + 24, () => this.scene.stop());
+    fitModal(this, panelW, panelH);
 
     this.add
       .text(W / 2, py + 28, "ADMIN PANEL", { fontFamily: FONT_TITLE, fontSize: "18px", color: "#f0a500" })

@@ -566,8 +566,14 @@ setInterval(() => {
 // Per-socket timestamps of the last chat line / emote, for rate limiting.
 const chatLast = new Map<string, number>();
 const emoteLast = new Map<string, number>();
-// Emotes the server will relay. Keep in sync with the client emote bar.
-const ALLOWED_EMOTES = new Set(["wave", "laugh", "heart", "cry", "angry", "dance"]);
+// Per-socket timestamp of the last voice clip, + a hard size cap (~16s of Opus).
+const voiceLast = new Map<string, number>();
+const MAX_VOICE_BYTES = 800_000;
+// Emotes the server will relay. Keep in sync with EMOTES in src/ui/emotes.ts.
+const ALLOWED_EMOTES = new Set([
+  "happy", "laugh", "heart", "sad", "angry", "love", "cry", "idea",
+  "music", "sleep", "star", "question", "alert", "exclaim", "dizzy",
+]);
 
 // Resolve an account id to its live socket id, if that account is online.
 function socketIdForAccount(accountId: string): string | undefined {
@@ -1064,6 +1070,27 @@ io.on("connection", (socket) => {
     io.to(worldKey(player.world)).emit("player:emote", { id: socket.id, emote });
   });
 
+  // Push-to-talk voice: relay a short binary audio clip to everyone else in the
+  // same world. Capped in size + rate so it can't be used to flood the room;
+  // muted players can't talk, mirroring chat.
+  socket.on("voice:clip", ({ data, mime }) => {
+    const player = players.get(socket.id);
+    if (!player) return;
+    if (isMuted(player.playerId)) {
+      socket.emit("mod:notice", { text: "You are muted and can't talk." });
+      return;
+    }
+    if (typeof mime !== "string" || !mime.startsWith("audio/")) return;
+    // socket.io delivers binary as a Buffer/ArrayBuffer view — both expose
+    // byteLength (Buffer extends Uint8Array).
+    const size = (data as { byteLength?: number })?.byteLength ?? 0;
+    if (size <= 0 || size > MAX_VOICE_BYTES) return;
+    const now = Date.now();
+    if (now - (voiceLast.get(socket.id) ?? 0) < 400) return;
+    voiceLast.set(socket.id, now);
+    socket.to(worldKey(player.world)).emit("player:voice", { id: socket.id, data, mime });
+  });
+
   socket.on("character:set", ({ char }) => {
     const player = players.get(socket.id);
     if (!player) return;
@@ -1080,6 +1107,7 @@ io.on("connection", (socket) => {
     players.delete(socket.id);
     chatLast.delete(socket.id);
     emoteLast.delete(socket.id);
+    voiceLast.delete(socket.id);
     // Only clear the live-session slot if it still points at us (a newer login
     // may have already taken it over).
     if (player && liveByAccount.get(player.playerId) === socket.id) {

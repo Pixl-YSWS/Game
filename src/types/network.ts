@@ -126,6 +126,8 @@ export interface ServerToClientEvents {
   "chat:message": (data: ChatMessage) => void;
   // An emote (wave, etc.) triggered by a player in the same world.
   "player:emote": (data: { id: string; emote: string }) => void;
+  // A push-to-talk voice clip from a player in the same world (binary audio).
+  "player:voice": (data: { id: string; data: ArrayBuffer; mime: string }) => void;
   // Sent to a socket right before it's disconnected because the same account
   // logged in elsewhere (single-session enforcement).
   "auth:kicked": () => void;
@@ -171,6 +173,8 @@ export interface ClientToServerEvents {
   "chat:send": (payload: { text: string }) => void;
   // Trigger an emote (e.g. "wave") broadcast to the player's current world.
   "emote:send": (payload: { emote: string }) => void;
+  // Send a push-to-talk voice clip (binary audio) to the player's world.
+  "voice:clip": (payload: { data: ArrayBuffer; mime: string }) => void;
   // Choose a character skin (index into CHAR_BASES). Persisted on the account.
   "character:set": (payload: { char: number }) => void;
   // Ask for the inventory snapshot (responds with inventory:list).

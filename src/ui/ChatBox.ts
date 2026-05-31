@@ -35,6 +35,9 @@ export class ChatBox {
   private unread = 0;
   private readonly x = 12;
   private inputY: number;
+  // Optional slash-command interceptor. Returns true if it handled the line
+  // (so it is NOT sent to the server as chat). Set by UIScene.
+  onCommand?: (raw: string) => boolean;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -144,11 +147,19 @@ export class ChatBox {
   private submit() {
     const text = this.inputEl.value.trim();
     if (text) {
-      const sent = gameSocket.sendChat(text);
-      if (!sent) this.flashHint("Offline — message will send when you reconnect");
+      // Slash-commands are handled locally and never broadcast as chat.
+      if (!(text.startsWith("/") && this.onCommand?.(text))) {
+        const sent = gameSocket.sendChat(text);
+        if (!sent) this.flashHint("Offline — message will send when you reconnect");
+      }
     }
     this.inputEl.value = "";
     this.close();
+  }
+
+  // A local-only system line (command feedback, etc.) — not sent anywhere.
+  addSystem(text: string) {
+    this.addMessage({ id: "__system__", name: "", text: `§ ${text}` });
   }
 
   // Briefly override the closed-chat hint (used to confirm a queued message).
@@ -161,12 +172,15 @@ export class ChatBox {
 
   addMessage(msg: ChatMessage) {
     const mine = msg.id === gameSocket.id;
+    const system = msg.id === "__system__";
     const action = msg.text.startsWith("/me ");
-    const display = action
-      ? `✦ ${msg.name} ${msg.text.slice(4)}`
-      : `${msg.name}: ${msg.text}`;
-    // All chat lines in white for max legibility; /me actions stay green.
-    const color = action ? COLORS.good : COLORS.text;
+    const display = system
+      ? msg.text.replace(/^§ /, "")
+      : action
+        ? `✦ ${msg.name} ${msg.text.slice(4)}`
+        : `${msg.name}: ${msg.text}`;
+    // White chat for legibility; /me actions green; system feedback amber.
+    const color = system ? COLORS.accent : action ? COLORS.good : COLORS.text;
 
     const text = this.scene.add
       .text(this.x, 0, display, {

@@ -20,12 +20,50 @@ export const FONT_EMOJI =
 export const COLORS = {
   text: "#ffffff",
   textDim: "#c9d4e3",
+  // Dark ink for labels that sit on the light parchment/slate adventure buttons.
+  textDark: "#4a2f17",
   accent: "#ffd166",
   good: "#7bdc8b",
   bad: "#ff6b6b",
   panel: 0x1b2233,
   stroke: "#0a0f1c",
 } as const;
+
+// ── Kenney "UI pack — adventure" atlas ─────────────────────────────────────
+// The whole HUD (panels, buttons, checkboxes, slider, round mobile buttons,
+// close buttons) is skinned from this one spritesheet, loaded in BootScene.
+export const UI_ATLAS = "ui-adv";
+
+// Logical UI texture name → frame in the adventure spritesheet atlas. Code keeps
+// using the friendly "ui-*" names; `uiFrame()` resolves them to atlas frames so
+// the call sites never have to know the pack's odd "…img.png" frame naming.
+const UI_FRAME: Record<string, string> = {
+  "ui-panel": "panel_brownimg.png",
+  "ui-panel-dark": "panel_brown_dark_corners_aimg.png",
+  "ui-btn": "button_brownimg.png",
+  "ui-btn-down": "button_brownimg.png",
+  "ui-btn-grey": "button_greyimg.png",
+  "ui-btn-grey-down": "button_greyimg.png",
+  "ui-btn-close": "button_brown_closeimg.png",
+  "ui-btn-close-grey": "button_grey_closeimg.png",
+  "ui-check-off": "checkbox_brown_emptyimg.png",
+  "ui-check-on": "checkbox_brown_checkedimg.png",
+  "ui-slide-track": "panel_brown_darkimg.png",
+  "ui-slide-fill": "panel_brownimg.png",
+  "ui-slide-handle": "round_brownimg.png",
+  "ui-round": "round_brownimg.png",
+  "ui-round-down": "round_brown_darkimg.png",
+};
+
+/** Resolve a logical "ui-*" name to its frame in the adventure atlas. */
+export function uiFrame(name: string): string {
+  return UI_FRAME[name] ?? name;
+}
+
+// ── Kenney emote pack ──────────────────────────────────────────────────────
+// Player emotes are pixel sprites from this atlas (16×16 frames), loaded in
+// BootScene. See `src/ui/emotes.ts` for the key → frame table.
+export const EMOTE_ATLAS = "emotes";
 
 const CURSOR_BASE = "/assets/kenney_cursor-pixel-pack/Tiles";
 
