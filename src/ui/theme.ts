@@ -107,15 +107,17 @@ export async function buildCursors(scale = CURSOR_SCALE): Promise<void> {
  */
 export async function preloadFonts(): Promise<void> {
   if (!("fonts" in document)) return;
-  // Monocraft is optional (added by the user); load it best-effort so a missing
-  // file never blocks the others — chat just falls back to Pixelify Sans.
-  (document as Document).fonts.load(`16px "Monocraft"`).catch(() => {});
   try {
     await Promise.all([
       (document as Document).fonts.load(`16px "${FONT}"`),
       (document as Document).fonts.load(`16px "${FONT_NARROW}"`),
       (document as Document).fonts.load(`400 16px "${FONT_TITLE}"`),
       (document as Document).fonts.load(`700 16px "${FONT_TITLE}"`),
+      // Await Monocraft too, so Phaser bakes chat text in it from the start
+      // (Phaser rasterises text once — a late load would leave already-created
+      // lines stuck in the fallback while the live DOM input shows Monocraft).
+      // `.catch` keeps a missing file from blocking the others.
+      (document as Document).fonts.load(`16px "Monocraft"`).catch(() => {}),
     ]);
     // Wait for any in-flight font loads kicked off by the stylesheet, too.
     await (document as Document).fonts.ready;
