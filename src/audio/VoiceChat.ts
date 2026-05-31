@@ -29,11 +29,6 @@ function pickMime(): string {
   return "";
 }
 
-interface PlayQueue {
-  urls: string[];
-  playing: boolean;
-}
-
 class VoiceChat {
   private stream?: MediaStream;
   private recorder?: MediaRecorder;
@@ -41,20 +36,31 @@ class VoiceChat {
   private segTimer?: ReturnType<typeof setTimeout>;
   private sender?: (data: ArrayBuffer, mime: string) => void;
   private stateCb?: (on: boolean) => void;
-  // Per-speaker playback queues so one person's chunks play in order without
-  // overlapping (different speakers still play concurrently).
-  private queues = new Map<string, PlayQueue>();
+
+  // ── Playback (Web Audio) ──────────────────────────────────────────────
+  // Each speaker's clips are decoded and scheduled back-to-back on a single
+  // AudioContext timeline so they play sample-accurately with NO gap between
+  // chunks. Bare <audio> elements (the old approach) re-prime the decoder on
+  // every clip, leaving a silent seam ~every segment — which made continuous
+  // speech come through as choppy fragments.
+  private ctx?: AudioContext;
+  private gain?: GainNode;
+  private comp?: DynamicsCompressorNode;
+  // Per-speaker scheduling cursor: the AudioContext time the next clip should
+  // start at (= when the previous one ends).
+  private nextTime = new Map<string, number>();
+  // Boost incoming voice a little; a compressor after it tames any clipping so
+  // the gain makes things audibly louder without distorting loud speech.
+  private static readonly GAIN = 1.7;
+  // Cushion added when (re)starting a speaker, so the first clip doesn't
+  // underrun before the next arrives.
+  private static readonly JITTER_S = 0.12;
 
   // Length of each streamed segment. This is the dominant source of latency
   // (a whole segment must be recorded before it can be sent), so keep it short.
   // Too short adds per-segment overhead and audible seams; ~0.7s is a good
   // low-latency balance for a casual game.
   private static readonly SEGMENT_MS = 700;
-  // Small jitter buffer: up to this many chunks may wait behind the one
-  // currently playing. A buffer of 1 (the old value) dropped audio at the
-  // slightest network hiccup, which is the main cause of choppy voice; 2 rides
-  // out normal jitter while still capping how far behind real-time we drift.
-  private static readonly MAX_QUEUE = 2;
 
   /** True if the browser can record audio at all (used to hide the mic UI). */
   get supported(): boolean {
@@ -99,6 +105,9 @@ class VoiceChat {
     if (!loadSettings().voiceEnabled) return false;
     if (!(await this.ensureMic())) return false;
     this.enabled = true;
+    // Warm up / resume the playback graph on this user gesture so received
+    // voice can play without waiting for a later interaction.
+    this.ensureCtx();
     this.recordSegment();
     this.stateCb?.(true);
     return true;
@@ -183,55 +192,71 @@ class VoiceChat {
     }
   }
 
-  // Queue a received chunk from speaker `id` and play it after their earlier
-  // ones (unless the listener has voice muted).
-  play(id: string, data: ArrayBuffer, mime: string) {
-    if (!loadSettings().voiceEnabled) return;
-    let q = this.queues.get(id);
-    if (!q) {
-      q = { urls: [], playing: false };
-      this.queues.set(id, q);
+  // Lazily build the shared playback graph: gain → compressor → output. The
+  // context starts suspended until a user gesture; we resume it opportunistically
+  // (toggling the mic, or any received clip after the player has interacted).
+  private ensureCtx(): AudioContext | undefined {
+    const Ctor =
+      (typeof AudioContext !== "undefined" && AudioContext) ||
+      (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!Ctor) return undefined;
+    if (!this.ctx) {
+      this.ctx = new Ctor();
+      this.gain = this.ctx.createGain();
+      this.gain.gain.value = VoiceChat.GAIN;
+      this.comp = this.ctx.createDynamicsCompressor();
+      this.gain.connect(this.comp);
+      this.comp.connect(this.ctx.destination);
     }
+    if (this.ctx.state === "suspended") void this.ctx.resume().catch(() => {});
+    return this.ctx;
+  }
+
+  // Decode a received clip from speaker `id` and schedule it to play exactly
+  // when their previous clip ends — gapless, sample-accurate. Falling behind
+  // (a network stall) just restarts the cursor near "now".
+  async play(id: string, data: ArrayBuffer, _mime: string) {
+    if (!loadSettings().voiceEnabled) return;
+    const ctx = this.ensureCtx();
+    if (!ctx || !this.gain) return;
+    // socket.io delivers browser binary as an ArrayBuffer, but normalise a
+    // TypedArray view too. decodeAudioData detaches its input, so hand it a
+    // fresh copy (each segment is a self-contained webm/mp4 clip).
+    const ab = ArrayBuffer.isView(data)
+      ? ((data as ArrayBufferView).buffer as ArrayBuffer).slice(0)
+      : (data as ArrayBuffer).slice(0);
+    let buffer: AudioBuffer;
     try {
-      const url = URL.createObjectURL(new Blob([data], { type: mime || "audio/webm" }));
-      q.urls.push(url);
-      // If we're falling behind, drop the oldest queued chunks to catch up.
-      while (q.urls.length > VoiceChat.MAX_QUEUE) {
-        const stale = q.urls.shift()!;
-        URL.revokeObjectURL(stale);
-      }
-      if (!q.playing) this.playNext(id);
+      buffer = await ctx.decodeAudioData(ab);
+    } catch {
+      return; // undecodable chunk — skip it rather than break the stream
+    }
+    const now = ctx.currentTime;
+    let start = this.nextTime.get(id) ?? 0;
+    // First clip, or we've drained below real-time: (re)start with a small
+    // cushion so the next clip has time to arrive before this one ends.
+    if (start < now + 0.02) start = now + VoiceChat.JITTER_S;
+    // Don't let the schedule run away if clips arrive in a burst.
+    if (start > now + 1.0) start = now + 1.0;
+    const src = ctx.createBufferSource();
+    src.buffer = buffer;
+    src.connect(this.gain);
+    src.start(start);
+    this.nextTime.set(id, start + buffer.duration);
+  }
+
+  // Tear everything down (mic + playback graph) when leaving gameplay.
+  release() {
+    this.disable();
+    this.nextTime.clear();
+    try {
+      void this.ctx?.close();
     } catch {
       /* ignore */
     }
-  }
-
-  private playNext(id: string) {
-    const q = this.queues.get(id);
-    if (!q) return;
-    const url = q.urls.shift();
-    if (!url) {
-      q.playing = false;
-      return;
-    }
-    q.playing = true;
-    const audio = new Audio(url);
-    const next = () => {
-      URL.revokeObjectURL(url);
-      this.playNext(id);
-    };
-    audio.onended = next;
-    audio.onerror = next;
-    audio.play().catch(next);
-  }
-
-  // Tear everything down (mic + any queued playback) when leaving gameplay.
-  release() {
-    this.disable();
-    for (const q of this.queues.values()) {
-      for (const url of q.urls) URL.revokeObjectURL(url);
-    }
-    this.queues.clear();
+    this.ctx = undefined;
+    this.gain = undefined;
+    this.comp = undefined;
   }
 }
 

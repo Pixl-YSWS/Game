@@ -6,6 +6,9 @@ export interface PlayerState {
   // Character skin index (into the client's CHAR_BASES). Optional so the
   // lightweight player:move payload doesn't have to carry it.
   char?: number;
+  // Custom hand-drawn skin (encoded pixel grid; see src/world/skin.ts). When
+  // present it overrides `char` so the avatar renders the player's own art.
+  skin?: string;
   // True if the account is Hack Club "verified".
   verified?: boolean;
 }
@@ -61,6 +64,40 @@ export interface HouseObject {
   placedBy: string; // account id of whoever placed it
 }
 
+// A YSWS-style project a player has shipped. `hackatimeProject` maps this
+// card to a Hackatime project name so its tracked coding time can be pulled
+// in. `seconds` is filled in server-side (merged from Hackatime) when a
+// project list is sent — it is not stored.
+export interface Project {
+  id: number;
+  name: string;
+  description?: string;
+  repoUrl?: string;
+  demoUrl?: string;
+  hackatimeProject?: string;
+  createdAt: number;
+  updatedAt: number;
+  // Coding time (seconds) from Hackatime for the mapped project, if any.
+  // Server-computed; undefined when Hackatime isn't connected or unmapped.
+  seconds?: number;
+}
+
+// One Hackatime project's tracked time, plus the account-wide total. Returned
+// to the client so the projects panel can show coding stats.
+export interface HackatimeProjectStat {
+  name: string;
+  seconds: number;
+  text: string; // human-readable ("2 hrs 13 mins")
+}
+export interface HackatimeStats {
+  connected: boolean;
+  totalSeconds: number;
+  humanReadableTotal: string;
+  projects: HackatimeProjectStat[];
+  // Set when a fetch failed (bad key, network, etc.) so the UI can explain.
+  error?: string;
+}
+
 // Anchor for the world day/night cycle. Clients extrapolate the current
 // phase from (Date.now() - serverNow + tNow * dayLengthMs) mod dayLengthMs.
 export interface DayCycle {
@@ -96,7 +133,7 @@ export interface AdminPlayerEntry {
 }
 
 export interface ServerToClientEvents {
-  init: (data: { id: string; accountId: string; name: string; char: number; verified: boolean; role: ModRole; world: WorldState; pixels: number; unread: number; dayCycle: DayCycle }) => void;
+  init: (data: { id: string; accountId: string; name: string; char: number; skin?: string; verified: boolean; role: ModRole; world: WorldState; pixels: number; unread: number; dayCycle: DayCycle }) => void;
   // A short moderation message shown to one player (e.g. "You have been muted").
   "mod:notice": (data: { text: string }) => void;
   // Snapshot for the admin panel (in response to admin:list).
@@ -131,8 +168,9 @@ export interface ServerToClientEvents {
   // Sent to a socket right before it's disconnected because the same account
   // logged in elsewhere (single-session enforcement).
   "auth:kicked": () => void;
-  // A player changed their character skin; update their avatar in place.
-  "player:appearance": (data: { id: string; char: number }) => void;
+  // A player changed their character appearance; update their avatar in place.
+  // `skin` is set for a custom hand-drawn avatar; otherwise `char` applies.
+  "player:appearance": (data: { id: string; char: number; skin?: string }) => void;
   // A world switch was refused (e.g. open world needs a verified account).
   "world:denied": (data: { reason: string }) => void;
   // Inventory snapshot (in response to inventory:get, or after a change).
@@ -142,6 +180,14 @@ export interface ServerToClientEvents {
   // A piece of furniture was placed / removed in the shared house.
   "house:object:added": (data: { object: HouseObject }) => void;
   "house:object:removed": (data: { id: number }) => void;
+  // The caller's project list (in response to project:list, or after a
+  // create/update/delete). Hackatime time is merged in when available.
+  "project:list": (data: { items: Project[]; hackatimeConnected: boolean }) => void;
+  // Result of a create/update/delete (success=false carries a reason code).
+  "project:result": (data: { ok: boolean; reason?: string; id?: number }) => void;
+  // Hackatime stats snapshot (in response to hackatime:stats) + whether the
+  // account currently has a key on file.
+  "hackatime:stats": (data: HackatimeStats) => void;
 }
 
 // One line of world chat. `self` is filled in client-side, not sent.
@@ -176,7 +222,40 @@ export interface ClientToServerEvents {
   // Send a push-to-talk voice clip (binary audio) to the player's world.
   "voice:clip": (payload: { data: ArrayBuffer; mime: string }) => void;
   // Choose a character skin (index into CHAR_BASES). Persisted on the account.
+  // Picking a preset clears any custom hand-drawn skin.
   "character:set": (payload: { char: number }) => void;
+  // Set a custom hand-drawn skin (encoded pixel grid; see src/world/skin.ts).
+  // Overrides the preset until a preset is picked again.
+  "character:setSkin": (payload: { skin: string }) => void;
+
+  // ── Projects + Hackatime ─────────────────────────────────────────────
+  // Ask for the caller's projects (responds with project:list).
+  "project:list": () => void;
+  // Create a new project. Server validates + responds with project:result and
+  // a fresh project:list.
+  "project:create": (payload: {
+    name: string;
+    description?: string;
+    repoUrl?: string;
+    demoUrl?: string;
+    hackatimeProject?: string;
+  }) => void;
+  // Edit an existing project (must be the owner).
+  "project:update": (payload: {
+    id: number;
+    name: string;
+    description?: string;
+    repoUrl?: string;
+    demoUrl?: string;
+    hackatimeProject?: string;
+  }) => void;
+  // Delete one of the caller's projects.
+  "project:delete": (payload: { id: number }) => void;
+  // Store/replace the caller's Hackatime API key (empty string disconnects).
+  // Server verifies it against Hackatime and responds with hackatime:stats.
+  "hackatime:setKey": (payload: { key: string }) => void;
+  // Ask for the caller's Hackatime stats (responds with hackatime:stats).
+  "hackatime:stats": () => void;
   // Ask for the inventory snapshot (responds with inventory:list).
   "inventory:get": () => void;
   // Place a placeable item as furniture in the shared house.

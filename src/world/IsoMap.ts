@@ -1,13 +1,14 @@
 import Phaser from "phaser";
 import { cartToIso, TILE_W, TILE_H } from "../utils/IsoUtils";
-import type { MapDef } from "../types/map";
+import type { MapDef, MapObject } from "../types/map";
+import { TILE_SRC, SOLID } from "./tileset";
 
 const SRC_TILE = 16;
 
 export class IsoMap {
   private scene: Phaser.Scene;
   private mapDef: MapDef;
-  // Stamped tile images, kept so the whole layer can be wiped when the
+  // Stamped tile/object images, kept so the whole layer can be wiped when the
   // player switches to a different world.
   private stamps: Phaser.GameObjects.Image[] = [];
 
@@ -27,27 +28,9 @@ export class IsoMap {
   }
 
   build() {
-    const { cols, rows, tilesetKey, tilesetCols, groundLayer, decoLayer, flatDeco } = this.mapDef;
-
-    for (let row = 0; row < rows; row++) {
-      for (let col = 0; col < cols; col++) {
-        const { x, y } = cartToIso(col, row);
-
-        const gIdx = groundLayer[row]?.[col] ?? -1;
-        if (gIdx >= 0) {
-          this.stamp(tilesetKey, gIdx, tilesetCols, x, y, 0);
-        }
-
-        const dIdx = decoLayer[row]?.[col] ?? -1;
-        if (dIdx >= 0) {
-          // Flat decos sit just above the ground (depth 0.5) so the player
-          // — whose depth is always >= 1.5 — always renders on top of them.
-          // Tall decos use row-based depth for 2.5D layering.
-          const depth = flatDeco.has(dIdx) ? 0.5 : row + 1;
-          this.stamp(tilesetKey, dIdx, tilesetCols, x, y, depth);
-        }
-      }
-    }
+    const { cols, rows, cozy } = this.mapDef;
+    if (cozy) this.buildCozy();
+    else this.buildLegacy();
 
     this.boundsX = 0;
     this.boundsY = 0;
@@ -55,7 +38,77 @@ export class IsoMap {
     this.boundsH = rows * TILE_H;
   }
 
-  private stamp(
+  // ── Cozy maps: tiles resolved via the CozyValley registry + objects ──────
+  private buildCozy() {
+    const { cols, rows, groundLayer, decoLayer, flatDeco, objects } = this.mapDef;
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        const { x, y } = cartToIso(col, row);
+
+        const g = groundLayer[row]?.[col] ?? -1;
+        if (g >= 0) this.stampTile(g, x, y, 0);
+
+        const d = decoLayer[row]?.[col] ?? -1;
+        // SOLID is collision-only (an object's footprint / a border) — no art.
+        if (d >= 0 && d !== SOLID) {
+          const depth = flatDeco.has(d) ? 0.5 : row + 1;
+          this.stampTile(d, x, y, depth);
+        }
+      }
+    }
+    for (const obj of objects ?? []) this.stampObject(obj);
+  }
+
+  // Resolve a cozy tile id to its sheet sub-rect and stamp one 16×16 cell.
+  private stampTile(id: number, wx: number, wy: number, depth: number) {
+    const src = TILE_SRC[id];
+    if (!src) return;
+    const frameKey = `${src.key}_t${id}`;
+    const texture = this.scene.textures.get(src.key);
+    if (!texture.has(frameKey)) {
+      texture.add(frameKey, 0, src.fx * SRC_TILE, src.fy * SRC_TILE, SRC_TILE, SRC_TILE);
+    }
+    const img = this.scene.add.image(wx, wy, src.key, frameKey).setOrigin(0, 0);
+    img.setScale(TILE_W / SRC_TILE, TILE_H / SRC_TILE);
+    img.setDepth(depth);
+    this.stamps.push(img);
+  }
+
+  // Stamp a free-standing multi-tile object (tree, house). Depth is its base
+  // row so players sort in front when below it and behind when above.
+  private stampObject(obj: MapObject) {
+    const { x, y } = cartToIso(obj.cx, obj.cy);
+    const frameKey = `${obj.key}_o${obj.sx}_${obj.sy}_${obj.w}_${obj.h}`;
+    const texture = this.scene.textures.get(obj.key);
+    if (!texture.has(frameKey)) {
+      texture.add(frameKey, 0, obj.sx, obj.sy, obj.w, obj.h);
+    }
+    const img = this.scene.add.image(x, y, obj.key, frameKey).setOrigin(0, 0);
+    img.setScale(TILE_W / SRC_TILE, TILE_H / SRC_TILE);
+    img.setDepth(obj.cy + obj.h / SRC_TILE);
+    this.stamps.push(img);
+  }
+
+  // ── Legacy maps (house interiors): single packed tileset by index ────────
+  private buildLegacy() {
+    const { cols, rows, tilesetKey, tilesetCols, groundLayer, decoLayer, flatDeco } = this.mapDef;
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        const { x, y } = cartToIso(col, row);
+
+        const gIdx = groundLayer[row]?.[col] ?? -1;
+        if (gIdx >= 0) this.stampLegacy(tilesetKey, gIdx, tilesetCols, x, y, 0);
+
+        const dIdx = decoLayer[row]?.[col] ?? -1;
+        if (dIdx >= 0) {
+          const depth = flatDeco.has(dIdx) ? 0.5 : row + 1;
+          this.stampLegacy(tilesetKey, dIdx, tilesetCols, x, y, depth);
+        }
+      }
+    }
+  }
+
+  private stampLegacy(
     textureKey: string,
     tileIndex: number,
     sheetCols: number,
@@ -77,7 +130,6 @@ export class IsoMap {
     img.setOrigin(0, 0);
     img.setDepth(depth);
     this.stamps.push(img);
-    return img;
   }
 
   get centre(): { x: number; y: number } {

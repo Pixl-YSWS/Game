@@ -18,6 +18,9 @@ import {
   clearSession,
   getCharIndex,
   setCharIndex,
+  getCustomSkin,
+  setCustomSkin,
+  clearCustomSkin,
 } from "../network/playerIdentity";
 import { loadSettings, getKeybinds } from "../data/Settings";
 import { UIScene } from "./UIScene";
@@ -107,6 +110,8 @@ export class WorldScene extends Phaser.Scene {
   // Our own appearance, from the server `init` (used when (re)building the
   // local avatar on every world switch).
   private myChar = 0;
+  // Our custom hand-drawn skin (encoded), or undefined when using the preset.
+  private mySkin?: string;
   private myVerified = false;
   // Optional world to request right after connecting, set from the main menu.
   private initialWorld?: WorldRef;
@@ -409,6 +414,10 @@ export class WorldScene extends Phaser.Scene {
   private interactWithNpc(npc: Npc) {
     if (npc.def.shopId) {
       this.scene.launch("ShopScene", { from: "WorldScene" });
+      return;
+    }
+    if (npc.def.panel === "projects") {
+      this.scene.launch("ProjectsScene", { from: "WorldScene" });
       return;
     }
     this.ui?.openDialogue(npc.def.name, npc.def.dialogue);
@@ -723,7 +732,7 @@ export class WorldScene extends Phaser.Scene {
     const { cx, cy } = state.spawn;
     this.localPlayer = new Player(
       this,
-      { id: gameSocket.id ?? "local", cx, cy, name: "You", char: this.myChar, verified: this.myVerified },
+      { id: gameSocket.id ?? "local", cx, cy, name: "You", char: this.myChar, skin: this.mySkin, verified: this.myVerified },
       true,
       this.mapDef,
     );
@@ -843,20 +852,32 @@ export class WorldScene extends Phaser.Scene {
       this.returnToLogin("This account was opened somewhere else.", false);
     });
 
-    gameSocket.on("init", ({ accountId, name, char, verified, role, world, pixels, unread, dayCycle }) => {
+    gameSocket.on("init", ({ accountId, name, char, skin, verified, role, world, pixels, unread, dayCycle }) => {
       setAccountId(accountId);
       setAccountName(name);
       this.myVerified = verified;
       this.ui?.setAdminRole(role);
-      // Reconcile any locally-chosen skin with the server's stored one: if the
-      // player picked one before connecting, push it; otherwise adopt theirs.
-      const pref = getCharIndex();
-      if (pref >= 0 && pref !== char) {
-        this.myChar = pref;
-        gameSocket.setCharacter(pref);
+      // Reconcile appearance with the server's stored one. A locally-drawn
+      // custom skin wins (push it); otherwise adopt the server's skin if it has
+      // one; otherwise fall back to preset reconciliation.
+      const localSkin = getCustomSkin();
+      this.myChar = char;
+      if (localSkin && localSkin !== skin) {
+        this.mySkin = localSkin;
+        gameSocket.setSkin(localSkin);
+      } else if (skin) {
+        this.mySkin = skin;
+        setCustomSkin(skin);
       } else {
-        this.myChar = char;
-        setCharIndex(char);
+        this.mySkin = undefined;
+        clearCustomSkin();
+        const pref = getCharIndex();
+        if (pref >= 0 && pref !== char) {
+          this.myChar = pref;
+          gameSocket.setCharacter(pref);
+        } else {
+          setCharIndex(char);
+        }
       }
       this.ui?.setWallet(pixels, 0);
       this.ui?.setUnread(unread);
@@ -925,9 +946,12 @@ export class WorldScene extends Phaser.Scene {
       if (id !== gameSocket.id) playUiSound(this, "sfx-switch", 0.25);
     });
 
-    gameSocket.on("player:appearance", ({ id, char }) => {
-      this.playerBySocketId(id)?.setCharacter(char);
-      if (id === gameSocket.id) this.myChar = char;
+    gameSocket.on("player:appearance", ({ id, char, skin }) => {
+      this.playerBySocketId(id)?.setAppearance(char, skin);
+      if (id === gameSocket.id) {
+        this.myChar = char;
+        this.mySkin = skin;
+      }
     });
 
     gameSocket.on("world:denied", ({ reason }) => {

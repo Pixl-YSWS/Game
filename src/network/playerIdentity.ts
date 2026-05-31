@@ -52,3 +52,21 @@ export function getCharIndex(): number {
 export function setCharIndex(index: number) {
   localStorage.setItem(CHAR_KEY, String(index));
 }
+
+// Custom hand-drawn skin (encoded pixel grid; see src/world/skin.ts). null
+// means "no custom skin — use the preset". Mirrors the server-side account
+// value so the editor can preload the last drawing and the avatar applies it
+// before the socket `init` round-trips.
+const SKIN_KEY = "pixlgame:skin";
+
+export function getCustomSkin(): string | null {
+  return localStorage.getItem(SKIN_KEY);
+}
+
+export function setCustomSkin(skin: string) {
+  localStorage.setItem(SKIN_KEY, skin);
+}
+
+export function clearCustomSkin() {
+  localStorage.removeItem(SKIN_KEY);
+}

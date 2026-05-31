@@ -16,11 +16,15 @@ import type {
   Notification,
   HouseObject,
   InventoryEntry,
+  Project,
 } from "../src/types/network.ts";
 import { generateMap } from "../src/world/MapGen.ts";
 import { makeHouseInterior } from "../src/world/HouseMap.ts";
 import { getShopItem } from "../src/shop/catalog.ts";
 import { setupAuth, type Account } from "./auth.ts";
+import { fetchHackatimeStats, invalidateHackatime, secondsByProject } from "./hackatime.ts";
+import { setupHackatimeAuth } from "./hackatimeAuth.ts";
+import { isValidSkin } from "../src/world/cozyChar.ts";
 import { censorChat } from "./moderation.ts";
 import type { ModRole, AdminEntry, MuteEntry, AdminPlayerEntry } from "../src/types/network.ts";
 
@@ -153,6 +157,68 @@ function houseObjectsList(): HouseObject[] {
   return selectHouseObjects.all().map(r => ({
     id: r.id, itemId: r.item_id, cx: r.cx, cy: r.cy, placedBy: r.placed_by,
   }));
+}
+
+// Per-player shipped projects (YSWS submissions). `hackatime_project` maps a
+// card to a Hackatime project name so its tracked coding time can be merged in.
+db.run(`
+  CREATE TABLE IF NOT EXISTS projects (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    owner_id          TEXT NOT NULL,
+    name              TEXT NOT NULL,
+    description       TEXT,
+    repo_url          TEXT,
+    demo_url          TEXT,
+    hackatime_project TEXT,
+    created_at        INTEGER NOT NULL,
+    updated_at        INTEGER NOT NULL
+  )
+`);
+db.run("CREATE INDEX IF NOT EXISTS idx_projects_owner ON projects(owner_id)");
+
+interface ProjectRow {
+  id: number;
+  name: string;
+  description: string | null;
+  repo_url: string | null;
+  demo_url: string | null;
+  hackatime_project: string | null;
+  created_at: number;
+  updated_at: number;
+}
+const selectProjects = db.query<ProjectRow, [string]>(
+  "SELECT id, name, description, repo_url, demo_url, hackatime_project, created_at, updated_at " +
+    "FROM projects WHERE owner_id = ? ORDER BY created_at DESC",
+);
+const countProjects = db.query<{ n: number }, [string]>(
+  "SELECT COUNT(*) AS n FROM projects WHERE owner_id = ?",
+);
+const insertProject = db.query<{ id: number }, [string, string, string | null, string | null, string | null, string | null, number, number]>(
+  "INSERT INTO projects (owner_id, name, description, repo_url, demo_url, hackatime_project, created_at, updated_at) " +
+    "VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
+);
+const selectProjectOwner = db.query<{ owner_id: string }, [number]>(
+  "SELECT owner_id FROM projects WHERE id = ?",
+);
+const updateProject = db.query<unknown, [string, string | null, string | null, string | null, string | null, number, number]>(
+  "UPDATE projects SET name = ?, description = ?, repo_url = ?, demo_url = ?, hackatime_project = ?, updated_at = ? WHERE id = ?",
+);
+const deleteProject = db.query<unknown, [number]>("DELETE FROM projects WHERE id = ?");
+
+// Max projects per player — keeps one account from filling the table.
+const MAX_PROJECTS = 50;
+
+function projectFromRow(r: ProjectRow): Project {
+  return {
+    id: r.id,
+    name: r.name,
+    description: r.description ?? undefined,
+    repoUrl: r.repo_url ?? undefined,
+    demoUrl: r.demo_url ?? undefined,
+    hackatimeProject: r.hackatime_project ?? undefined,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  };
 }
 
 // Remembered position PER world, so leaving and returning to your village
@@ -470,6 +536,10 @@ app.get("/", (_req, res) => {
 // compile); here we just mount its router.
 app.use("/auth", auth.router);
 
+// Hackatime OAuth routes (/hackatime/connect, /hackatime/callback). Attaches a
+// Hackatime access token to the calling game account (via its session token).
+app.use("/hackatime", setupHackatimeAuth(auth));
+
 // Villages this account may visit (from accepted invites), for the main menu.
 // Token-gated like /auth/verify since the menu has no live socket yet.
 app.get("/api/villages", (req, res) => {
@@ -507,11 +577,13 @@ io.use((socket, next) => {
   next();
 });
 
-interface ServerPlayerState extends PlayerState {
+interface ServerPlayerState extends Omit<PlayerState, "skin"> {
   playerId: string;
   world: WorldRef;
   pixels: number;
   char: number;
+  // Custom hand-drawn skin (encoded), or null to use the `char` preset.
+  skin: string | null;
   verified: boolean;
 }
 const players = new Map<string, ServerPlayerState>();
@@ -584,7 +656,9 @@ function peersInWorld(world: WorldRef, exceptSocketId?: string): PlayerState[] {
   const target = worldKey(world);
   return [...players.values()]
     .filter(p => worldKey(p.world) === target && p.id !== exceptSocketId)
-    .map(({ id, cx, cy, name, char, verified }) => ({ id, cx, cy, name, char, verified }));
+    .map(({ id, cx, cy, name, char, skin, verified }) => ({
+      id, cx, cy, name, char, skin: skin ?? undefined, verified,
+    }));
 }
 
 function worldStateFor(state: ServerPlayerState): WorldState {
@@ -637,7 +711,7 @@ function switchWorld(socket: import("socket.io").Socket<ClientToServerEvents, Se
   if (next.kind === "house") socket.emit("house:objects", { objects: houseObjectsList() });
   socket.to(newRoom).emit("player:join", {
     id: state.id, cx: state.cx, cy: state.cy, name: state.name,
-    char: state.char, verified: state.verified,
+    char: state.char, skin: state.skin ?? undefined, verified: state.verified,
   });
   // World switches are the natural rollback points — persist the NEW
   // world's record too so a crash mid-session never strands a player.
@@ -704,6 +778,7 @@ io.on("connection", (socket) => {
     cy,
     name: account.name,
     char: account.char,
+    skin: account.skin,
     verified: account.verified,
     world,
     pixels: saved?.pixels ?? 0,
@@ -720,6 +795,7 @@ io.on("connection", (socket) => {
     accountId: playerId,
     name: account.name,
     char: state.char,
+    skin: state.skin ?? undefined,
     verified: state.verified,
     role: roleOf(playerId),
     world: worldStateFor(state),
@@ -733,7 +809,7 @@ io.on("connection", (socket) => {
   });
   socket.to(room).emit("player:join", {
     id: state.id, cx: state.cx, cy: state.cy, name: state.name,
-    char: state.char, verified: state.verified,
+    char: state.char, skin: state.skin ?? undefined, verified: state.verified,
   });
   if (world.kind === "house") socket.emit("house:objects", { objects: houseObjectsList() });
 
@@ -1096,8 +1172,155 @@ io.on("connection", (socket) => {
     if (!player) return;
     if (!Number.isInteger(char) || char < 0 || char >= 5) return;
     player.char = char;
+    // Picking a preset clears any custom skin (auth.setChar nulls it in the DB).
+    player.skin = null;
     auth.setChar(player.playerId, char);
     io.to(worldKey(player.world)).emit("player:appearance", { id: socket.id, char });
+  });
+
+  // Set a custom hand-drawn skin. Validated against the shared codec so a
+  // client can't store/broadcast junk; takes precedence over the preset.
+  socket.on("character:setSkin", ({ skin }) => {
+    const player = players.get(socket.id);
+    if (!player) return;
+    if (!isValidSkin(skin)) return;
+    player.skin = skin;
+    auth.setSkin(player.playerId, skin);
+    io.to(worldKey(player.world)).emit("player:appearance", {
+      id: socket.id, char: player.char, skin,
+    });
+  });
+
+  // ── Projects + Hackatime ─────────────────────────────────────────────
+
+  // Sanitise a free-text field: strip control chars, trim, cap length.
+  const cleanText = (v: unknown, max: number): string =>
+    typeof v === "string" ? v.replace(/[\x00-\x1f]/g, " ").trim().slice(0, max) : "";
+  // A URL field is optional — keep it only if it parses as http(s).
+  const cleanUrl = (v: unknown): string | null => {
+    const s = cleanText(v, 300);
+    if (!s) return null;
+    try {
+      const u = new URL(s);
+      return u.protocol === "http:" || u.protocol === "https:" ? s : null;
+    } catch {
+      return null;
+    }
+  };
+
+  // Send the caller's projects, merging in Hackatime time for mapped projects.
+  const sendProjectList = async (player: ServerPlayerState) => {
+    const rows = selectProjects.all(player.playerId);
+    const items: Project[] = rows.map(projectFromRow);
+    const key = auth.getHackatimeKey(player.playerId);
+    let connected = false;
+    if (key) {
+      const stats = await fetchHackatimeStats(key);
+      connected = stats.connected;
+      if (stats.connected) {
+        const byName = secondsByProject(stats);
+        for (const it of items) {
+          if (it.hackatimeProject) it.seconds = byName.get(it.hackatimeProject) ?? 0;
+        }
+      }
+    }
+    socket.emit("project:list", { items, hackatimeConnected: connected });
+  };
+
+  socket.on("project:list", () => {
+    const player = players.get(socket.id);
+    if (!player) return;
+    void sendProjectList(player);
+  });
+
+  socket.on("project:create", (payload) => {
+    const player = players.get(socket.id);
+    if (!player) return;
+    const name = cleanText(payload?.name, 60);
+    if (!name) {
+      socket.emit("project:result", { ok: false, reason: "name_required" });
+      return;
+    }
+    if ((countProjects.get(player.playerId)?.n ?? 0) >= MAX_PROJECTS) {
+      socket.emit("project:result", { ok: false, reason: "too_many" });
+      return;
+    }
+    const now = Date.now();
+    const row = insertProject.get(
+      player.playerId,
+      name,
+      cleanText(payload?.description, 500) || null,
+      cleanUrl(payload?.repoUrl),
+      cleanUrl(payload?.demoUrl),
+      cleanText(payload?.hackatimeProject, 100) || null,
+      now,
+      now,
+    );
+    socket.emit("project:result", { ok: true, id: row?.id });
+    void sendProjectList(player);
+  });
+
+  socket.on("project:update", (payload) => {
+    const player = players.get(socket.id);
+    if (!player) return;
+    const id = payload?.id;
+    if (!Number.isInteger(id)) return;
+    const owner = selectProjectOwner.get(id)?.owner_id;
+    if (owner !== player.playerId) {
+      socket.emit("project:result", { ok: false, reason: "not_found" });
+      return;
+    }
+    const name = cleanText(payload?.name, 60);
+    if (!name) {
+      socket.emit("project:result", { ok: false, reason: "name_required" });
+      return;
+    }
+    updateProject.run(
+      name,
+      cleanText(payload?.description, 500) || null,
+      cleanUrl(payload?.repoUrl),
+      cleanUrl(payload?.demoUrl),
+      cleanText(payload?.hackatimeProject, 100) || null,
+      Date.now(),
+      id,
+    );
+    socket.emit("project:result", { ok: true, id });
+    void sendProjectList(player);
+  });
+
+  socket.on("project:delete", ({ id }) => {
+    const player = players.get(socket.id);
+    if (!player) return;
+    if (!Number.isInteger(id)) return;
+    const owner = selectProjectOwner.get(id)?.owner_id;
+    if (owner !== player.playerId) return;
+    deleteProject.run(id);
+    socket.emit("project:result", { ok: true, id });
+    void sendProjectList(player);
+  });
+
+  socket.on("hackatime:setKey", ({ key }) => {
+    const player = players.get(socket.id);
+    if (!player) return;
+    const clean = typeof key === "string" ? key.trim().slice(0, 200) : "";
+    const prev = auth.getHackatimeKey(player.playerId);
+    invalidateHackatime(prev);
+    invalidateHackatime(clean);
+    auth.setHackatimeKey(player.playerId, clean);
+    // Validate against Hackatime + return fresh stats so the UI updates.
+    void fetchHackatimeStats(clean || null).then((stats) => {
+      socket.emit("hackatime:stats", stats);
+      // Time mappings may now resolve — refresh the project list too.
+      const p = players.get(socket.id);
+      if (p) void sendProjectList(p);
+    });
+  });
+
+  socket.on("hackatime:stats", () => {
+    const player = players.get(socket.id);
+    if (!player) return;
+    const key = auth.getHackatimeKey(player.playerId);
+    void fetchHackatimeStats(key).then((stats) => socket.emit("hackatime:stats", stats));
   });
 
   socket.on("disconnect", () => {

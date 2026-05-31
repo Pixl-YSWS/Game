@@ -13,6 +13,7 @@ import { InvitePanelScene } from "./scenes/InvitePanelScene";
 import { InboxScene } from "./scenes/InboxScene";
 import { InventoryScene } from "./scenes/InventoryScene";
 import { AdminScene } from "./scenes/AdminScene";
+import { ProjectsScene } from "./scenes/ProjectsScene";
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
   width: 1280,
@@ -24,7 +25,7 @@ const config: Phaser.Types.Core.GameConfig = {
   roundPixels: true,
   // DOM container lets us overlay a real <input> for the chat box.
   dom: { createContainer: true },
-  scene: [BootScene, LoginScene, MainMenuScene, WorldScene, InteriorScene, UIScene, ShopScene, PauseScene, SettingsScene, CharacterScene, InvitePanelScene, InboxScene, InventoryScene, AdminScene],
+  scene: [BootScene, LoginScene, MainMenuScene, WorldScene, InteriorScene, UIScene, ShopScene, PauseScene, SettingsScene, CharacterScene, InvitePanelScene, InboxScene, InventoryScene, AdminScene, ProjectsScene],
   scale: {
     // RESIZE makes the canvas exactly match the window so there are no black
     // letterbox bars — the game fills the whole screen (and refills on

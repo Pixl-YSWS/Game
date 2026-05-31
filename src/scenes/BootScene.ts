@@ -1,5 +1,7 @@
 import Phaser from "phaser";
 import { FONT, UI_ATLAS, EMOTE_ATLAS } from "../ui/theme";
+import { characterSheetSpecs, FRAME_W, FRAME_H } from "../world/cozyChar";
+import { worldSheetSpecs } from "../world/tileset";
 import { SERVER_URL } from "../network/socket";
 import {
   getSessionToken,
@@ -46,12 +48,20 @@ export class BootScene extends Phaser.Scene {
       label.destroy();
     });
 
-    // ── Kenney tiny-town — main city tileset ───────────────────────
-    // 12 columns × 11 rows, 16×16 px tiles
+    // ── Kenney tiny-town — kept for the legacy house interiors ─────
+    // (The cozy overworld uses the CozyValley sheets below; interiors still
+    // slice this single packed tileset by index.)
     this.load.image(
       "tiles-town",
       "assets/kenney_tiny-town/Tilemap/tilemap_packed.png",
     );
+
+    // ── CozyValley / CozyTowns world art ───────────────────────────
+    // Loaded as plain images; IsoMap slices 16×16 ground/deco frames and
+    // multi-tile object rects (trees, houses) out of them. See world/tileset.ts.
+    for (const spec of worldSheetSpecs) {
+      this.load.image(spec.key, spec.path);
+    }
 
     // ── Kenney tiny-battle — kept for future use ───────────────────
     this.load.image(
@@ -59,14 +69,13 @@ export class BootScene extends Phaser.Scene {
       "assets/kenney_tiny-battle/Tilemap/tilemap_packed.png",
     );
 
-    // ── Player avatars — Kenney pixel-platformer characters ────────
-    // 9 cols × 3 rows of 24×24 tiles with 1px spacing. The top row holds the
-    // colourful humanoid characters we map players onto.
-    this.load.spritesheet(
-      "chars",
-      "assets/kenney_pixel-platformer/Tilemap/tilemap-characters.png",
-      { frameWidth: 24, frameHeight: 24, spacing: 1 },
-    );
+    // ── Player avatars — CozyValley layered paper-doll ─────────────
+    // Each customisable layer (body/hands, hair, top, bottom) is a 32×32
+    // animation sheet sharing one frame grid; the Player stacks them. See
+    // src/world/cozyChar.ts for the frame/animation definitions.
+    for (const spec of characterSheetSpecs()) {
+      this.load.spritesheet(spec.key, spec.path, { frameWidth: FRAME_W, frameHeight: FRAME_H });
+    }
 
     // ── Kenney "UI pack — adventure" ──────────────────────────────
     // One spritesheet atlas skins the whole HUD: panels, buttons, checkboxes,

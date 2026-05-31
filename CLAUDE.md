@@ -36,7 +36,7 @@ Login is mandatory — the socket server rejects any connection without a valid 
 
 Flow: client → `GET /auth/login` → Hack Club consent → `GET /auth/callback` (token exchange + `/api/v1/me`) → redirect to client with `#auth=<sessionToken>`. The client stores the token in localStorage and sends it in the socket handshake; `server/auth.ts` verifies it. Accounts + tokens live in the SQLite `accounts` table (`server/data/players.db`). Game state (seed, position, pixels) is keyed by the Hack Club account id. One active session per account — a new login kicks the old one.
 
-Optional env vars: `ADMIN_SECRET` (required to use the admin CLI), `ADMIN_EMAILS` (comma-separated emails that get root admin on first login), `DATA_DIR` (SQLite path for prod/Railway), `ALLOW_GUEST`, `OPENWORLD_VERIFIED_ONLY`.
+Optional env vars: `ADMIN_SECRET` (required to use the admin CLI), `ADMIN_EMAILS` (comma-separated emails that get root admin on first login), `DATA_DIR` (SQLite path for prod/Railway), `ALLOW_GUEST`, `OPENWORLD_VERIFIED_ONLY`. Hackatime OAuth needs `HACKATIME_CLIENT_ID` / `HACKATIME_CLIENT_SECRET` (register an app at https://hackatime.hackclub.com/oauth/applications with redirect URI `<server>/hackatime/callback` and scope `read`); `HACKATIME_REDIRECT_URI`, `HACKATIME_API_BASE`, `HACKATIME_SCOPES` are optional overrides.
 
 ## Architecture
 
@@ -94,6 +94,16 @@ Key socket events (see `src/types/network.ts` for full typed interface): `init`,
 ### Economy & shop
 
 Players earn "pixels" (in-game currency). `src/shop/catalog.ts` exports `SHOP_CATALOG` (shared by client and server so prices can't be spoofed). Items with `placeable: true` can be placed as furniture in the shared house via `house:place` / `house:remove`. Pixel balances live in the SQLite `pixels` table; `wallet:update` syncs the client.
+
+### Projects & Hackatime (YSWS)
+
+Players ship "projects" (YSWS submissions) via the **Pip** NPC (a `panel: "projects"` villager added in `MapGen.ts`; `WorldScene.interactWithNpc` routes it to `ProjectsScene`). Projects live in the SQLite `projects` table (owner, name, description, repo/demo URLs, optional `hackatime_project` mapping) and are managed over `project:list/create/update/delete` (all server-validated). `ProjectsScene` (`src/scenes/ProjectsScene.ts`) is a single modal with three modes — list, create/edit form (DOM inputs), and a Hackatime connect panel.
+
+Hackatime (Hack Club's coding-time tracker) is connected per-player via **its own OAuth 2.0** (`server/hackatimeAuth.ts`, mounted at `/hackatime`). The client opens `/hackatime/connect?token=<session>` in a popup; the server verifies the game session, redirects to Hackatime's consent screen, exchanges the code at `/oauth/token`, and stores the resulting access token on the account (`accounts.hackatime_key` — the column now holds an OAuth Bearer token, not a pasted key). The popup's success page `postMessage`s the game, which refreshes stats. `server/hackatime.ts` reads `/api/v1/authenticated/projects` with the token (cached 60s, fails soft); `sendProjectList` merges each project's tracked seconds in by its mapped Hackatime project name. Socket events: `hackatime:setKey` (empty string disconnects) / `hackatime:stats`.
+
+### Custom character skins
+
+Beyond the 5 preset skins (`CHAR_BASES`), players can draw a 16×16 avatar in `SkinEditorScene` (launched from the "Draw your own" button in `CharacterScene`). The skin is encoded by a compact, Phaser-free codec (`src/world/skin.ts` — also imported by the server for validation), rendered to a Phaser texture by `src/world/skinTexture.ts` (client only), persisted on the account (`accounts.custom_skin`), and broadcast via `player:appearance` (which now carries an optional `skin`). A custom skin overrides the `char` preset; picking a preset clears it. `Player.setAppearance(char, skin?)` is the single entry point for applying either.
 
 ### Audio
 

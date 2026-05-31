@@ -156,6 +156,44 @@ class GameSocket {
     this.socket?.emit("character:set", { char });
   }
 
+  // Set a custom hand-drawn skin (encoded pixel grid; see src/world/skin.ts).
+  setSkin(skin: string) {
+    this.socket?.emit("character:setSkin", { skin });
+  }
+
+  // ── Projects + Hackatime ────────────────────────────────────────
+  requestProjects() {
+    this.socket?.emit("project:list");
+  }
+  createProject(payload: {
+    name: string;
+    description?: string;
+    repoUrl?: string;
+    demoUrl?: string;
+    hackatimeProject?: string;
+  }) {
+    this.socket?.emit("project:create", payload);
+  }
+  updateProject(payload: {
+    id: number;
+    name: string;
+    description?: string;
+    repoUrl?: string;
+    demoUrl?: string;
+    hackatimeProject?: string;
+  }) {
+    this.socket?.emit("project:update", payload);
+  }
+  deleteProject(id: number) {
+    this.socket?.emit("project:delete", { id });
+  }
+  setHackatimeKey(key: string) {
+    this.socket?.emit("hackatime:setKey", { key });
+  }
+  requestHackatimeStats() {
+    this.socket?.emit("hackatime:stats");
+  }
+
   // Send a persistent village invite to an account.
   sendInvite(toAccountId: string) {
     this.socket?.emit("invite:send", { toAccountId });

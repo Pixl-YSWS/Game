@@ -33,6 +33,9 @@ export interface Account {
   email: string | null;
   slackId: string | null;
   char: number;
+  // Custom hand-drawn skin (encoded pixel grid), or null to use the `char`
+  // preset. Takes precedence over `char` when present.
+  skin: string | null;
   verified: boolean;
 }
 
@@ -91,8 +94,14 @@ export interface AuthModule {
   router: express.Router;
   /** Resolve a session token to its account, or null if invalid/expired. */
   verifySession(token: string): Account | null;
-  /** Persist a player's chosen character skin. */
+  /** Persist a player's chosen preset character skin (clears any custom skin). */
   setChar(accountId: string, char: number): void;
+  /** Persist a player's custom hand-drawn skin (encoded pixel grid). */
+  setSkin(accountId: string, skin: string): void;
+  /** Persist (or clear, with "") a player's Hackatime API key. */
+  setHackatimeKey(accountId: string, key: string): void;
+  /** Read a player's stored Hackatime API key, or null if none. */
+  getHackatimeKey(accountId: string): string | null;
 }
 
 export function setupAuth(db: Database): AuthModule {
@@ -118,6 +127,8 @@ export function setupAuth(db: Database): AuthModule {
   for (const sql of [
     "ALTER TABLE accounts ADD COLUMN char_index INTEGER",
     "ALTER TABLE accounts ADD COLUMN verification_status TEXT",
+    "ALTER TABLE accounts ADD COLUMN custom_skin TEXT",
+    "ALTER TABLE accounts ADD COLUMN hackatime_key TEXT",
   ]) {
     try { db.run(sql); }
     catch (e: any) { if (!/duplicate column name/i.test(String(e?.message))) throw e; }
@@ -144,8 +155,18 @@ export function setupAuth(db: Database): AuthModule {
       updated_at = excluded.updated_at
   `);
 
+  // Picking a preset also clears any custom skin so the preset takes effect.
   const updateChar = db.query(
-    `UPDATE accounts SET char_index = ?, updated_at = ? WHERE account_id = ?`,
+    `UPDATE accounts SET char_index = ?, custom_skin = NULL, updated_at = ? WHERE account_id = ?`,
+  );
+  const updateSkin = db.query(
+    `UPDATE accounts SET custom_skin = ?, updated_at = ? WHERE account_id = ?`,
+  );
+  const updateHackatimeKey = db.query(
+    `UPDATE accounts SET hackatime_key = ?, updated_at = ? WHERE account_id = ?`,
+  );
+  const selectHackatimeKey = db.query<{ hackatime_key: string | null }, [string]>(
+    `SELECT hackatime_key FROM accounts WHERE account_id = ?`,
   );
 
   // Slide a session's expiry forward (sliding-window auth — see verifySession).
@@ -161,12 +182,13 @@ export function setupAuth(db: Database): AuthModule {
       slack_id: string | null;
       session_expires_at: number;
       char_index: number | null;
+      custom_skin: string | null;
       verification_status: string | null;
     },
     [string]
   >(
     `SELECT account_id, name, email, slack_id, session_expires_at,
-            char_index, verification_status
+            char_index, custom_skin, verification_status
      FROM accounts WHERE session_token = ?`,
   );
 
@@ -334,6 +356,7 @@ export function setupAuth(db: Database): AuthModule {
       email: row.email,
       slackId: row.slack_id,
       char: row.char_index ?? defaultCharIndex(row.account_id),
+      skin: row.custom_skin ?? null,
       verified: row.verification_status === "verified",
     };
   }
@@ -343,5 +366,17 @@ export function setupAuth(db: Database): AuthModule {
     updateChar.run(char, Date.now(), accountId);
   }
 
-  return { router, verifySession, setChar };
+  function setSkin(accountId: string, skin: string) {
+    updateSkin.run(skin, Date.now(), accountId);
+  }
+
+  function setHackatimeKey(accountId: string, key: string) {
+    updateHackatimeKey.run(key.length > 0 ? key : null, Date.now(), accountId);
+  }
+
+  function getHackatimeKey(accountId: string): string | null {
+    return selectHackatimeKey.get(accountId)?.hackatime_key ?? null;
+  }
+
+  return { router, verifySession, setChar, setSkin, setHackatimeKey, getHackatimeKey };
 }

@@ -1,21 +1,36 @@
 import Phaser from "phaser";
-import { Button, panel, closeButton, fitModal } from "../ui/UIKit";
-import { FONT, FONT_TITLE, COLORS } from "../ui/theme";
-import { CHAR_BASES } from "../entities/Player";
-import { getCharIndex, setCharIndex } from "../network/playerIdentity";
+import { makeMenuButton, type MenuButton } from "../utils/MenuButton";
+import { FONT, FONT_TITLE, FONT_NARROW, COLORS } from "../ui/theme";
+import { panel, closeButton, fitModal } from "../ui/UIKit";
+import { getCustomSkin, setCustomSkin } from "../network/playerIdentity";
 import { gameSocket } from "../network/socket";
+import { CozyAvatar } from "../entities/CozyAvatar";
+import {
+  type Outfit,
+  PRESET_OUTFITS,
+  decodeOutfit,
+  encodeOutfit,
+  clampOutfit,
+  NUM_BODY,
+  NUM_HAIR,
+  NUM_TOP,
+  NUM_BOTTOM,
+} from "../world/cozyChar";
 
 interface CharInit {
   from?: string;
 }
 
-// Overlay scene to pick your character skin. Saved locally + pushed to the
-// server (which persists it on your account and tells other players).
+// Outfit customiser: assemble a CozyValley character from body tone + hair +
+// top + bottom, with a live animated preview. The chosen outfit is encoded into
+// the account `skin` string and pushed via character:setSkin (same plumbing the
+// old pixel skins used), so it persists and shows to everyone.
 export class CharacterScene extends Phaser.Scene {
   private fromKey?: string;
-  private selected = 0;
-  private highlight?: Phaser.GameObjects.Rectangle;
-  private slots: { x: number; y: number }[] = [];
+  private outfit: Outfit = { ...PRESET_OUTFITS[0] };
+  private preview?: CozyAvatar;
+  private valueLabels: Partial<Record<keyof Outfit, Phaser.GameObjects.Text>> = {};
+  private steppers: MenuButton[] = [];
 
   constructor() {
     super({ key: "CharacterScene" });
@@ -23,81 +38,122 @@ export class CharacterScene extends Phaser.Scene {
 
   init(data: CharInit) {
     this.fromKey = data?.from;
+    const existing = getCustomSkin();
+    this.outfit = (existing && decodeOutfit(existing)) || { ...PRESET_OUTFITS[0] };
   }
 
   create() {
     if (this.fromKey) this.scene.pause(this.fromKey);
     this.events.once("shutdown", () => {
       if (this.fromKey) this.scene.resume(this.fromKey);
+      this.preview?.destroy();
     });
 
     const W = this.scale.width;
     const H = this.scale.height;
-
     this.add.zone(0, 0, W, H).setOrigin(0).setInteractive();
 
-    const panelW = 480;
-    const panelH = 260;
+    const panelW = 540;
+    const panelH = 380;
+    const px = (W - panelW) / 2;
+    const py = (H - panelH) / 2;
     panel(this, W / 2, H / 2, panelW, panelH, "ui-panel-dark");
-    closeButton(this, W / 2 + panelW / 2 - 26, H / 2 - panelH / 2 + 24, () => this.scene.stop());
+    closeButton(this, px + panelW - 26, py + 24, () => this.scene.stop());
     fitModal(this, panelW, panelH);
 
     this.add
-      .text(W / 2, H / 2 - 92, "CHOOSE YOUR LOOK", {
-        fontFamily: FONT_TITLE,
-        fontSize: "18px",
-        color: "#f0a500",
-      })
+      .text(W / 2, py + 30, "CUSTOMISE YOUR LOOK", { fontFamily: FONT_TITLE, fontSize: "18px", color: "#f0a500" })
       .setOrigin(0.5);
 
-    this.selected = getCharIndex();
-    if (this.selected < 0 || this.selected >= CHAR_BASES.length) this.selected = 0;
-
-    // Row of character previews.
-    const n = CHAR_BASES.length;
-    const gap = 76;
-    const startX = W / 2 - ((n - 1) * gap) / 2;
-    const rowY = H / 2 - 6;
-
-    this.highlight = this.add
-      .rectangle(startX, rowY, 60, 70, 0xffd166, 0.18)
-      .setStrokeStyle(2, 0xffd166, 0.9);
-
-    CHAR_BASES.forEach((frame, i) => {
-      const x = startX + i * gap;
-      this.slots.push({ x, y: rowY });
-      this.add
-        .image(x, rowY, "chars", frame)
-        .setScale(2.4)
-        .setInteractive({ cursor: "pointer" })
-        .on("pointerdown", () => this.select(i));
-    });
-
+    // ── Live preview (left) ───────────────────────────────────────────
+    const previewX = px + 120;
+    const previewY = py + panelH / 2 + 10;
     this.add
-      .text(W / 2, H / 2 + 48, "Click a character to pick it", {
-        fontFamily: FONT,
-        fontSize: "9px",
-        color: COLORS.textDim,
-      })
-      .setOrigin(0.5);
+      .rectangle(previewX, previewY - 4, 150, 200, 0x000000, 0.22)
+      .setStrokeStyle(1, 0xffffff, 0.12);
+    this.add.ellipse(previewX, previewY + 78, 70, 26, 0x000000, 0.25);
+    this.preview = new CozyAvatar(this, this.outfit);
+    this.preview.setPosition(previewX, previewY + 80).setScale(4);
+    this.preview.setAnim("idle", "down", false);
 
-    new Button(this, W / 2, H / 2 + 92, "DONE", {
+    // ── Steppers (right) ──────────────────────────────────────────────
+    const rowX = px + 250;
+    const rowW = panelW - (rowX - px) - 30;
+    let y = py + 78;
+    const rowGap = 52;
+    this.buildStepper("Skin", "body", 1, NUM_BODY, rowX, y, rowW);
+    y += rowGap;
+    this.buildStepper("Hair", "hair", 0, NUM_HAIR, rowX, y, rowW);
+    y += rowGap;
+    this.buildStepper("Top", "top", 1, NUM_TOP, rowX, y, rowW);
+    y += rowGap;
+    this.buildStepper("Bottom", "bottom", 1, NUM_BOTTOM, rowX, y, rowW);
+
+    // ── Footer ────────────────────────────────────────────────────────
+    makeMenuButton(this, px + 120, py + panelH - 32, "RANDOM", {
+      width: 150,
+      height: 38,
+      variant: "grey",
+      onClick: () => this.randomise(),
+    });
+    makeMenuButton(this, W / 2 + 130, py + panelH - 32, "DONE", {
       width: 200,
-      height: 48,
+      height: 42,
       onClick: () => this.scene.stop(),
     });
 
-    this.select(this.selected);
-
+    this.refresh();
     this.input.keyboard?.on("keydown-ESC", () => this.scene.stop());
   }
 
-  private select(i: number) {
-    this.selected = i;
-    const slot = this.slots[i];
-    if (this.highlight && slot) this.highlight.setPosition(slot.x, slot.y);
-    setCharIndex(i);
-    // Apply live if we're already in a game; otherwise it syncs on next connect.
-    if (gameSocket.connected) gameSocket.setCharacter(i);
+  private buildStepper(
+    label: string,
+    key: keyof Outfit,
+    min: number,
+    max: number,
+    x: number,
+    y: number,
+    w: number,
+  ) {
+    this.add.text(x, y - 16, label, { fontFamily: FONT_NARROW, fontSize: "13px", color: COLORS.textDim }).setOrigin(0, 0.5);
+    const cycle = (delta: number) => {
+      const span = max - min + 1;
+      this.outfit[key] = min + (((this.outfit[key] - min + delta) % span) + span) % span;
+      this.apply();
+    };
+    this.steppers.push(
+      makeMenuButton(this, x + 16, y + 12, "<", { width: 34, height: 32, variant: "grey", onClick: () => cycle(-1) }),
+    );
+    this.valueLabels[key] = this.add
+      .text(x + w / 2, y + 12, "", { fontFamily: FONT, fontSize: "13px", color: "#ffffff" })
+      .setOrigin(0.5);
+    this.steppers.push(
+      makeMenuButton(this, x + w - 16, y + 12, ">", { width: 34, height: 32, variant: "grey", onClick: () => cycle(1) }),
+    );
+  }
+
+  private randomise() {
+    const r = (n: number, from = 1) => from + Math.floor(Math.random() * (n - from + 1));
+    this.outfit = { body: r(NUM_BODY), hair: r(NUM_HAIR, 0), top: r(NUM_TOP), bottom: r(NUM_BOTTOM) };
+    this.apply();
+  }
+
+  // Update the labels + preview from the current outfit (no network push).
+  private refresh() {
+    this.outfit = clampOutfit(this.outfit);
+    this.valueLabels.body?.setText(`${this.outfit.body} / ${NUM_BODY}`);
+    this.valueLabels.hair?.setText(this.outfit.hair === 0 ? "none" : `${this.outfit.hair} / ${NUM_HAIR}`);
+    this.valueLabels.top?.setText(`${this.outfit.top} / ${NUM_TOP}`);
+    this.valueLabels.bottom?.setText(`${this.outfit.bottom} / ${NUM_BOTTOM}`);
+    this.preview?.setOutfit(this.outfit);
+    this.preview?.setAnim("idle", "down", false);
+  }
+
+  // Update visuals AND push the new look to the server / local storage live.
+  private apply() {
+    this.refresh();
+    const encoded = encodeOutfit(this.outfit);
+    setCustomSkin(encoded);
+    if (gameSocket.connected) gameSocket.setSkin(encoded);
   }
 }
