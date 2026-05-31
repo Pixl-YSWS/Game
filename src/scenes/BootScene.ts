@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import { FONT, UI_ATLAS, EMOTE_ATLAS } from "../ui/theme";
-import { characterSheetSpecs, FRAME_W, FRAME_H } from "../world/cozyChar";
+import { characterSheetSpecs, npcCharSheetSpecs, FRAME_W, FRAME_H } from "../world/cozyChar";
 import { worldSheetSpecs } from "../world/tileset";
 import { SERVER_URL } from "../network/socket";
 import {
@@ -74,6 +74,13 @@ export class BootScene extends Phaser.Scene {
     // animation sheet sharing one frame grid; the Player stacks them. See
     // src/world/cozyChar.ts for the frame/animation definitions.
     for (const spec of characterSheetSpecs()) {
+      this.load.spritesheet(spec.key, spec.path, { frameWidth: FRAME_W, frameHeight: FRAME_H });
+    }
+
+    // ── NPC avatars — CozyValley pre-assembled characters ─────────
+    // Single-sprite composite characters so NPCs look distinct from
+    // player paper-dolls. Same 5×18 frame grid as the layered sheets.
+    for (const spec of npcCharSheetSpecs()) {
       this.load.spritesheet(spec.key, spec.path, { frameWidth: FRAME_W, frameHeight: FRAME_H });
     }
 

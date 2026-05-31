@@ -105,6 +105,21 @@ export const texHair = (n: number) => `cv-hair-${n}`;
 export const texTop = (n: number) => `cv-top-${n}`;
 export const texBottom = (n: number) => `cv-bottom-${n}`;
 
+// ── Pre-assembled NPC character spritesheets ────────────────────────────
+// 9 pre-made composite character sheets from CozyValley Premium, same
+// 32×32 grid / animation layout as the layered system but baked into a
+// single sprite. Used by NPCs for a quick distinct look.
+export const NPC_CHARS = 9;
+const NPC_CHAR_DIR = "assets/CozyValley_Premium_1.3/CozyValley_Premium_1.3/Characters/-- Pre-assembled Characters";
+export const texNpcChar = (n: number) => `cv-npc-${n}`;
+export function npcCharSheetSpecs(): SheetSpec[] {
+  const specs: SheetSpec[] = [];
+  for (let n = 1; n <= NPC_CHARS; n++) {
+    specs.push({ key: texNpcChar(n), path: `${NPC_CHAR_DIR}/char${n}.png` });
+  }
+  return specs;
+}
+
 // Asset files to load, paired with their texture key. Consumed by BootScene.
 const BASE_DIR = "assets/CozyValley_Basic_1.0/CozyValley_Basic_1.0/Characters";
 export interface SheetSpec { key: string; path: string }
