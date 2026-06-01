@@ -326,7 +326,7 @@ Please check the [open issues](https://github.com/Pixl-YSWS/Game/issues) before 
 
 ## License
 
-Distributed under the ? License. See [`LICENSE`](LICENSE) for more information.
+Distributed under the MIT License. See [`LICENSE`](LICENSE) for more information.
 
 ---
 
