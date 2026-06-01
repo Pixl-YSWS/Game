@@ -23,6 +23,7 @@ import {
   cowObject,
   cowSolidCells,
   chickenObject,
+  sharkObject,
   fenceObject,
   FENCE,
   grassPatchObject,
@@ -254,6 +255,9 @@ export function generateVillage(): MapDef {
   placeCow("lie", 22, 16);
   objects.push(chickenObject(21, 14));
   objects.push(chickenObject(24, 16));
+
+  objects.push(sharkObject(14, 20));
+  objects.push(sharkObject(18, 20));
 
   const canPlaceTree = (c: number, r: number) => {
     for (const [cc, rr] of [

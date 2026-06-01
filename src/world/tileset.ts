@@ -13,6 +13,7 @@ export const TS = {
   cow: "cv-cow",
   chicken: "cv-chicken",
   beach: "cv-beach",
+  fish: "cv-fish",
 } as const;
 
 const PV = "assets/CozyValley_Premium_1.3/CozyValley_Premium_1.3";
@@ -37,6 +38,7 @@ export const worldSheetSpecs: SheetSpec[] = [
   { key: TS.cow, path: `${PV}/Animals/Cow/Cow_brownwhite.png` },
   { key: TS.chicken, path: `${PV}/Animals/Chicken/Chicken_brown.png` },
   { key: TS.beach, path: `${P}/Beach.png` },
+  { key: TS.fish, path: `${PV}/Animals/Fish/Fish_big.png` },
 ];
 
 export const GRASS = 1;
@@ -283,4 +285,22 @@ export function fenceObject(
   cy: number,
 ): MapObject {
   return { key: TS.fence, sx: part.sx, sy: part.sy, w: 16, h: 16, cx, cy };
+}
+
+const SHARK_SWIM: { sx: number; sy: number }[] = [
+  { sx: 64, sy: 0 },
+  { sx: 0, sy: 16 },
+];
+export function sharkObject(cx: number, cy: number): MapObject {
+  return {
+    key: TS.fish,
+    sx: 64,
+    sy: 0,
+    w: 32,
+    h: 16,
+    cx,
+    cy,
+    frames: SHARK_SWIM.map((f) => ({ sx: f.sx, sy: f.sy })),
+    fps: 4,
+  };
 }

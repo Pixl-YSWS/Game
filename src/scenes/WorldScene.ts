@@ -3,6 +3,7 @@ import { IsoMap } from "../world/IsoMap";
 import { Player } from "../entities/Player";
 import { Npc } from "../entities/Npc";
 import { Animal } from "../entities/Animal";
+import { Shark } from "../entities/Shark";
 import type { PlayerState, WorldRef, WorldState } from "../types/network";
 import type { MapDef, MapObject } from "../types/map";
 import { generateMap, generateVillage } from "../world/MapGen";
@@ -86,6 +87,7 @@ export class WorldScene extends Phaser.Scene {
   private portalTween?: Phaser.Tweens.Tween;
 
   private animals: Animal[] = [];
+  private sharks: Shark[] = [];
 
   private npcs: Npc[] = [];
 
@@ -182,6 +184,7 @@ export class WorldScene extends Phaser.Scene {
       this.cancelPlacement();
       this.clearNpcs();
       this.clearAnimals();
+      this.clearSharks();
       this.clearConnError();
       this.ui?.closeDialogue();
       this.scale.off("resize", this.onResize, this);
@@ -587,6 +590,34 @@ export class WorldScene extends Phaser.Scene {
     this.animals.length = 0;
   }
 
+  private extractSharks(): MapObject[] {
+    const sharks: MapObject[] = [];
+    if (!this.mapDef?.objects) return sharks;
+    const rest: MapObject[] = [];
+    for (const obj of this.mapDef.objects) {
+      if (Shark.isShark(obj.key)) {
+        sharks.push(obj);
+      } else {
+        rest.push(obj);
+      }
+    }
+    this.mapDef.objects = rest;
+    return sharks;
+  }
+
+  private rebuildSharks(objs: MapObject[]) {
+    this.clearSharks();
+    if (!this.mapDef) return;
+    for (const obj of objs) {
+      this.sharks.push(new Shark(this, obj, this.mapDef));
+    }
+  }
+
+  private clearSharks() {
+    for (const s of this.sharks) s.destroy();
+    this.sharks.length = 0;
+  }
+
   private refreshNpcPrompt() {
     if (!this.localPlayer) return;
     if (this.ui?.isDialogueOpen) {
@@ -759,6 +790,7 @@ export class WorldScene extends Phaser.Scene {
     this.clearPortal();
     this.clearHouseObjects();
     this.clearAnimals();
+    this.clearSharks();
     this.cancelPlacement();
 
     this.mapDef =
@@ -774,6 +806,7 @@ export class WorldScene extends Phaser.Scene {
               portal: "spawn",
             });
     const animalObjects = this.extractAnimals();
+    const sharkObjects = this.extractSharks();
     this.isoMap = new IsoMap(this, this.mapDef);
     this.isoMap.build();
     if (state.world.kind !== "house") this.buildOcean();
@@ -781,6 +814,7 @@ export class WorldScene extends Phaser.Scene {
     this.rebuildPortal();
     this.rebuildNpcs();
     this.rebuildAnimals(animalObjects);
+    this.rebuildSharks(sharkObjects);
     this.ui?.closeDialogue();
 
     const cam = this.cameras.main;
