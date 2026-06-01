@@ -83,9 +83,7 @@ export class ProjectsScene extends Phaser.Scene {
       window.removeEventListener("message", this.onPopupMessage);
       try {
         this.oauthPopup?.close();
-      } catch {
-        /* ignore */
-      }
+      } catch {}
       this.clearBody();
     });
 

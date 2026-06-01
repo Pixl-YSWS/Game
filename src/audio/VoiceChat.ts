@@ -11,9 +11,7 @@ function pickMime(): string {
   for (const c of candidates) {
     try {
       if (MediaRecorder.isTypeSupported(c)) return c;
-    } catch {
-      /* ignore */
-    }
+    } catch {}
   }
   return "";
 }
@@ -92,9 +90,7 @@ class VoiceChat {
     this.segTimer = undefined;
     try {
       this.recorder?.stop();
-    } catch {
-      /* already stopped */
-    }
+    } catch {}
     this.recorder = undefined;
     this.stream?.getTracks().forEach((t) => t.stop());
     this.stream = undefined;
@@ -138,9 +134,7 @@ class VoiceChat {
       if (this.enabled) this.recordSegment();
       try {
         recorder.stop();
-      } catch {
-        /* ignore */
-      }
+      } catch {}
     }, VoiceChat.SEGMENT_MS);
   }
 
@@ -151,9 +145,7 @@ class VoiceChat {
     try {
       const buf = await blob.arrayBuffer();
       this.sender?.(buf, blob.type || "audio/webm");
-    } catch {
-      /* ignore */
-    }
+    } catch {}
   }
 
   private ensureCtx(): AudioContext | undefined {
@@ -206,9 +198,7 @@ class VoiceChat {
     this.nextTime.clear();
     try {
       void this.ctx?.close();
-    } catch {
-      /* ignore */
-    }
+    } catch {}
     this.ctx = undefined;
     this.gain = undefined;
     this.comp = undefined;

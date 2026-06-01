@@ -1,10 +1,17 @@
-// MOSTLY WRITTEN BY CLAUDE
-// MAP STUFF IS MOSTLY WRITTEN BY CLAUDE
-
 import Phaser from "phaser";
 import { cartToIso, TILE_W, TILE_H } from "../utils/IsoUtils";
 import type { MapDef, MapObject } from "../types/map";
-import { TILE_SRC, SOLID, PATH, GRASS, GRASS_DARK, WATER, TS } from "./tileset";
+import {
+  TILE_SRC,
+  SOLID,
+  PATH,
+  GRASS,
+  GRASS_DARK,
+  WATER,
+  TS,
+  sandFrame,
+  SAND_FRINGE,
+} from "./tileset";
 
 const SRC_TILE = 16;
 
