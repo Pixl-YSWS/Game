@@ -10,11 +10,8 @@ interface InboxInit {
   from: string;
 }
 
-const VISIBLE = 5; // notification cards shown at once
+const VISIBLE = 5;
 
-// Overlay panel showing the persistent notification inbox. Pending village
-// invites can be accepted (granting access to that village) or declined;
-// accepted invites get a quick "VISIT" shortcut into the village.
 export class InboxScene extends Phaser.Scene {
   private fromKey = "WorldScene";
   private items: Notification[] = [];
@@ -55,7 +52,11 @@ export class InboxScene extends Phaser.Scene {
     fitModal(this, panelW, panelH);
 
     this.add
-      .text(W / 2, py + 28, "NOTIFICATIONS", { fontFamily: FONT_TITLE, fontSize: "18px", color: "#f0a500" })
+      .text(W / 2, py + 28, "NOTIFICATIONS", {
+        fontFamily: FONT_TITLE,
+        fontSize: "18px",
+        color: "#f0a500",
+      })
       .setOrigin(0.5);
 
     this.listX = px + 28;
@@ -63,7 +64,11 @@ export class InboxScene extends Phaser.Scene {
     this.listW = panelW - 56;
 
     this.emptyText = this.add
-      .text(W / 2, this.listY + 80, "Loading…", { fontFamily: FONT_NARROW, fontSize: "14px", color: COLORS.textDim })
+      .text(W / 2, this.listY + 80, "Loading…", {
+        fontFamily: FONT_NARROW,
+        fontSize: "14px",
+        color: COLORS.textDim,
+      })
       .setOrigin(0.5);
 
     makeMenuButton(this, W / 2, py + panelH - 38, "CLOSE", {
@@ -71,11 +76,18 @@ export class InboxScene extends Phaser.Scene {
       onClick: () => this.scene.stop(),
     });
 
-    this.input.on("wheel", (_p: unknown, _o: unknown, _dx: number, dy: number) => {
-      const max = Math.max(0, this.items.length - VISIBLE);
-      this.scroll = Phaser.Math.Clamp(this.scroll + (dy > 0 ? 1 : -1), 0, max);
-      this.render();
-    });
+    this.input.on(
+      "wheel",
+      (_p: unknown, _o: unknown, _dx: number, dy: number) => {
+        const max = Math.max(0, this.items.length - VISIBLE);
+        this.scroll = Phaser.Math.Clamp(
+          this.scroll + (dy > 0 ? 1 : -1),
+          0,
+          max,
+        );
+        this.render();
+      },
+    );
     this.input.keyboard?.on("keydown-ESC", () => this.scene.stop());
 
     gameSocket.on("notify:list", this.onList);
@@ -85,12 +97,11 @@ export class InboxScene extends Phaser.Scene {
 
   private onList = ({ items }: { items: Notification[]; unread: number }) => {
     this.items = items;
-    // Listing marks everything read server-side — clear the HUD badge too.
+
     (this.scene.get("UIScene") as UIScene | undefined)?.setUnread(0);
     this.render();
   };
 
-  // A notification can land while the inbox is open — prepend it live.
   private onNew = ({ item }: { item: Notification }) => {
     this.items.unshift(item);
     (this.scene.get("UIScene") as UIScene | undefined)?.setUnread(0);
@@ -101,9 +112,9 @@ export class InboxScene extends Phaser.Scene {
     for (const c of this.cards) c.destroy();
     this.cards.length = 0;
 
-    this.emptyText?.setVisible(this.items.length === 0).setText(
-      this.items.length === 0 ? "No notifications yet" : "",
-    );
+    this.emptyText
+      ?.setVisible(this.items.length === 0)
+      .setText(this.items.length === 0 ? "No notifications yet" : "");
 
     const cardH = 72;
     const slice = this.items.slice(this.scroll, this.scroll + VISIBLE);
@@ -130,26 +141,31 @@ export class InboxScene extends Phaser.Scene {
     });
   }
 
-  // Right-aligned action area for a card, depending on the item's status.
   private addActions(item: Notification, rightX: number, cy: number) {
     if (item.status === "pending" && item.type === "village_invite") {
       const accept = makeMenuButton(this, rightX - 50, cy - 18, "ACCEPT", {
-        width: 100, height: 30,
+        width: 100,
+        height: 30,
         onClick: () => this.respond(item, true),
       });
       const decline = makeMenuButton(this, rightX - 50, cy + 18, "DECLINE", {
-        width: 100, height: 30, variant: "grey",
+        width: 100,
+        height: 30,
+        variant: "grey",
         onClick: () => this.respond(item, false),
       });
       this.cards.push(accept.container, decline.container);
       return;
     }
     if (item.status === "accepted" && item.type === "village_invite") {
-      // Accepted: offer a quick jump into that village.
       const visit = makeMenuButton(this, rightX - 50, cy, "VISIT", {
-        width: 100, height: 32,
+        width: 100,
+        height: 32,
         onClick: () => {
-          gameSocket.enterWorld({ kind: "village", ownerPlayerId: item.fromId });
+          gameSocket.enterWorld({
+            kind: "village",
+            ownerPlayerId: item.fromId,
+          });
           this.scene.stop();
         },
       });

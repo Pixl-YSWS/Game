@@ -2,22 +2,13 @@ import Phaser from "phaser";
 import { FONT, COLORS, CURSORS, UI_ATLAS, uiFrame } from "./theme";
 import { loadSettings } from "../data/Settings";
 
-// Small widget library skinned with the Kenney "UI pack — adventure". Every
-// sprite lives in one atlas (key `UI_ATLAS`); logical "ui-*" names resolve to
-// atlas frames via `uiFrame()`. Everything here is plain Phaser GameObjects so
-// it drops into any scene (menus, HUD, chat).
-
-/** Play a UI sound, swallowing the "audio not unlocked yet" errors. */
 export function playUiSound(scene: Phaser.Scene, key: string, volume = 0.4) {
   try {
     if (scene.sound.locked || !loadSettings().soundEnabled) return;
     scene.sound.play(key, { volume });
-  } catch {
-    /* audio not ready — ignore */
-  }
+  } catch {}
 }
 
-/** An Image of a logical "ui-*" sprite from the adventure atlas. */
 export function uiImage(
   scene: Phaser.Scene,
   x: number,
@@ -27,7 +18,6 @@ export function uiImage(
   return scene.add.image(x, y, UI_ATLAS, uiFrame(name));
 }
 
-/** A NineSlice of a logical "ui-*" sprite from the adventure atlas. */
 export function uiNineslice(
   scene: Phaser.Scene,
   x: number,
@@ -40,11 +30,20 @@ export function uiNineslice(
   top = left,
   bottom = left,
 ): Phaser.GameObjects.NineSlice {
-  return scene.add.nineslice(x, y, UI_ATLAS, uiFrame(name), w, h, left, right, top, bottom);
+  return scene.add.nineslice(
+    x,
+    y,
+    UI_ATLAS,
+    uiFrame(name),
+    w,
+    h,
+    left,
+    right,
+    top,
+    bottom,
+  );
 }
 
-/** A nine-sliced panel. Defaults to the dark wood + metal-corner frame, whose
- *  decorative corners are ~18px → inset 20. */
 export function panel(
   scene: Phaser.Scene,
   x: number,
@@ -56,16 +55,6 @@ export function panel(
   return uiNineslice(scene, x, y, texture, w, h, 20, 20, 20, 20);
 }
 
-/**
- * Make a modal scene fit short / narrow viewports — chiefly mobile landscape,
- * where the screen is too short for a fixed-height panel. Scales the scene's
- * camera so a centred `contentW`×`contentH` panel always fits (never enlarging
- * past 1×), and dims the backdrop via the camera background (screen-space, so it
- * covers fully no matter the zoom). Re-fits on every resize / orientation flip.
- *
- * Scenes that call this should NOT draw their own full-screen dim rectangle —
- * the camera background handles it (a world-space dim would shrink under zoom).
- */
 export function fitModal(
   scene: Phaser.Scene,
   contentW: number,
@@ -74,8 +63,7 @@ export function fitModal(
   dimAlpha = 0.78,
 ): void {
   scene.cameras.main.setBackgroundColor(`rgba(0,0,0,${dimAlpha})`);
-  // The panel was laid out around this point; keep the camera centred on it so
-  // an orientation flip while open doesn't drag the panel off to one side.
+
   const cx0 = scene.scale.width / 2;
   const cy0 = scene.scale.height / 2;
   const apply = () => {
@@ -95,8 +83,6 @@ export interface CloseButtonOpts {
   grey?: boolean;
 }
 
-/** A ready-made ✕ close button (the adventure pack's `button_*_close` sprite).
- *  Drop it at the top-right corner of a panel and wire `onClick` to close. */
 export function closeButton(
   scene: Phaser.Scene,
   x: number,
@@ -105,9 +91,14 @@ export function closeButton(
   opts: CloseButtonOpts = {},
 ): Phaser.GameObjects.Image {
   const h = opts.size ?? 30;
-  const img = uiImage(scene, x, y, opts.grey ? "ui-btn-close-grey" : "ui-btn-close")
+  const img = uiImage(
+    scene,
+    x,
+    y,
+    opts.grey ? "ui-btn-close-grey" : "ui-btn-close",
+  )
     .setOrigin(0.5)
-    // The close sprite is 48×24 (2:1), so keep that ratio when sizing by height.
+
     .setDisplaySize(h * 2, h)
     .setInteractive({ cursor: CURSORS.pointer });
   img.on("pointerover", () => img.setTint(0xfff2cc));
@@ -149,13 +140,12 @@ export class Button extends Phaser.GameObjects.Container {
     const h = opts.height ?? 56;
     const tex = opts.variant === "grey" ? "ui-btn-grey" : "ui-btn";
 
-    // The adventure button sprite is 48×24 with ~8px rounded corners → inset 8.
     this.bg = uiNineslice(scene, 0, 0, tex, w, h, 8).setOrigin(0.5);
     this.label = scene.add
       .text(0, -2, text, {
         fontFamily: FONT,
         fontSize: `${opts.fontSize ?? 16}px`,
-        // Dark ink reads on the light parchment / slate adventure buttons.
+
         color: COLORS.textDark,
       })
       .setOrigin(0.5)
@@ -163,14 +153,9 @@ export class Button extends Phaser.GameObjects.Container {
 
     this.add([this.bg, this.label]);
     this.setSize(w, h);
-    // Input lives on the nineslice, not the container: a Container has no Origin
-    // component, so making it interactive feeds Phaser an undefined displayOrigin
-    // and the hit area shrinks to the centre. The nineslice's default hit area
-    // already spans its full size.
+
     this.bg.setInteractive({ cursor: CURSORS.pointer });
 
-    // No separate pressed sprite in this pack — show hover/press with a warm
-    // highlight / darkening tint plus a 1px label nudge.
     this.bg.on("pointerover", () => this.enabled && this.bg.setTint(0xfff2cc));
     this.bg.on("pointerout", () => {
       this.bg.clearTint();
@@ -215,7 +200,13 @@ export class Checkbox extends Phaser.GameObjects.Image {
     checked: boolean,
     onChange?: (v: boolean) => void,
   ) {
-    super(scene, x, y, UI_ATLAS, uiFrame(checked ? "ui-check-on" : "ui-check-off"));
+    super(
+      scene,
+      x,
+      y,
+      UI_ATLAS,
+      uiFrame(checked ? "ui-check-on" : "ui-check-off"),
+    );
     this.checked = checked;
     this.onChange = onChange;
     this.setOrigin(0.5).setDisplaySize(40, 40);
@@ -262,10 +253,24 @@ export class Slider extends Phaser.GameObjects.Container {
     this.val = Phaser.Math.Clamp(value, 0, 1);
     this.onChange = onChange;
 
-    const track = uiNineslice(scene, 0, 0, "ui-slide-track", width, 16, 7)
-      .setOrigin(0, 0.5);
-    this.fill = uiNineslice(scene, 0, 0, "ui-slide-fill", width * this.val, 16, 7)
-      .setOrigin(0, 0.5);
+    const track = uiNineslice(
+      scene,
+      0,
+      0,
+      "ui-slide-track",
+      width,
+      16,
+      7,
+    ).setOrigin(0, 0.5);
+    this.fill = uiNineslice(
+      scene,
+      0,
+      0,
+      "ui-slide-fill",
+      width * this.val,
+      16,
+      7,
+    ).setOrigin(0, 0.5);
     this.handle = uiImage(scene, width * this.val, 0, "ui-slide-handle")
       .setOrigin(0.5)
       .setDisplaySize(26, 26);

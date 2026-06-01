@@ -2,15 +2,16 @@ import Phaser from "phaser";
 import { Button, panel } from "../ui/UIKit";
 import { FONT, FONT_TITLE, COLORS } from "../ui/theme";
 import { SERVER_URL } from "../network/socket";
-import { setSessionToken, setAccountId, setAccountName } from "../network/playerIdentity";
+import {
+  setSessionToken,
+  setAccountId,
+  setAccountName,
+} from "../network/playerIdentity";
 
 interface LoginInit {
   message?: string;
 }
 
-// Gate scene: you cannot play without a Hack Club login. Clicking the button
-// sends the browser to the server's /auth/login, which kicks off the Hack
-// Club OAuth flow and redirects back with a session token in the URL hash.
 export class LoginScene extends Phaser.Scene {
   constructor() {
     super({ key: "LoginScene" });
@@ -25,7 +26,6 @@ export class LoginScene extends Phaser.Scene {
     const cy = H / 2;
     this.cameras.main.setBackgroundColor("#0d0d1a");
 
-    // Starfield.
     const stars = this.add.graphics();
     stars.fillStyle(0xffffff, 0.6);
     for (let i = 0; i < 80; i++) {
@@ -70,7 +70,6 @@ export class LoginScene extends Phaser.Scene {
       onClick: () => this.login(),
     });
 
-    // ── Guest section (testing) ────────────────────────────────────
     this.add
       .text(W / 2, cy - 18, "— or play as a guest —", {
         fontFamily: FONT,
@@ -79,9 +78,7 @@ export class LoginScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    const input = this.add
-      .dom(W / 2, cy + 22, "input")
-      .setOrigin(0.5);
+    const input = this.add.dom(W / 2, cy + 22, "input").setOrigin(0.5);
     this.guestInput = input.node as HTMLInputElement;
     this.guestInput.type = "text";
     this.guestInput.maxLength = 24;
@@ -97,9 +94,7 @@ export class LoginScene extends Phaser.Scene {
       borderRadius: "6px",
       outline: "none",
     } as Partial<CSSStyleDeclaration>);
-    // The width is set via CSS *after* creation, so Phaser's cached size (used
-    // to apply the origin-0.5 offset) is stale and the field renders off-centre.
-    // Re-measure now that the real width is in place.
+
     input.updateSize();
     this.guestInput.addEventListener("keydown", (e) => {
       e.stopPropagation();
@@ -113,7 +108,6 @@ export class LoginScene extends Phaser.Scene {
       onClick: () => this.joinAsGuest(),
     });
 
-    // Status / error line (also shows the optional incoming message).
     this.statusText = this.add
       .text(W / 2, cy + 134, data?.message ?? "", {
         fontFamily: FONT,
@@ -125,11 +119,16 @@ export class LoginScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     this.add
-      .text(W / 2, H - 16, "Hack Club login keeps your progress · guests are temporary", {
-        fontFamily: FONT,
-        fontSize: "9px",
-        color: "#555566",
-      })
+      .text(
+        W / 2,
+        H - 16,
+        "Hack Club login keeps your progress · guests are temporary",
+        {
+          fontFamily: FONT,
+          fontSize: "9px",
+          color: "#555566",
+        },
+      )
       .setOrigin(0.5, 1);
   }
 
@@ -146,10 +145,19 @@ export class LoginScene extends Phaser.Scene {
     }
     this.statusText?.setColor(COLORS.textDim).setText("Joining…");
     try {
-      const res = await fetch(`${SERVER_URL}/auth/guest?name=${encodeURIComponent(name)}`);
-      const data = (await res.json()) as { ok: boolean; token?: string; accountId?: string; name?: string };
+      const res = await fetch(
+        `${SERVER_URL}/auth/guest?name=${encodeURIComponent(name)}`,
+      );
+      const data = (await res.json()) as {
+        ok: boolean;
+        token?: string;
+        accountId?: string;
+        name?: string;
+      };
       if (!res.ok || !data.ok || !data.token) {
-        this.statusText?.setColor(COLORS.bad).setText("Guest login is disabled.");
+        this.statusText
+          ?.setColor(COLORS.bad)
+          .setText("Guest login is disabled.");
         return;
       }
       setSessionToken(data.token);
@@ -157,7 +165,9 @@ export class LoginScene extends Phaser.Scene {
       setAccountName(data.name ?? name);
       this.scene.start("MainMenuScene");
     } catch {
-      this.statusText?.setColor(COLORS.bad).setText("Can't reach the server. Is it running?");
+      this.statusText
+        ?.setColor(COLORS.bad)
+        .setText("Can't reach the server. Is it running?");
     }
   }
 }

@@ -1,27 +1,19 @@
-// Central place for fonts, colours and cursors so the whole game shares one
-// look. Body text uses the bundled Kenney Future family; only panel/scene
-// titles use the Pixelify Sans web font (loaded from index.html).
-
-/** Primary UI font (all-caps blocky). Used everywhere via Phaser text styles. */
 export const FONT = "Kenney Future";
-/** Condensed variant — handy for chat / dialogue where line length matters. */
+
 export const FONT_NARROW = "Kenney Future Narrow";
-/** Title font — Pixelify Sans. Reserved for scene/panel headings only. */
+
 export const FONT_TITLE = "Pixelify Sans";
-/** Chat / small-body font — Monocraft (a Minecraft look-alike), falling back
- *  to Pixelify Sans until Monocraft.ttf is added to public/assets/fonts.
- *  Used where the blocky all-caps Kenney font is too dense to read small. */
+
 export const FONT_CHAT = '"Monocraft", "Pixelify Sans", sans-serif';
 export const FONT_DIALOUG = '"Monocraft", "Pixelify Sans", sans-serif';
-/** System emoji font stack — for item glyphs (Kenney has no emoji coverage). */
+
 export const FONT_EMOJI =
   '"Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji", sans-serif';
 
-// Shared palette (hex strings for Phaser text, numbers for fills).
 export const COLORS = {
   text: "#ffffff",
   textDim: "#c9d4e3",
-  // Dark ink for labels that sit on the light parchment/slate adventure buttons.
+
   textDark: "#4a2f17",
   accent: "#ffd166",
   good: "#7bdc8b",
@@ -30,14 +22,8 @@ export const COLORS = {
   stroke: "#0a0f1c",
 } as const;
 
-// ── Kenney "UI pack — adventure" atlas ─────────────────────────────────────
-// The whole HUD (panels, buttons, checkboxes, slider, round mobile buttons,
-// close buttons) is skinned from this one spritesheet, loaded in BootScene.
 export const UI_ATLAS = "ui-adv";
 
-// Logical UI texture name → frame in the adventure spritesheet atlas. Code keeps
-// using the friendly "ui-*" names; `uiFrame()` resolves them to atlas frames so
-// the call sites never have to know the pack's odd "…img.png" frame naming.
 const UI_FRAME: Record<string, string> = {
   "ui-panel": "panel_brownimg.png",
   "ui-panel-dark": "panel_brown_dark_corners_aimg.png",
@@ -56,37 +42,26 @@ const UI_FRAME: Record<string, string> = {
   "ui-round-down": "round_brown_darkimg.png",
 };
 
-/** Resolve a logical "ui-*" name to its frame in the adventure atlas. */
 export function uiFrame(name: string): string {
   return UI_FRAME[name] ?? name;
 }
 
-// ── Kenney emote pack ──────────────────────────────────────────────────────
-// Player emotes are pixel sprites from this atlas (16×16 frames), loaded in
-// BootScene. See `src/ui/emotes.ts` for the key → frame table.
 export const EMOTE_ATLAS = "emotes";
 
 const CURSOR_BASE = "/assets/kenney_cursor-pixel-pack/Tiles";
 
-// How much to enlarge the 16×16 cursor art. CSS can't scale a cursor image,
-// so `buildCursors()` rasterises an upscaled copy to a data URL at boot.
 export const CURSOR_SCALE = 3;
 
-// Source art + hotspot (in native 16px pixels). `buildCursors` fills the
-// `css` strings with upscaled data URLs; until then these 16px fallbacks work.
 const CURSOR_SRC = {
   default: { file: "tile_0026.png", hotX: 1, hotY: 1, fallback: "auto" },
   pointer: { file: "tile_0137.png", hotX: 4, hotY: 1, fallback: "pointer" },
 } as const;
 
-// CSS cursor strings for Phaser's input system (mutated by buildCursors).
 export const CURSORS = {
   default: `url('${CURSOR_BASE}/${CURSOR_SRC.default.file}') 1 1, auto`,
   pointer: `url('${CURSOR_BASE}/${CURSOR_SRC.pointer.file}') 4 1, pointer`,
 };
 
-// Upscale one 16px cursor to a crisp (nearest-neighbour) data-URL cursor
-// string with a scale-adjusted hotspot.
 function upscaleCursor(
   src: { file: string; hotX: number; hotY: number; fallback: string },
   scale: number,
@@ -101,7 +76,7 @@ function upscaleCursor(
         c.height = img.height * scale;
         const ctx = c.getContext("2d");
         if (!ctx) return resolve(fallback);
-        ctx.imageSmoothingEnabled = false; // keep pixels crisp
+        ctx.imageSmoothingEnabled = false;
         ctx.drawImage(img, 0, 0, c.width, c.height);
         const url = c.toDataURL("image/png");
         resolve(
@@ -116,11 +91,6 @@ function upscaleCursor(
   });
 }
 
-/**
- * Rasterise enlarged cursors and apply them globally. Mutates CURSORS (so
- * Phaser hover cursors pick up the bigger pointer) and injects a stylesheet
- * setting the page/canvas default cursor. Call once before the game boots.
- */
 export async function buildCursors(scale = CURSOR_SCALE): Promise<void> {
   try {
     const [def, ptr] = await Promise.all([
@@ -130,22 +100,12 @@ export async function buildCursors(scale = CURSOR_SCALE): Promise<void> {
     CURSORS.default = def;
     CURSORS.pointer = ptr;
 
-    // Default cursor for the page + canvas. No !important so Phaser's inline
-    // hover cursor (the pointer) still wins when over an interactive object.
     const style = document.createElement("style");
     style.textContent = `body, #game-container canvas { cursor: ${def}; }`;
     document.head.appendChild(style);
-  } catch {
-    // Keep the 16px fallbacks.
-  }
+  } catch {}
 }
 
-/**
- * Load every UI font before the game boots so the very first text rendered
- * (the BootScene loading label) already uses them — otherwise Phaser caches
- * glyphs in the fallback font at the wrong metrics and centred text ends up
- * mis-aligned.
- */
 export async function preloadFonts(): Promise<void> {
   if (!("fonts" in document)) return;
   try {
@@ -154,15 +114,10 @@ export async function preloadFonts(): Promise<void> {
       (document as Document).fonts.load(`16px "${FONT_NARROW}"`),
       (document as Document).fonts.load(`400 16px "${FONT_TITLE}"`),
       (document as Document).fonts.load(`700 16px "${FONT_TITLE}"`),
-      // Await Monocraft too, so Phaser bakes chat text in it from the start
-      // (Phaser rasterises text once — a late load would leave already-created
-      // lines stuck in the fallback while the live DOM input shows Monocraft).
-      // `.catch` keeps a missing file from blocking the others.
+
       (document as Document).fonts.load(`16px "Monocraft"`).catch(() => {}),
     ]);
-    // Wait for any in-flight font loads kicked off by the stylesheet, too.
+
     await (document as Document).fonts.ready;
-  } catch {
-    // Non-fatal: text just falls back to a system font.
-  }
+  } catch {}
 }

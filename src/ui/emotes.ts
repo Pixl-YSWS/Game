@@ -1,8 +1,5 @@
 import { EMOTE_ATLAS } from "./theme";
 
-// Shared emote table. `key` must match the server's ALLOWED_EMOTES set; `frame`
-// is the sprite (in the Kenney emote-pack atlas, `EMOTE_ATLAS`) that pops in the
-// bubble above a player's head and fills the emote bar.
 export interface Emote {
   key: string;
   frame: string;
@@ -27,7 +24,6 @@ export const EMOTES: Emote[] = [
   { key: "dizzy", frame: "emote_swirl.png", label: "Dizzy" },
 ];
 
-// The handful shown directly on the HUD bar; the rest live in the expand popup.
 export const QUICK_EMOTES = EMOTES.slice(0, 5);
 
 /** All emote keys — the client/server allow-list is derived from this. */

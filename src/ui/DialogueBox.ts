@@ -8,10 +8,6 @@ interface DialogueState {
   index: number;
 }
 
-// Bottom-of-screen dialogue panel. Rendered as separate scene-level objects
-// (not in a Container) so they correctly inherit the `setScrollFactor(0)`
-// HUD behavior of the WorldScene — Containers reapply the camera zoom in a
-// way that pushes a 1280×720-positioned panel off-screen.
 export class DialogueBox {
   private state?: DialogueState;
   private bg: Phaser.GameObjects.NineSlice;
@@ -87,8 +83,6 @@ export class DialogueBox {
     this.setVisible(true);
   }
 
-  // Advance to the next line, or close if at the last line. Returns true if
-  // the box is still open after this call.
   advance(): boolean {
     if (!this.state) return false;
     this.state.index += 1;

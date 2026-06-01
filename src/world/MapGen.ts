@@ -1,3 +1,6 @@
+// MOSTLY WRITTEN BY CLAUDE
+// MAP STUFF IS MOSTLY WRITTEN BY CLAUDE
+
 import type { MapDef, NpcDef, MapObject } from "../types/map";
 import {
   GRASS,
@@ -25,7 +28,6 @@ import {
   grassPatchObject,
 } from "./tileset";
 
-// Mulberry32 — fast, good-quality seeded PRNG
 function seededRng(seed: number): () => number {
   let s = seed >>> 0;
   return () => {
@@ -41,33 +43,38 @@ function ri(rng: () => number, n: number): number {
 
 const COLS = 30;
 const ROWS = 22;
-const BORDER = 2; // solid forest band around the playable area
+const BORDER = 2;
 
-// Where houses can sit (top-left anchors), left→right across the upper area.
 const HOUSE_SLOTS = [
   { x: 4, y: 3 },
   { x: 12, y: 3 },
   { x: 20, y: 3 },
 ];
-const HOUSE_DOOR_ROW = 3 + HOUSE_H - 1; // bottom row of a house at y=3 → row 8
-const MAIN_PATH_ROW = HOUSE_DOOR_ROW + 2; // road running below the houses
+const HOUSE_DOOR_ROW = 3 + HOUSE_H - 1;
+const MAIN_PATH_ROW = HOUSE_DOOR_ROW + 2;
 
-// Build a cozy CozyValley village/town from a seed. Grass everywhere, a forest
-// border, a path network, a few houses (each a multi-tile object with a working
-// door), scattered flowers/rocks, villagers, and an optional world portal.
 export function generateMap(
   seed: number,
-  options: { houses?: boolean; sharedHouse?: boolean; portal?: "spawn" | "bottomRight" } = {},
+  options: {
+    houses?: boolean;
+    sharedHouse?: boolean;
+    portal?: "spawn" | "bottomRight";
+  } = {},
 ): MapDef {
   const { houses = true, sharedHouse = false, portal: portalKind } = options;
   const rng = seededRng(seed);
 
-  const ground: number[][] = Array.from({ length: ROWS }, () => new Array(COLS).fill(GRASS));
-  const deco: number[][] = Array.from({ length: ROWS }, () => new Array(COLS).fill(-1));
+  const ground: number[][] = Array.from({ length: ROWS }, () =>
+    new Array(COLS).fill(GRASS),
+  );
+  const deco: number[][] = Array.from({ length: ROWS }, () =>
+    new Array(COLS).fill(-1),
+  );
   const objects: MapObject[] = [];
   const doors: { cx: number; cy: number }[] = [];
 
-  const inB = (c: number, r: number) => c >= 0 && r >= 0 && c < COLS && r < ROWS;
+  const inB = (c: number, r: number) =>
+    c >= 0 && r >= 0 && c < COLS && r < ROWS;
   const setSolid = (c: number, r: number) => {
     if (inB(c, r)) deco[r][c] = SOLID;
   };
@@ -75,10 +82,10 @@ export function generateMap(
     if (inB(c, r) && deco[r][c] !== SOLID) ground[r][c] = PATH;
   };
 
-  // ── Forest border: solid 2-tile band, decorated with overhanging trees ──
   for (let r = 0; r < ROWS; r++) {
     for (let c = 0; c < COLS; c++) {
-      if (c < BORDER || c >= COLS - BORDER || r < BORDER || r >= ROWS - BORDER) setSolid(c, r);
+      if (c < BORDER || c >= COLS - BORDER || r < BORDER || r >= ROWS - BORDER)
+        setSolid(c, r);
     }
   }
   for (let c = 0; c < COLS - 1; c += 2) {
@@ -90,28 +97,28 @@ export function generateMap(
     objects.push(treeObject(ri(rng, 4), COLS - 2, r));
   }
 
-  // ── Houses ───────────────────────────────────────────────────────────
-  const slots = houses ? HOUSE_SLOTS : sharedHouse ? HOUSE_SLOTS.slice(0, 1) : [];
+  const slots = houses
+    ? HOUSE_SLOTS
+    : sharedHouse
+      ? HOUSE_SLOTS.slice(0, 1)
+      : [];
   slots.forEach((slot, i) => {
     objects.push(houseObject(i, slot.x, slot.y));
     for (const [c, r] of houseSolidCells(slot.x, slot.y)) setSolid(c, r);
     const door = houseDoorCells(slot.x, slot.y);
-    // The door cells are the walkable doorway (clear any solid we just set).
+
     for (const [c, r] of door) if (inB(c, r)) deco[r][c] = -1;
-    // Step-down path from the doorway to the main road so the door is reachable.
+
     const dc = door[0][0];
     for (let r = HOUSE_DOOR_ROW; r <= MAIN_PATH_ROW; r++) setPath(dc, r);
-    // Entering fires when you step onto the doorway tile.
+
     doors.push({ cx: door[0][0], cy: door[0][1] });
   });
 
-  // ── Path network ───────────────────────────────────────────────────────
-  // Main road below the houses, plus a lane down to the spawn.
   for (let c = BORDER; c < COLS - BORDER; c++) setPath(c, MAIN_PATH_ROW);
   const spawn = { cx: Math.floor(COLS / 2), cy: ROWS - 6 };
   for (let r = MAIN_PATH_ROW; r <= spawn.cy; r++) setPath(spawn.cx, r);
 
-  // ── Scatter flowers + rocks on open grass ──────────────────────────────
   const isOpenGrass = (c: number, r: number) =>
     inB(c, r) && ground[r][c] === GRASS && deco[r][c] === -1;
   for (let n = 0; n < 26; n++) {
@@ -122,7 +129,6 @@ export function generateMap(
     deco[r][c] = pool[ri(rng, pool.length)];
   }
 
-  // ── World-switch portal ────────────────────────────────────────────────
   const doorSet = new Set(doors.map((d) => `${d.cx},${d.cy}`));
   const walkable = (c: number, r: number) => {
     if (!inB(c, r) || doorSet.has(`${c},${r}`)) return false;
@@ -148,7 +154,7 @@ export function generateMap(
     cols: COLS,
     rows: ROWS,
     cozy: true,
-    tilesetKey: TS.terrain, // unused for cozy maps (registry-resolved)
+    tilesetKey: TS.terrain,
     tilesetCols: 16,
     groundLayer: ground,
     decoLayer: deco,
@@ -163,62 +169,56 @@ export function generateMap(
   };
 }
 
-// ── Fixed village ─────────────────────────────────────────────────────────
-// A single hand-authored island layout, identical for every player (the seed
-// is intentionally ignored — the seed plumbing still exists on the server so
-// per-player random villages can be switched back on later). Composition: a
-// water border with a sandy shore, a blue-roof house top-right, a red-roof
-// house bottom-left, a fenced chicken pen top-left, a dirt path network, a
-// little herd of cows + chickens, scattered trees, and a portal to the open
-// world.
 const V_COLS = 30;
 const V_ROWS = 22;
 
 export function generateVillage(): MapDef {
-  const ground: number[][] = Array.from({ length: V_ROWS }, () => new Array(V_COLS).fill(GRASS));
-  const deco: number[][] = Array.from({ length: V_ROWS }, () => new Array(V_COLS).fill(-1));
+  const ground: number[][] = Array.from({ length: V_ROWS }, () =>
+    new Array(V_COLS).fill(GRASS),
+  );
+  const deco: number[][] = Array.from({ length: V_ROWS }, () =>
+    new Array(V_COLS).fill(-1),
+  );
   const objects: MapObject[] = [];
   const doors: { cx: number; cy: number }[] = [];
-  // Deterministic RNG only for cosmetic flower/rock scatter — the structural
-  // layout below is fully fixed.
+
   const rng = seededRng(0x5eed1e);
 
-  const inB = (c: number, r: number) => c >= 0 && r >= 0 && c < V_COLS && r < V_ROWS;
+  const inB = (c: number, r: number) =>
+    c >= 0 && r >= 0 && c < V_COLS && r < V_ROWS;
   const setSolid = (c: number, r: number) => {
     if (inB(c, r)) deco[r][c] = SOLID;
   };
   const setPath = (c: number, r: number) => {
-    if (inB(c, r) && deco[r][c] !== SOLID && ground[r][c] !== WATER) ground[r][c] = PATH;
+    if (inB(c, r) && deco[r][c] !== SOLID && ground[r][c] !== WATER)
+      ground[r][c] = PATH;
   };
 
-  // ── Water border + sandy shore ─────────────────────────────────────────
-  // Ring distance from the nearest edge: 0–1 = water (impassable), 2 = shore.
   for (let r = 0; r < V_ROWS; r++) {
     for (let c = 0; c < V_COLS; c++) {
       const d = Math.min(c, r, V_COLS - 1 - c, V_ROWS - 1 - r);
       if (d < 2) ground[r][c] = WATER;
-      else if (d === 2) ground[r][c] = PATH; // shore (same tan tile as paths)
+      else if (d === 2) ground[r][c] = PATH;
     }
   }
 
-  // ── Houses ──────────────────────────────────────────────────────────────
   const placeHouse = (variant: number, x: number, y: number) => {
     objects.push(houseObject(variant, x, y));
     for (const [c, r] of houseSolidCells(x, y)) setSolid(c, r);
     const door = houseDoorCells(x, y);
     for (const [c, r] of door) {
-      if (inB(c, r)) deco[r][c] = -1; // doorway is walkable
+      if (inB(c, r)) deco[r][c] = -1;
       doors.push({ cx: c, cy: r });
     }
   };
-  placeHouse(0, 21, 3); // blue roof, top-right → door (23,8)/(24,8)
-  placeHouse(3, 4, 12); // red roof, bottom-left → door (6,17)/(7,17)
+  placeHouse(0, 21, 3);
+  placeHouse(3, 4, 12);
 
-  // ── Fenced chicken pen, top-left ────────────────────────────────────────
   const pen = { x0: 4, y0: 3, x1: 10, y1: 7 };
   for (let c = pen.x0; c <= pen.x1; c++) {
     const top = c === pen.x0 ? FENCE.TL : c === pen.x1 ? FENCE.TR : FENCE.TOP;
-    const bot = c === pen.x0 ? FENCE.BL : c === pen.x1 ? FENCE.BR : FENCE.BOTTOM;
+    const bot =
+      c === pen.x0 ? FENCE.BL : c === pen.x1 ? FENCE.BR : FENCE.BOTTOM;
     objects.push(fenceObject(top, c, pen.y0));
     objects.push(fenceObject(bot, c, pen.y1));
     setSolid(c, pen.y0);
@@ -230,36 +230,40 @@ export function generateVillage(): MapDef {
     setSolid(pen.x0, r);
     setSolid(pen.x1, r);
   }
-  objects.push(chickenObject(7, 5)); // a chicken pecking inside the pen
+  objects.push(chickenObject(7, 5));
 
-  // ── Dirt path ───────────────────────────────────────────────────────────
-  // A simple 2-tile-wide trail linking the two house doors. The organic edges
-  // come from the sand rendering (tufts), so the path itself stays tidy.
   const pathH = (c0: number, c1: number, r: number, w = 2) => {
-    for (let c = c0; c <= c1; c++) for (let dr = 0; dr < w; dr++) setPath(c, r + dr);
+    for (let c = c0; c <= c1; c++)
+      for (let dr = 0; dr < w; dr++) setPath(c, r + dr);
   };
   const pathV = (c: number, r0: number, r1: number, w = 2) => {
-    for (let r = r0; r <= r1; r++) for (let dc = 0; dc < w; dc++) setPath(c + dc, r);
+    for (let r = r0; r <= r1; r++)
+      for (let dc = 0; dc < w; dc++) setPath(c + dc, r);
   };
-  pathV(23, 9, 10); // blue house door (row 8) down to the main trail
-  pathH(10, 24, 10); // main east–west trail
-  pathV(10, 10, 18); // lane down the east side of the red house
-  pathH(6, 11, 18, 1); // along the bottom to the red house door
+  pathV(23, 9, 10);
+  pathH(10, 24, 10);
+  pathV(10, 10, 18);
+  pathH(6, 11, 18, 1);
 
-  // ── Animals ─────────────────────────────────────────────────────────────
   const placeCow = (anim: "idle" | "graze" | "lie", c: number, r: number) => {
     objects.push(cowObject(anim, c, r));
     for (const [cc, rr] of cowSolidCells(c, r)) setSolid(cc, rr);
   };
-  placeCow("graze", 17, 12); // grazing in the middle
-  placeCow("lie", 19, 15); // resting on the dark grass
+  placeCow("graze", 17, 12);
+  placeCow("lie", 19, 15);
   placeCow("lie", 22, 16);
   objects.push(chickenObject(21, 14));
   objects.push(chickenObject(24, 16));
 
-  // ── Trees ───────────────────────────────────────────────────────────────
   const canPlaceTree = (c: number, r: number) => {
-    for (const [cc, rr] of [[c, r], [c + 1, r], [c, r + 1], [c + 1, r + 1], [c, r + 2], [c + 1, r + 2]]) {
+    for (const [cc, rr] of [
+      [c, r],
+      [c + 1, r],
+      [c, r + 1],
+      [c + 1, r + 1],
+      [c, r + 2],
+      [c + 1, r + 2],
+    ]) {
       if (!inB(cc, rr)) return false;
       if (ground[rr][cc] === WATER) return false;
       const d = deco[rr][cc];
@@ -268,24 +272,37 @@ export function generateVillage(): MapDef {
     return true;
   };
   for (const [c, r, v] of [
-    [12, 3, 0], [19, 3, 1], [17, 5, 2], [25, 10, 3],
-    [14, 13, 0], [12, 10, 1], [25, 15, 2], [16, 16, 3],
+    [12, 3, 0],
+    [19, 3, 1],
+    [17, 5, 2],
+    [25, 10, 3],
+    [14, 13, 0],
+    [12, 10, 1],
+    [25, 15, 2],
+    [16, 16, 3],
   ] as const) {
     if (!canPlaceTree(c, r)) continue;
     objects.push(treeObject(v, c, r));
     for (const [cc, rr] of treeSolidCells(c, r)) setSolid(cc, rr);
   }
 
-  // ── Grass-patch decals: soft light blobs to break up the flat grass ──────
   for (const [c, r] of [
-    [13, 4], [8, 11], [16, 6], [3, 8], [20, 13], [14, 16], [24, 6], [19, 15],
+    [13, 4],
+    [8, 11],
+    [16, 6],
+    [3, 8],
+    [20, 13],
+    [14, 16],
+    [24, 6],
+    [19, 15],
   ] as const) {
     if (ground[r]?.[c] === GRASS) objects.push(grassPatchObject("light", c, r));
   }
 
-  // ── Cosmetic flower/rock scatter on open grass ──────────────────────────
   const isOpenGrass = (c: number, r: number) =>
-    inB(c, r) && (ground[r][c] === GRASS || ground[r][c] === GRASS_DARK) && deco[r][c] === -1;
+    inB(c, r) &&
+    (ground[r][c] === GRASS || ground[r][c] === GRASS_DARK) &&
+    deco[r][c] === -1;
   for (let n = 0; n < 22; n++) {
     const c = 3 + ri(rng, V_COLS - 6);
     const r = 3 + ri(rng, V_ROWS - 6);
@@ -294,7 +311,6 @@ export function generateVillage(): MapDef {
     deco[r][c] = pool[ri(rng, pool.length)];
   }
 
-  // ── Spawn, portal, villagers ────────────────────────────────────────────
   const spawn = { cx: 15, cy: 12 };
   const doorSet = new Set(doors.map((d) => `${d.cx},${d.cy}`));
   const walkable = (c: number, r: number) => {
@@ -303,20 +319,35 @@ export function generateVillage(): MapDef {
     const d = deco[r][c];
     return !(d >= 0 && SOLID_DECO.has(d));
   };
-  const portal = nearestWalkable({ cx: V_COLS - 4, cy: V_ROWS - 4 }, walkable, V_COLS, V_ROWS);
+  const portal = nearestWalkable(
+    { cx: V_COLS - 4, cy: V_ROWS - 4 },
+    walkable,
+    V_COLS,
+    V_ROWS,
+  );
 
-  // Villagers at fixed open tiles around spawn (clamped to walkable just in
-  // case), so the shop + projects NPCs are always reachable.
   const reserved = new Set<string>([`${spawn.cx},${spawn.cy}`]);
   if (portal) reserved.add(`${portal.cx},${portal.cy}`);
   const fixedSpots = [
-    { cx: 13, cy: 12 }, { cx: 17, cy: 11 }, { cx: 16, cy: 13 }, { cx: 14, cy: 14 },
+    { cx: 13, cy: 12 },
+    { cx: 17, cy: 11 },
+    { cx: 16, cy: 13 },
+    { cx: 14, cy: 14 },
   ];
   const npcs: NpcDef[] = [];
   VILLAGER_TEMPLATES.forEach((tpl, i) => {
     let spot = fixedSpots[i];
-    if (!spot || !walkable(spot.cx, spot.cy) || reserved.has(`${spot.cx},${spot.cy}`)) {
-      const found = nearestWalkable(spawn, (c, r) => walkable(c, r) && !reserved.has(`${c},${r}`), V_COLS, V_ROWS);
+    if (
+      !spot ||
+      !walkable(spot.cx, spot.cy) ||
+      reserved.has(`${spot.cx},${spot.cy}`)
+    ) {
+      const found = nearestWalkable(
+        spawn,
+        (c, r) => walkable(c, r) && !reserved.has(`${c},${r}`),
+        V_COLS,
+        V_ROWS,
+      );
       if (!found) return;
       spot = found;
     }
@@ -344,8 +375,6 @@ export function generateVillage(): MapDef {
   };
 }
 
-// Villager templates. `sprite` is legacy (NPCs now derive their CozyValley look
-// from their id); kept so existing NpcDef consumers still type-check.
 const VILLAGER_TEMPLATES: Omit<NpcDef, "cx" | "cy">[] = [
   {
     id: "villager_quill",
@@ -362,7 +391,10 @@ const VILLAGER_TEMPLATES: Omit<NpcDef, "cx" | "cy">[] = [
     id: "villager_mara",
     name: "Mara",
     sprite: 0,
-    dialogue: ["Watch your step around the houses.", "Some doors lead to places you've never been."],
+    dialogue: [
+      "Watch your step around the houses.",
+      "Some doors lead to places you've never been.",
+    ],
     reward: 3,
   },
   {
@@ -381,7 +413,6 @@ const VILLAGER_TEMPLATES: Omit<NpcDef, "cx" | "cy">[] = [
   },
 ];
 
-// Expanding-ring search outward from `anchor` for the first tile passing `ok`.
 function nearestWalkable(
   anchor: { cx: number; cy: number },
   ok: (c: number, r: number) => boolean,
@@ -402,7 +433,6 @@ function nearestWalkable(
   return undefined;
 }
 
-// Place villagers on open tiles a few steps out from spawn, deterministically.
 function placeVillagers(
   spawn: { cx: number; cy: number },
   walkable: (c: number, r: number) => boolean,

@@ -1,10 +1,21 @@
+// MOSTLY WRITTEN BY CLAUDE ;(
+// ik disappointing...
+
 const KEY = "pixlgame.settings.v1";
 
-// Rebindable actions. Movement defaults to WASD (arrow keys always work too as
-// fixed alternates). Stored as Phaser key-code names (e.g. "W", "SHIFT", "UP").
 export type ControlAction =
-  | "up" | "down" | "left" | "right" | "run"
-  | "interact" | "chat" | "players" | "invite" | "inbox" | "bag" | "talk";
+  | "up"
+  | "down"
+  | "left"
+  | "right"
+  | "run"
+  | "interact"
+  | "chat"
+  | "players"
+  | "invite"
+  | "inbox"
+  | "bag"
+  | "talk";
 
 export const DEFAULT_KEYBINDS: Record<ControlAction, string> = {
   up: "W",
@@ -18,14 +29,14 @@ export const DEFAULT_KEYBINDS: Record<ControlAction, string> = {
   invite: "I",
   inbox: "N",
   bag: "B",
-  // Hold to talk (push-to-talk voice chat).
+
   talk: "V",
 };
 
 export interface GameSettings {
   defaultZoom: number;
   soundEnabled: boolean;
-  // Push-to-talk voice chat: gates both the mic and hearing others.
+
   voiceEnabled: boolean;
   keybinds: Record<ControlAction, string>;
 }
@@ -45,8 +56,7 @@ export function loadSettings(): GameSettings {
     const raw = localStorage.getItem(KEY);
     if (raw) {
       const parsed = JSON.parse(raw) as Partial<GameSettings>;
-      // keybinds is nested, so merge it on top of the defaults explicitly
-      // (a plain spread would drop any actions added since the save).
+
       cached = {
         ...DEFAULTS,
         ...parsed,

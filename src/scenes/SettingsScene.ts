@@ -16,7 +16,6 @@ interface SettingsInit {
   from?: string;
 }
 
-// Remappable actions in display order (action → label).
 const REMAP_ROWS: [ControlAction, string][] = [
   ["up", "Move Up"],
   ["down", "Move Down"],
@@ -32,32 +31,56 @@ const REMAP_ROWS: [ControlAction, string][] = [
   ["talk", "Toggle Mic"],
 ];
 
-// Friendly display for a stored Phaser key-code name.
 export function prettyKey(name: string): string {
   const map: Record<string, string> = {
-    UP: "↑", DOWN: "↓", LEFT: "←", RIGHT: "→",
-    SHIFT: "Shift", SPACE: "Space", ENTER: "Enter", TAB: "Tab",
+    UP: "↑",
+    DOWN: "↓",
+    LEFT: "←",
+    RIGHT: "→",
+    SHIFT: "Shift",
+    SPACE: "Space",
+    ENTER: "Enter",
+    TAB: "Tab",
   };
   return map[name] ?? name;
 }
 
-// Map a raw keydown event to a storable Phaser key-code name, or null if it's
-// a key we don't allow binding to (modifiers alone, function keys, etc.).
 export function eventToKeyName(e: KeyboardEvent): string | null {
   if (e.key.length === 1 && /[a-z]/i.test(e.key)) return e.key.toUpperCase();
   if (e.key.length === 1 && /[0-9]/.test(e.key)) {
-    return ["ZERO", "ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT", "NINE"][+e.key];
+    return [
+      "ZERO",
+      "ONE",
+      "TWO",
+      "THREE",
+      "FOUR",
+      "FIVE",
+      "SIX",
+      "SEVEN",
+      "EIGHT",
+      "NINE",
+    ][+e.key];
   }
   switch (e.code) {
-    case "ArrowUp": return "UP";
-    case "ArrowDown": return "DOWN";
-    case "ArrowLeft": return "LEFT";
-    case "ArrowRight": return "RIGHT";
-    case "Space": return "SPACE";
-    case "Enter": return "ENTER";
-    case "Tab": return "TAB";
-    case "ShiftLeft": case "ShiftRight": return "SHIFT";
-    default: return null;
+    case "ArrowUp":
+      return "UP";
+    case "ArrowDown":
+      return "DOWN";
+    case "ArrowLeft":
+      return "LEFT";
+    case "ArrowRight":
+      return "RIGHT";
+    case "Space":
+      return "SPACE";
+    case "Enter":
+      return "ENTER";
+    case "Tab":
+      return "TAB";
+    case "ShiftLeft":
+    case "ShiftRight":
+      return "SHIFT";
+    default:
+      return null;
   }
 }
 
@@ -67,9 +90,9 @@ export class SettingsScene extends Phaser.Scene {
   private voiceBtn?: MenuButton;
   private fullscreenBtn?: MenuButton;
   private controlsObjects: Phaser.GameObjects.GameObject[] = [];
-  // Per-action key buttons (so their labels can be refreshed after a rebind).
+
   private keyButtons = new Map<ControlAction, MenuButton>();
-  // The action currently waiting for a key press (rebind in progress).
+
   private listeningFor?: ControlAction;
   private fromKey?: string;
 
@@ -82,8 +105,6 @@ export class SettingsScene extends Phaser.Scene {
   }
 
   create() {
-    // Pause the launching scene so its buttons don't keep receiving hover
-    // events while Settings is on top of them.
     if (this.fromKey) this.scene.pause(this.fromKey);
     this.events.once("shutdown", () => {
       if (this.fromKey) this.scene.resume(this.fromKey);
@@ -92,20 +113,15 @@ export class SettingsScene extends Phaser.Scene {
     const W = this.scale.width;
     const H = this.scale.height;
 
-    // Dim backdrop is the modal camera background (see fitModal); this just
-    // blocks clicks from reaching the paused scene beneath.
-    // Eat clicks so they don't reach buttons in the paused scene underneath.
-    this.add
-      .zone(0, 0, W, H)
-      .setOrigin(0)
-      .setInteractive();
+    this.add.zone(0, 0, W, H).setOrigin(0).setInteractive();
 
-    // Panel.
     const panelW = 380;
     const panelH = 504;
     const py = (H - panelH) / 2;
     panel(this, W / 2, H / 2, panelW, panelH, "ui-panel-dark");
-    closeButton(this, W / 2 + panelW / 2 - 26, py + 24, () => this.scene.stop());
+    closeButton(this, W / 2 + panelW / 2 - 26, py + 24, () =>
+      this.scene.stop(),
+    );
     fitModal(this, panelW, panelH);
 
     this.add
@@ -150,7 +166,6 @@ export class SettingsScene extends Phaser.Scene {
       onClick: () => this.scene.stop(),
     });
 
-    // Keep the fullscreen label in sync however it changes (button, F11, Esc).
     const syncFs = () => this.fullscreenBtn?.setText(this.fullscreenLabel());
     this.scale.on("enterfullscreen", syncFs);
     this.scale.on("leavefullscreen", syncFs);
@@ -159,10 +174,10 @@ export class SettingsScene extends Phaser.Scene {
       this.scale.off("leavefullscreen", syncFs);
     });
 
-    // One keyboard handler drives both the rebind capture and Esc, so there's
-    // no ambiguity about which fires first.
     this.input.keyboard?.on("keydown", this.onKeyDown, this);
-    this.events.once("shutdown", () => this.input.keyboard?.off("keydown", this.onKeyDown, this));
+    this.events.once("shutdown", () =>
+      this.input.keyboard?.off("keydown", this.onKeyDown, this),
+    );
   }
 
   private onKeyDown(e: KeyboardEvent) {
@@ -173,7 +188,7 @@ export class SettingsScene extends Phaser.Scene {
         return;
       }
       const name = eventToKeyName(e);
-      if (!name) return; // unsupported key — keep listening
+      if (!name) return;
       setKeybind(this.listeningFor, name);
       this.listeningFor = undefined;
       this.refreshKeyButtons();
@@ -189,15 +204,11 @@ export class SettingsScene extends Phaser.Scene {
     return `FULLSCREEN:  ${this.scale.isFullscreen ? "ON" : "OFF"}`;
   }
 
-  // Interactive remap overlay: each row shows an action and a clickable button
-  // with its current key; clicking listens for the next key press.
   private showControls() {
     if (this.controlsObjects.length > 0) return;
     const W = this.scale.width;
     const H = this.scale.height;
 
-    // Built after the settings buttons, so it stacks on top by display order;
-    // the full-screen blocker eats clicks meant for the panel underneath.
     const dim = this.add.rectangle(0, 0, W, H, 0x000000, 0.7).setOrigin(0);
     const blocker = this.add.zone(0, 0, W, H).setOrigin(0).setInteractive();
     const rowH = 30;
@@ -206,11 +217,17 @@ export class SettingsScene extends Phaser.Scene {
     const py = (H - panelH) / 2;
     const box = panel(this, W / 2, H / 2, panelW, panelH, "ui-panel-dark");
     const title = this.add
-      .text(W / 2, py + 28, "CONTROLS", { fontFamily: FONT_TITLE, fontSize: "18px", color: "#f0a500" })
+      .text(W / 2, py + 28, "CONTROLS", {
+        fontFamily: FONT_TITLE,
+        fontSize: "18px",
+        color: "#f0a500",
+      })
       .setOrigin(0.5);
     const hint = this.add
       .text(W / 2, py + 48, "Arrows always move  •  Esc pauses", {
-        fontFamily: FONT_CHAT, fontSize: "12px", color: COLORS.textDim,
+        fontFamily: FONT_CHAT,
+        fontSize: "12px",
+        color: COLORS.textDim,
       })
       .setOrigin(0.5)
       .setResolution(3);
@@ -221,37 +238,58 @@ export class SettingsScene extends Phaser.Scene {
     REMAP_ROWS.forEach(([action, label], i) => {
       const ry = py + 70 + i * rowH + rowH / 2;
       const a = this.add
-        .text(leftX, ry, label, { fontFamily: FONT_CHAT, fontSize: "15px", color: COLORS.text })
+        .text(leftX, ry, label, {
+          fontFamily: FONT_CHAT,
+          fontSize: "15px",
+          color: COLORS.text,
+        })
         .setOrigin(0, 0.5)
         .setResolution(3);
-      const btn = makeMenuButton(this, btnX, ry, prettyKey(getKeybinds()[action]), {
-        width: 128,
-        height: 26,
-        onClick: () => this.startListening(action),
-      });
+      const btn = makeMenuButton(
+        this,
+        btnX,
+        ry,
+        prettyKey(getKeybinds()[action]),
+        {
+          width: 128,
+          height: 26,
+          onClick: () => this.startListening(action),
+        },
+      );
       this.keyButtons.set(action, btn);
       this.controlsObjects.push(a, btn.container);
     });
 
-    const resetBtn = makeMenuButton(this, W / 2 - 86, py + panelH - 34, "RESET", {
-      width: 150,
-      height: 38,
-      variant: "grey",
-      onClick: () => {
-        resetKeybinds();
-        this.cancelListening();
-        this.refreshKeyButtons();
+    const resetBtn = makeMenuButton(
+      this,
+      W / 2 - 86,
+      py + panelH - 34,
+      "RESET",
+      {
+        width: 150,
+        height: 38,
+        variant: "grey",
+        onClick: () => {
+          resetKeybinds();
+          this.cancelListening();
+          this.refreshKeyButtons();
+        },
       },
-    });
-    const closeBtn = makeMenuButton(this, W / 2 + 86, py + panelH - 34, "CLOSE", {
-      width: 150,
-      height: 38,
-      onClick: () => this.hideControls(),
-    });
+    );
+    const closeBtn = makeMenuButton(
+      this,
+      W / 2 + 86,
+      py + panelH - 34,
+      "CLOSE",
+      {
+        width: 150,
+        height: 38,
+        onClick: () => this.hideControls(),
+      },
+    );
     this.controlsObjects.push(resetBtn.container, closeBtn.container);
   }
 
-  // Enter "press a key" mode for one action.
   private startListening(action: ControlAction) {
     this.cancelListening();
     this.listeningFor = action;
@@ -263,7 +301,6 @@ export class SettingsScene extends Phaser.Scene {
     this.refreshKeyButtons();
   }
 
-  // Refresh every key button's label from the saved binds.
   private refreshKeyButtons() {
     for (const [action, btn] of this.keyButtons) {
       btn.setText(prettyKey(getKeybinds()[action]));

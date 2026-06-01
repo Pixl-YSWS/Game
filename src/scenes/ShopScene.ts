@@ -7,7 +7,6 @@ import { gameSocket } from "../network/socket";
 import { UIScene } from "./UIScene";
 
 interface ShopInit {
-  // The scene to pause while the shop is open and resume on close.
   from: string;
 }
 
@@ -15,13 +14,10 @@ interface Row {
   item: ShopItem;
   label: Phaser.GameObjects.Text;
   btn: MenuButton;
-  // Absolute (unscrolled) centre-y of this row inside the list.
+
   centerY: number;
 }
 
-// Overlay scene listing the shop catalog. Buying is server-validated; the
-// scene reacts to wallet:update / shop:result for visual feedback. The catalog
-// is longer than the panel, so the list lives in a masked, scrollable viewport.
 export class ShopScene extends Phaser.Scene {
   private fromKey = "WorldScene";
   private rows: Row[] = [];
@@ -29,7 +25,6 @@ export class ShopScene extends Phaser.Scene {
   private toast?: Phaser.GameObjects.Text;
   private currentPixels = 0;
 
-  // Scroll viewport state.
   private content?: Phaser.GameObjects.Container;
   private scroll = 0;
   private maxScroll = 0;
@@ -51,7 +46,6 @@ export class ShopScene extends Phaser.Scene {
     const W = this.scale.width;
     const H = this.scale.height;
 
-    // Pause the launching scene so its input doesn't leak through.
     this.scene.pause(this.fromKey);
     this.events.once("shutdown", () => {
       this.scene.resume(this.fromKey);
@@ -59,11 +53,8 @@ export class ShopScene extends Phaser.Scene {
       gameSocket.off("shop:result", this.onShopResult);
     });
 
-    // Block clicks from reaching the paused scene; the dim itself is the modal
-    // camera background (see fitModal), which covers any zoom level.
     this.add.zone(0, 0, W, H).setOrigin(0).setInteractive();
 
-    // Keep the panel inside the canvas even on short screens.
     const panelW = 520;
     const panelH = Math.min(480, H - 48);
     const px = (W - panelW) / 2;
@@ -80,8 +71,6 @@ export class ShopScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    // Read the current pixel count from the running UI scene so the shop's
-    // header starts in sync; live updates come via wallet:update below.
     const ui = this.scene.get("UIScene") as UIScene | undefined;
     this.currentPixels = ui?.walletTotal ?? 0;
 
@@ -93,17 +82,14 @@ export class ShopScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    // ── Scrollable list viewport ─────────────────────────────────────
     const listX = px + 24;
     const listW = panelW - 48;
     this.listTop = py + 84;
-    this.listBottom = py + panelH - 70; // leaves room for toast + CLOSE
+    this.listBottom = py + panelH - 70;
     const viewportH = this.listBottom - this.listTop;
 
     this.content = this.add.container(0, 0);
 
-    // A drag-to-scroll surface behind the rows (rows are added after, so they
-    // win the click via Phaser's top-only input).
     this.add
       .zone(listX, this.listTop, listW, viewportH)
       .setOrigin(0, 0)
@@ -139,13 +125,11 @@ export class ShopScene extends Phaser.Scene {
       this.rows.push({ item, label, btn, centerY });
     }
 
-    // Clip the list to the viewport.
     const maskShape = this.make.graphics({ x: 0, y: 0 });
     maskShape.fillStyle(0xffffff);
     maskShape.fillRect(listX, this.listTop, listW, viewportH);
     this.content.setMask(maskShape.createGeometryMask());
 
-    // Scrollbar (only meaningful when the list overflows).
     const contentH = SHOP_CATALOG.length * rowH;
     this.maxScroll = Math.max(0, contentH - viewportH);
     this.thumbTrackH = viewportH;
@@ -153,13 +137,15 @@ export class ShopScene extends Phaser.Scene {
     this.add
       .rectangle(this.thumbX, this.listTop, 4, viewportH, 0xffffff, 0.08)
       .setOrigin(0.5, 0);
-    const thumbH = this.maxScroll > 0 ? Math.max(28, (viewportH / contentH) * viewportH) : viewportH;
+    const thumbH =
+      this.maxScroll > 0
+        ? Math.max(28, (viewportH / contentH) * viewportH)
+        : viewportH;
     this.thumb = this.add
       .rectangle(this.thumbX, this.listTop, 4, thumbH, 0xffffff, 0.35)
       .setOrigin(0.5, 0)
       .setVisible(this.maxScroll > 0);
 
-    // Wheel + drag scrolling.
     this.input.on(
       "wheel",
       (_p: Phaser.Input.Pointer, _o: unknown, _dx: number, dy: number) => {
@@ -177,7 +163,8 @@ export class ShopScene extends Phaser.Scene {
       }
     });
     this.input.on("pointermove", (p: Phaser.Input.Pointer) => {
-      if (dragging && p.isDown) this.setScroll(dragStartScroll - (p.y - dragStartY));
+      if (dragging && p.isDown)
+        this.setScroll(dragStartScroll - (p.y - dragStartY));
     });
     this.input.on("pointerup", () => (dragging = false));
     this.applyScroll();
@@ -206,14 +193,13 @@ export class ShopScene extends Phaser.Scene {
     this.applyScroll();
   }
 
-  // Position the content and toggle each row's visibility (invisible rows are
-  // skipped by Phaser input, so scrolled-away BUY buttons aren't clickable).
   private applyScroll() {
     if (!this.content) return;
     this.content.y = -this.scroll;
     for (const row of this.rows) {
       const worldY = row.centerY - this.scroll;
-      const visible = worldY + 28 > this.listTop && worldY - 28 < this.listBottom;
+      const visible =
+        worldY + 28 > this.listTop && worldY - 28 < this.listBottom;
       row.label.setVisible(visible);
       row.btn.container.setVisible(visible);
     }
@@ -229,7 +215,11 @@ export class ShopScene extends Phaser.Scene {
     this.pixelsText?.setText(`Wallet:  ${this.currentPixels}p`);
   };
 
-  private onShopResult = (data: { itemId: string; success: boolean; reason?: string }) => {
+  private onShopResult = (data: {
+    itemId: string;
+    success: boolean;
+    reason?: string;
+  }) => {
     if (data.success) {
       this.flash(`Bought!`, "#7dda1c");
     } else if (data.reason === "not_enough_pixels") {

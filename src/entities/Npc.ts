@@ -4,8 +4,6 @@ import type { NpcDef } from "../types/map";
 import { FONT, CURSORS } from "../ui/theme";
 import { texNpcChar, ANIM, IDLE_FRAME_MS } from "../world/cozyChar";
 
-// Each NPC id maps to a pre-assembled character sheet (char1–char9) so every
-// villager gets a unique look without paper-doll layering.
 const NPC_CHAR_LOOKUP: Record<string, number> = {
   villager_quill: 1,
   villager_mara: 2,

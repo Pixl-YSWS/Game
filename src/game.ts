@@ -20,18 +20,29 @@ const config: Phaser.Types.Core.GameConfig = {
   height: 720,
   backgroundColor: "#1a1a2e",
   parent: "game-container",
-  pixelArt: true, // crisp pixel rendering — essential for pixel art
+  pixelArt: true,
   antialias: false,
   roundPixels: true,
-  // DOM container lets us overlay a real <input> for the chat box.
+
   dom: { createContainer: true },
-  scene: [BootScene, LoginScene, MainMenuScene, WorldScene, InteriorScene, UIScene, ShopScene, PauseScene, SettingsScene, CharacterScene, InvitePanelScene, InboxScene, InventoryScene, AdminScene, ProjectsScene],
+  scene: [
+    BootScene,
+    LoginScene,
+    MainMenuScene,
+    WorldScene,
+    InteriorScene,
+    UIScene,
+    ShopScene,
+    PauseScene,
+    SettingsScene,
+    CharacterScene,
+    InvitePanelScene,
+    InboxScene,
+    InventoryScene,
+    AdminScene,
+    ProjectsScene,
+  ],
   scale: {
-    // RESIZE makes the canvas exactly match the window so there are no black
-    // letterbox bars — the game fills the whole screen (and refills on
-    // fullscreen / window resize). Scenes lay out against this.scale.width/
-    // height, which now track the live window size; the HUD reflows on the
-    // scale manager's "resize" event (see UIScene/WorldScene).
     mode: Phaser.Scale.RESIZE,
     autoCenter: Phaser.Scale.CENTER_BOTH,
   },

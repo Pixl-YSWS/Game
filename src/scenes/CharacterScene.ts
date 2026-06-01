@@ -21,15 +21,12 @@ interface CharInit {
   from?: string;
 }
 
-// Outfit customiser: assemble a CozyValley character from body tone + hair +
-// top + bottom, with a live animated preview. The chosen outfit is encoded into
-// the account `skin` string and pushed via character:setSkin (same plumbing the
-// old pixel skins used), so it persists and shows to everyone.
 export class CharacterScene extends Phaser.Scene {
   private fromKey?: string;
   private outfit: Outfit = { ...PRESET_OUTFITS[0] };
   private preview?: CozyAvatar;
-  private valueLabels: Partial<Record<keyof Outfit, Phaser.GameObjects.Text>> = {};
+  private valueLabels: Partial<Record<keyof Outfit, Phaser.GameObjects.Text>> =
+    {};
   private steppers: MenuButton[] = [];
 
   constructor() {
@@ -39,7 +36,9 @@ export class CharacterScene extends Phaser.Scene {
   init(data: CharInit) {
     this.fromKey = data?.from;
     const existing = getCustomSkin();
-    this.outfit = (existing && decodeOutfit(existing)) || { ...PRESET_OUTFITS[0] };
+    this.outfit = (existing && decodeOutfit(existing)) || {
+      ...PRESET_OUTFITS[0],
+    };
   }
 
   create() {
@@ -62,10 +61,13 @@ export class CharacterScene extends Phaser.Scene {
     fitModal(this, panelW, panelH);
 
     this.add
-      .text(W / 2, py + 30, "CUSTOMISE YOUR LOOK", { fontFamily: FONT_TITLE, fontSize: "18px", color: "#f0a500" })
+      .text(W / 2, py + 30, "CUSTOMISE YOUR LOOK", {
+        fontFamily: FONT_TITLE,
+        fontSize: "18px",
+        color: "#f0a500",
+      })
       .setOrigin(0.5);
 
-    // ── Live preview (left) ───────────────────────────────────────────
     const previewX = px + 120;
     const previewY = py + panelH / 2 + 10;
     this.add
@@ -76,7 +78,6 @@ export class CharacterScene extends Phaser.Scene {
     this.preview.setPosition(previewX, previewY + 80).setScale(4);
     this.preview.setAnim("idle", "down", false);
 
-    // ── Steppers (right) ──────────────────────────────────────────────
     const rowX = px + 250;
     const rowW = panelW - (rowX - px) - 30;
     let y = py + 78;
@@ -89,7 +90,6 @@ export class CharacterScene extends Phaser.Scene {
     y += rowGap;
     this.buildStepper("Bottom", "bottom", 1, NUM_BOTTOM, rowX, y, rowW);
 
-    // ── Footer ────────────────────────────────────────────────────────
     makeMenuButton(this, px + 120, py + panelH - 32, "RANDOM", {
       width: 150,
       height: 38,
@@ -115,41 +115,68 @@ export class CharacterScene extends Phaser.Scene {
     y: number,
     w: number,
   ) {
-    this.add.text(x, y - 16, label, { fontFamily: FONT_NARROW, fontSize: "13px", color: COLORS.textDim }).setOrigin(0, 0.5);
+    this.add
+      .text(x, y - 16, label, {
+        fontFamily: FONT_NARROW,
+        fontSize: "13px",
+        color: COLORS.textDim,
+      })
+      .setOrigin(0, 0.5);
     const cycle = (delta: number) => {
       const span = max - min + 1;
-      this.outfit[key] = min + (((this.outfit[key] - min + delta) % span) + span) % span;
+      this.outfit[key] =
+        min + ((((this.outfit[key] - min + delta) % span) + span) % span);
       this.apply();
     };
     this.steppers.push(
-      makeMenuButton(this, x + 16, y + 12, "<", { width: 34, height: 32, variant: "grey", onClick: () => cycle(-1) }),
+      makeMenuButton(this, x + 16, y + 12, "<", {
+        width: 34,
+        height: 32,
+        variant: "grey",
+        onClick: () => cycle(-1),
+      }),
     );
     this.valueLabels[key] = this.add
-      .text(x + w / 2, y + 12, "", { fontFamily: FONT, fontSize: "13px", color: "#ffffff" })
+      .text(x + w / 2, y + 12, "", {
+        fontFamily: FONT,
+        fontSize: "13px",
+        color: "#ffffff",
+      })
       .setOrigin(0.5);
     this.steppers.push(
-      makeMenuButton(this, x + w - 16, y + 12, ">", { width: 34, height: 32, variant: "grey", onClick: () => cycle(1) }),
+      makeMenuButton(this, x + w - 16, y + 12, ">", {
+        width: 34,
+        height: 32,
+        variant: "grey",
+        onClick: () => cycle(1),
+      }),
     );
   }
 
   private randomise() {
-    const r = (n: number, from = 1) => from + Math.floor(Math.random() * (n - from + 1));
-    this.outfit = { body: r(NUM_BODY), hair: r(NUM_HAIR, 0), top: r(NUM_TOP), bottom: r(NUM_BOTTOM) };
+    const r = (n: number, from = 1) =>
+      from + Math.floor(Math.random() * (n - from + 1));
+    this.outfit = {
+      body: r(NUM_BODY),
+      hair: r(NUM_HAIR, 0),
+      top: r(NUM_TOP),
+      bottom: r(NUM_BOTTOM),
+    };
     this.apply();
   }
 
-  // Update the labels + preview from the current outfit (no network push).
   private refresh() {
     this.outfit = clampOutfit(this.outfit);
     this.valueLabels.body?.setText(`${this.outfit.body} / ${NUM_BODY}`);
-    this.valueLabels.hair?.setText(this.outfit.hair === 0 ? "none" : `${this.outfit.hair} / ${NUM_HAIR}`);
+    this.valueLabels.hair?.setText(
+      this.outfit.hair === 0 ? "none" : `${this.outfit.hair} / ${NUM_HAIR}`,
+    );
     this.valueLabels.top?.setText(`${this.outfit.top} / ${NUM_TOP}`);
     this.valueLabels.bottom?.setText(`${this.outfit.bottom} / ${NUM_BOTTOM}`);
     this.preview?.setOutfit(this.outfit);
     this.preview?.setAnim("idle", "down", false);
   }
 
-  // Update visuals AND push the new look to the server / local storage live.
   private apply() {
     this.refresh();
     const encoded = encodeOutfit(this.outfit);

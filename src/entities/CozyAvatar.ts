@@ -8,10 +8,6 @@ import {
   type Outfit,
 } from "../world/cozyChar";
 
-// A layered CozyValley paper-doll avatar: several 32×32 sprites (hands, body,
-// clothes, hair) stacked back-to-front, all showing the same frame so one
-// frame index drives the whole character. Owns its own frame-advance timer.
-// Used by both Player and Npc; positioning / hop / bob are the parent's job.
 export class CozyAvatar extends Phaser.GameObjects.Container {
   private layers: Phaser.GameObjects.Sprite[] = [];
   private kind: "idle" | "walk" = "idle";
@@ -27,13 +23,12 @@ export class CozyAvatar extends Phaser.GameObjects.Container {
     scene.add.existing(this);
   }
 
-  // (Re)build the layer sprites for an outfit, preserving the current pose.
   setOutfit(outfit: Outfit) {
     for (const l of this.layers) l.destroy();
     this.layers = [];
     for (const key of outfitLayers(outfit)) {
       if (!key) continue;
-      // Origin at the feet (bottom-centre) so a 32px sprite stands on the tile.
+
       const sprite = this.scene.add.sprite(0, 0, key, 0).setOrigin(0.5, 1);
       this.layers.push(sprite);
       this.add(sprite);
@@ -43,8 +38,6 @@ export class CozyAvatar extends Phaser.GameObjects.Container {
     this.ensureTimer();
   }
 
-  // Set the active animation + facing. Resets the frame cursor only when the
-  // animation or direction actually changes, so a continuous walk keeps cycling.
   setAnim(kind: "idle" | "walk", dir: Dir, flipLeft: boolean) {
     if (kind !== this.kind || dir !== this.dir) {
       this.kind = kind;
@@ -83,7 +76,11 @@ export class CozyAvatar extends Phaser.GameObjects.Container {
     if (this.timer && this.timerDelay === delay) return;
     this.timer?.remove();
     this.timerDelay = delay;
-    this.timer = this.scene.time.addEvent({ delay, loop: true, callback: this.tick });
+    this.timer = this.scene.time.addEvent({
+      delay,
+      loop: true,
+      callback: this.tick,
+    });
   }
 
   destroy(fromScene?: boolean) {

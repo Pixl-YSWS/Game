@@ -10,7 +10,7 @@ interface AdminInit {
   role?: ModRole;
 }
 
-// One person shown in the moderation list.
+
 interface Person {
   accountId: string;
   name: string;
@@ -22,8 +22,8 @@ interface Person {
 
 const VISIBLE = 7;
 
-// Moderation panel: mute/unmute players and (full admins only) promote or
-// demote sub-admins. Opened from the HUD shield button, shown only to staff.
+
+
 export class AdminScene extends Phaser.Scene {
   private fromKey = "WorldScene";
   private myRole: ModRole = null;
@@ -115,12 +115,12 @@ export class AdminScene extends Phaser.Scene {
       people.push({ accountId: p.accountId, name: p.name, role: p.role, chatMuted: p.chatMuted, voiceMuted: p.voiceMuted, online: true });
       seen.add(p.accountId);
     }
-    // Offline muted accounts, so they can still be unmuted from here.
+    
     for (const m of data.mutes) {
       if (seen.has(m.accountId)) continue;
       people.push({ accountId: m.accountId, name: m.name, role: roleMap.get(m.accountId) ?? null, chatMuted: m.chat, voiceMuted: m.voice, online: false });
     }
-    // Staff first, then everyone else by name.
+    
     people.sort((a, b) => (rank(b.role) - rank(a.role)) || a.name.localeCompare(b.name));
     this.people = people;
     const max = Math.max(0, this.people.length - VISIBLE);
@@ -167,9 +167,9 @@ export class AdminScene extends Phaser.Scene {
         .setResolution(3);
       this.rowObjects.push(label, sub);
 
-      // Right-aligned action buttons. Mods can't be muted; only full admins
-      // can change roles, and never another admin. Chat and mic mute toggle
-      // independently.
+      
+      
+      
       let bx = this.listX + this.listW - 52;
       const step = 100;
       const canMute = p.role === null;

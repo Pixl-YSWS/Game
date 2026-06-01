@@ -12,9 +12,6 @@ interface ProjectsInit {
 
 type Mode = "list" | "form" | "hackatime";
 
-// The project board: an NPC-launched panel where players create / edit / delete
-// their shipped projects and connect their Hackatime account so each project's
-// tracked coding time shows up. Mirrors the shop/invite modal pattern.
 export class ProjectsScene extends Phaser.Scene {
   private fromKey = "WorldScene";
   private mode: Mode = "list";
@@ -23,40 +20,37 @@ export class ProjectsScene extends Phaser.Scene {
   private hackatimeConnected = false;
   private editingId: number | null = null;
 
-  // Panel geometry (set in create).
   private px = 0;
   private py = 0;
   private panelW = 580;
   private panelH = 500;
 
-  // Body objects + DOM nodes are torn down and rebuilt on every mode switch.
   private body: Phaser.GameObjects.GameObject[] = [];
   private bodyButtons: MenuButton[] = [];
   private domEls: Phaser.GameObjects.DOMElement[] = [];
   private listMask?: Phaser.Display.Masks.GeometryMask;
 
-  // Scroll state for the list viewport.
   private content?: Phaser.GameObjects.Container;
   private scroll = 0;
   private maxScroll = 0;
   private listTop = 0;
   private listBottom = 0;
   private rowH = 76;
-  // Per-row objects + buttons, so scrolled-away rows can be hidden (a geometry
-  // mask hides them visually but Phaser input still hits them otherwise).
+
   private rowRefs: {
     top: number;
-    objs: (Phaser.GameObjects.GameObject & Phaser.GameObjects.Components.Visible)[];
+    objs: (Phaser.GameObjects.GameObject &
+      Phaser.GameObjects.Components.Visible)[];
     btns: MenuButton[];
   }[] = [];
 
   private statusText?: Phaser.GameObjects.Text;
   private toast?: Phaser.GameObjects.Text;
-  // Popup window for the Hackatime OAuth flow + the message handler that hears
-  // back from it (declared here so it can be removed on shutdown).
+
   private oauthPopup: Window | null = null;
   private onPopupMessage = (e: MessageEvent) => {
-    if (e?.data?.source !== "hackatime" || e.data.status !== "connected") return;
+    if (e?.data?.source !== "hackatime" || e.data.status !== "connected")
+      return;
     this.flash("Hackatime connected!", "#7dda1c");
     gameSocket.requestHackatimeStats();
     gameSocket.requestProjects();
@@ -87,7 +81,11 @@ export class ProjectsScene extends Phaser.Scene {
       gameSocket.off("project:result", this.onProjectResult);
       gameSocket.off("hackatime:stats", this.onHackatimeStats);
       window.removeEventListener("message", this.onPopupMessage);
-      try { this.oauthPopup?.close(); } catch { /* ignore */ }
+      try {
+        this.oauthPopup?.close();
+      } catch {
+        /* ignore */
+      }
       this.clearBody();
     });
 
@@ -97,7 +95,9 @@ export class ProjectsScene extends Phaser.Scene {
     this.px = (W - this.panelW) / 2;
     this.py = (H - this.panelH) / 2;
     panel(this, W / 2, H / 2, this.panelW, this.panelH, "ui-panel-dark");
-    closeButton(this, this.px + this.panelW - 26, this.py + 24, () => this.scene.stop());
+    closeButton(this, this.px + this.panelW - 26, this.py + 24, () =>
+      this.scene.stop(),
+    );
     fitModal(this, this.panelW, this.panelH);
 
     this.add
@@ -109,14 +109,20 @@ export class ProjectsScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     this.toast = this.add
-      .text(W / 2, this.py + this.panelH - 64, "", { fontFamily: FONT, fontSize: "11px", color: "#7dda1c" })
+      .text(W / 2, this.py + this.panelH - 64, "", {
+        fontFamily: FONT,
+        fontSize: "11px",
+        color: "#7dda1c",
+      })
       .setOrigin(0.5);
 
-    // Wheel scrolls the list (only meaningful in list mode).
-    this.input.on("wheel", (_p: unknown, _o: unknown, _dx: number, dy: number) => {
-      if (this.mode !== "list") return;
-      this.setScroll(this.scroll + dy * 0.5);
-    });
+    this.input.on(
+      "wheel",
+      (_p: unknown, _o: unknown, _dx: number, dy: number) => {
+        if (this.mode !== "list") return;
+        this.setScroll(this.scroll + dy * 0.5);
+      },
+    );
     this.input.keyboard?.on("keydown-ESC", () => {
       if (this.mode === "list") this.scene.stop();
       else this.showList();
@@ -131,14 +137,25 @@ export class ProjectsScene extends Phaser.Scene {
     this.showList();
   }
 
-  // ── Socket reactions ──────────────────────────────────────────────────
-  private onProjectList = ({ items, hackatimeConnected }: { items: Project[]; hackatimeConnected: boolean }) => {
+  private onProjectList = ({
+    items,
+    hackatimeConnected,
+  }: {
+    items: Project[];
+    hackatimeConnected: boolean;
+  }) => {
     this.projects = items;
     this.hackatimeConnected = hackatimeConnected;
     if (this.mode === "list") this.showList();
   };
 
-  private onProjectResult = ({ ok, reason }: { ok: boolean; reason?: string }) => {
+  private onProjectResult = ({
+    ok,
+    reason,
+  }: {
+    ok: boolean;
+    reason?: string;
+  }) => {
     if (ok) {
       this.flash("Saved!", "#7dda1c");
       if (this.mode === "form") this.showList();
@@ -155,11 +172,11 @@ export class ProjectsScene extends Phaser.Scene {
   private onHackatimeStats = (stats: HackatimeStats) => {
     this.hackatimeConnected = stats.connected;
     this.updateStatusLine(stats);
-    if (stats.error === "invalid_key") this.flash("Hackatime needs reconnecting", "#ff7777");
+    if (stats.error === "invalid_key")
+      this.flash("Hackatime needs reconnecting", "#ff7777");
     else if (stats.error) this.flash("Couldn't reach Hackatime", "#ff7777");
   };
 
-  // ── Body lifecycle ────────────────────────────────────────────────────
   private clearBody() {
     for (const b of this.bodyButtons) b.destroy();
     this.bodyButtons.length = 0;
@@ -178,29 +195,36 @@ export class ProjectsScene extends Phaser.Scene {
     return o;
   }
 
-  // ── List mode ─────────────────────────────────────────────────────────
   private showList() {
     this.mode = "list";
     this.clearBody();
     const W = this.scale.width;
 
-    // Hackatime status line + connect/manage button.
     this.statusText = this.track(
       this.add
-        .text(this.px + 28, this.py + 60, "", { fontFamily: FONT_NARROW, fontSize: "13px", color: COLORS.textDim })
+        .text(this.px + 28, this.py + 60, "", {
+          fontFamily: FONT_NARROW,
+          fontSize: "13px",
+          color: COLORS.textDim,
+        })
         .setOrigin(0, 0.5),
     );
     this.updateStatusLine();
     this.bodyButtons.push(
-      makeMenuButton(this, this.px + this.panelW - 86, this.py + 60, this.hackatimeConnected ? "MANAGE" : "CONNECT HT", {
-        width: 130,
-        height: 34,
-        variant: "grey",
-        onClick: () => this.showHackatime(),
-      }),
+      makeMenuButton(
+        this,
+        this.px + this.panelW - 86,
+        this.py + 60,
+        this.hackatimeConnected ? "MANAGE" : "CONNECT HT",
+        {
+          width: 130,
+          height: 34,
+          variant: "grey",
+          onClick: () => this.showHackatime(),
+        },
+      ),
     );
 
-    // New-project button.
     this.bodyButtons.push(
       makeMenuButton(this, W / 2, this.py + 96, "+ NEW PROJECT", {
         width: 220,
@@ -209,7 +233,6 @@ export class ProjectsScene extends Phaser.Scene {
       }),
     );
 
-    // Scrollable list viewport.
     const listX = this.px + 28;
     const listW = this.panelW - 56;
     this.listTop = this.py + 124;
@@ -219,13 +242,18 @@ export class ProjectsScene extends Phaser.Scene {
     if (this.projects.length === 0) {
       this.track(
         this.add
-          .text(W / 2, this.listTop + viewportH / 2, "No projects yet.\nShip something and add it here!", {
-            fontFamily: FONT_NARROW,
-            fontSize: "14px",
-            color: COLORS.textDim,
-            align: "center",
-            lineSpacing: 6,
-          })
+          .text(
+            W / 2,
+            this.listTop + viewportH / 2,
+            "No projects yet.\nShip something and add it here!",
+            {
+              fontFamily: FONT_NARROW,
+              fontSize: "14px",
+              color: COLORS.textDim,
+              align: "center",
+              lineSpacing: 6,
+            },
+          )
           .setOrigin(0.5),
       );
     } else {
@@ -236,7 +264,6 @@ export class ProjectsScene extends Phaser.Scene {
         this.buildProjectRow(p, listX, top, listW, this.rowH);
       });
 
-      // Clip to the viewport.
       const g = this.make.graphics({ x: 0, y: 0 });
       g.fillStyle(0xffffff);
       g.fillRect(listX, this.listTop, listW, viewportH);
@@ -259,7 +286,13 @@ export class ProjectsScene extends Phaser.Scene {
     );
   }
 
-  private buildProjectRow(p: Project, x: number, top: number, w: number, rowH: number) {
+  private buildProjectRow(
+    p: Project,
+    x: number,
+    top: number,
+    w: number,
+    rowH: number,
+  ) {
     const content = this.content!;
     const bg = this.add
       .rectangle(x + w / 2, top + rowH / 2 - 4, w, rowH - 8, 0xffffff, 0.05)
@@ -271,25 +304,40 @@ export class ProjectsScene extends Phaser.Scene {
     });
     const meta: string[] = [];
     if (p.hackatimeProject) {
-      meta.push(this.hackatimeConnected ? `⏱ ${formatDuration(p.seconds ?? 0)}` : `⏱ ${p.hackatimeProject}`);
+      meta.push(
+        this.hackatimeConnected
+          ? `⏱ ${formatDuration(p.seconds ?? 0)}`
+          : `⏱ ${p.hackatimeProject}`,
+      );
     }
     if (p.repoUrl) meta.push("code");
     if (p.demoUrl) meta.push("demo");
     const sub = this.add.text(
       x + 12,
       top + 36,
-      meta.join("   •   ") || (p.description ? truncate(p.description, 60) : "—"),
-      { fontFamily: FONT_NARROW, fontSize: "12px", color: COLORS.textDim, wordWrap: { width: w - 180 } },
+      meta.join("   •   ") ||
+        (p.description ? truncate(p.description, 60) : "—"),
+      {
+        fontFamily: FONT_NARROW,
+        fontSize: "12px",
+        color: COLORS.textDim,
+        wordWrap: { width: w - 180 },
+      },
     );
 
     content.add([bg, name, sub]);
 
-    // Edit / delete buttons.
-    const editBtn = makeMenuButton(this, x + w - 116, top + rowH / 2 - 4, "EDIT", {
-      width: 78,
-      height: 32,
-      onClick: () => this.showForm(p),
-    });
+    const editBtn = makeMenuButton(
+      this,
+      x + w - 116,
+      top + rowH / 2 - 4,
+      "EDIT",
+      {
+        width: 78,
+        height: 32,
+        onClick: () => this.showForm(p),
+      },
+    );
     const delBtn = makeMenuButton(this, x + w - 34, top + rowH / 2 - 4, "DEL", {
       width: 64,
       height: 32,
@@ -303,7 +351,6 @@ export class ProjectsScene extends Phaser.Scene {
     this.bodyButtons.push(editBtn, delBtn);
     this.rowRefs.push({ top, objs: [bg, name, sub], btns: [editBtn, delBtn] });
 
-    // Clicking a row's links opens them in a new tab.
     if (p.repoUrl || p.demoUrl) {
       bg.setInteractive({ useHandCursor: true }).on("pointerup", () => {
         const url = p.demoUrl || p.repoUrl;
@@ -315,11 +362,11 @@ export class ProjectsScene extends Phaser.Scene {
   private setScroll(v: number) {
     this.scroll = Phaser.Math.Clamp(v, 0, this.maxScroll);
     if (this.content) this.content.y = -this.scroll;
-    // Hide rows scrolled outside the viewport so their buttons aren't clickable
-    // through the mask (and don't sit invisibly over the CLOSE button).
+
     for (const r of this.rowRefs) {
       const screenY = r.top - this.scroll;
-      const visible = screenY + this.rowH > this.listTop && screenY < this.listBottom;
+      const visible =
+        screenY + this.rowH > this.listTop && screenY < this.listBottom;
       for (const o of r.objs) o.setVisible(visible);
       for (const b of r.btns) {
         b.container.setVisible(visible);
@@ -331,14 +378,19 @@ export class ProjectsScene extends Phaser.Scene {
   private updateStatusLine(stats?: HackatimeStats) {
     if (!this.statusText) return;
     if (this.hackatimeConnected) {
-      const total = stats ? `  (${stats.humanReadableTotal || formatDuration(stats.totalSeconds)} total)` : "";
-      this.statusText.setText(`Hackatime: connected ✓${total}`).setColor(COLORS.good);
+      const total = stats
+        ? `  (${stats.humanReadableTotal || formatDuration(stats.totalSeconds)} total)`
+        : "";
+      this.statusText
+        .setText(`Hackatime: connected ✓${total}`)
+        .setColor(COLORS.good);
     } else {
-      this.statusText.setText("Hackatime: not connected").setColor(COLORS.textDim);
+      this.statusText
+        .setText("Hackatime: not connected")
+        .setColor(COLORS.textDim);
     }
   }
 
-  // ── Create / edit form ────────────────────────────────────────────────
   private showForm(project: Project | null) {
     this.mode = "form";
     this.editingId = project?.id ?? null;
@@ -359,16 +411,49 @@ export class ProjectsScene extends Phaser.Scene {
     const fieldW = this.panelW - 60;
     let y = this.py + 92;
 
-    const nameEl = this.field("Name", "input", fieldX, y, fieldW, project?.name ?? "", "My awesome project");
+    const nameEl = this.field(
+      "Name",
+      "input",
+      fieldX,
+      y,
+      fieldW,
+      project?.name ?? "",
+      "My awesome project",
+    );
     nameEl.maxLength = 60;
     y += 64;
-    const descEl = this.field("Description", "textarea", fieldX, y, fieldW, project?.description ?? "", "What is it?", 48);
+    const descEl = this.field(
+      "Description",
+      "textarea",
+      fieldX,
+      y,
+      fieldW,
+      project?.description ?? "",
+      "What is it?",
+      48,
+    );
     descEl.maxLength = 500;
     y += 86;
-    const repoEl = this.field("Repo URL", "input", fieldX, y, fieldW, project?.repoUrl ?? "", "https://github.com/…");
+    const repoEl = this.field(
+      "Repo URL",
+      "input",
+      fieldX,
+      y,
+      fieldW,
+      project?.repoUrl ?? "",
+      "https://github.com/…",
+    );
     repoEl.maxLength = 300;
     y += 64;
-    const demoEl = this.field("Demo URL", "input", fieldX, y, fieldW, project?.demoUrl ?? "", "https://…");
+    const demoEl = this.field(
+      "Demo URL",
+      "input",
+      fieldX,
+      y,
+      fieldW,
+      project?.demoUrl ?? "",
+      "https://…",
+    );
     demoEl.maxLength = 300;
     y += 64;
     const htEl = this.field(
@@ -382,7 +467,6 @@ export class ProjectsScene extends Phaser.Scene {
     );
     htEl.maxLength = 100;
 
-    // Save / cancel.
     this.bodyButtons.push(
       makeMenuButton(this, W / 2 - 110, this.py + this.panelH - 36, "SAVE", {
         width: 190,
@@ -399,7 +483,8 @@ export class ProjectsScene extends Phaser.Scene {
             this.flash("A project needs a name", "#ff7777");
             return;
           }
-          if (this.editingId != null) gameSocket.updateProject({ id: this.editingId, ...payload });
+          if (this.editingId != null)
+            gameSocket.updateProject({ id: this.editingId, ...payload });
           else gameSocket.createProject(payload);
         },
       }),
@@ -414,7 +499,6 @@ export class ProjectsScene extends Phaser.Scene {
     );
   }
 
-  // ── Hackatime connect (OAuth) ─────────────────────────────────────────
   private showHackatime() {
     this.mode = "hackatime";
     this.clearBody();
@@ -422,7 +506,11 @@ export class ProjectsScene extends Phaser.Scene {
 
     this.track(
       this.add
-        .text(W / 2, this.py + 58, "HACKATIME", { fontFamily: FONT, fontSize: "13px", color: COLORS.accent })
+        .text(W / 2, this.py + 58, "HACKATIME", {
+          fontFamily: FONT,
+          fontSize: "13px",
+          color: COLORS.accent,
+        })
         .setOrigin(0.5),
     );
     this.track(
@@ -433,7 +521,13 @@ export class ProjectsScene extends Phaser.Scene {
           this.hackatimeConnected
             ? "Your Hackatime account is connected. Coding time\nflows into any project you map to a Hackatime\nproject name."
             : "Connect your Hackatime account to pull your\ncoding time into your projects. A Hackatime window\nwill open for you to approve access.",
-          { fontFamily: FONT_NARROW, fontSize: "13px", color: COLORS.textDim, align: "center", lineSpacing: 7 },
+          {
+            fontFamily: FONT_NARROW,
+            fontSize: "13px",
+            color: COLORS.textDim,
+            align: "center",
+            lineSpacing: 7,
+          },
         )
         .setOrigin(0.5),
     );
@@ -479,9 +573,6 @@ export class ProjectsScene extends Phaser.Scene {
     );
   }
 
-  // Open the Hackatime OAuth flow in a popup so the player stays in-game. The
-  // server's /hackatime/connect verifies our session, bounces to Hackatime's
-  // consent screen, stores the token, and the popup messages us back.
   private openOAuthPopup() {
     const token = getSessionToken();
     if (!token) {
@@ -489,16 +580,18 @@ export class ProjectsScene extends Phaser.Scene {
       return;
     }
     const url = `${SERVER_URL}/hackatime/connect?token=${encodeURIComponent(token)}`;
-    this.oauthPopup = window.open(url, "hackatime_oauth", "width=560,height=720");
+    this.oauthPopup = window.open(
+      url,
+      "hackatime_oauth",
+      "width=560,height=720",
+    );
     if (!this.oauthPopup) {
-      // Popup blocked — fall back to a full-page redirect.
       window.location.href = url;
       return;
     }
     this.flash("Approve access in the Hackatime window…", "#ffd166");
   }
 
-  // Build a labelled DOM field (input or textarea) and track it for teardown.
   private field(
     label: string,
     kind: "input" | "textarea",
@@ -510,9 +603,17 @@ export class ProjectsScene extends Phaser.Scene {
     height = 30,
   ): HTMLInputElement & HTMLTextAreaElement {
     this.track(
-      this.add.text(x, y, label, { fontFamily: FONT_NARROW, fontSize: "12px", color: COLORS.textDim }).setOrigin(0, 0),
+      this.add
+        .text(x, y, label, {
+          fontFamily: FONT_NARROW,
+          fontSize: "12px",
+          color: COLORS.textDim,
+        })
+        .setOrigin(0, 0),
     );
-    const dom = this.add.dom(x + w / 2, y + 18 + height / 2, kind).setOrigin(0.5);
+    const dom = this.add
+      .dom(x + w / 2, y + 18 + height / 2, kind)
+      .setOrigin(0.5);
     const el = dom.node as HTMLInputElement & HTMLTextAreaElement;
     el.value = value;
     el.placeholder = placeholder;
@@ -529,7 +630,7 @@ export class ProjectsScene extends Phaser.Scene {
       resize: "none",
       boxSizing: "border-box",
     } as Partial<CSSStyleDeclaration>);
-    // Keep keystrokes from leaking to the game (movement, hotkeys).
+
     el.addEventListener("keydown", (e) => {
       e.stopPropagation();
       if (e.key === "Escape") this.showList();

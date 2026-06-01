@@ -4,17 +4,13 @@ import { playUiSound, uiNineslice } from "../ui/UIKit";
 
 export interface MenuButton {
   container: Phaser.GameObjects.Container;
-  // The actual interactive game object (the nineslice background). Input lives
-  // here, not on the container — a Container has no Origin component, so making
-  // it interactive gives Phaser an `undefined` displayOrigin and the hit test
-  // collapses to a tiny region near the centre.
   hit: Phaser.GameObjects.GameObject;
   label: Phaser.GameObjects.Text;
   setText(text: string): void;
   setFocused(v: boolean): void;
-  // Swap the click handler (used by recycled list rows).
+
   setOnClick(fn: () => void): void;
-  // Disable/enable: dims the button and ignores clicks while disabled.
+
   setEnabled(v: boolean): void;
   trigger(): void;
   destroy(): void;
@@ -27,8 +23,6 @@ interface MakeButtonOpts {
   onClick: () => void;
 }
 
-// Shared menu button, skinned with the Kenney UI pack nine-slice button art.
-// Clickable by mouse AND keyboard (see attachMenuNav).
 export function makeMenuButton(
   scene: Phaser.Scene,
   x: number,
@@ -40,18 +34,20 @@ export function makeMenuButton(
   const h = opts.height ?? 54;
   const tex = opts.variant === "grey" ? "ui-btn-grey" : "ui-btn";
 
-  // Adventure button sprite is 48×24 with ~8px rounded corners → inset 8.
   const bg = uiNineslice(scene, 0, 0, tex, w, h, 8).setOrigin(0.5);
   const fontSize = Phaser.Math.Clamp(Math.floor(h * 0.3), 11, 16);
   const label = scene.add
-    .text(0, -2, text, { fontFamily: FONT, fontSize: `${fontSize}px`, color: COLORS.textDark })
+    .text(0, -2, text, {
+      fontFamily: FONT,
+      fontSize: `${fontSize}px`,
+      color: COLORS.textDark,
+    })
     .setOrigin(0.5)
     .setResolution(4);
 
   const container = scene.add.container(x, y, [bg, label]);
   container.setSize(w, h);
-  // Input lives on the nineslice (it has an Origin, so the hit test is correct
-  // across the whole button); the default hit area already covers its full size.
+
   bg.setInteractive({ cursor: CURSORS.pointer });
 
   let hovering = false;
@@ -61,7 +57,6 @@ export function makeMenuButton(
   let onClick = opts.onClick;
 
   const render = () => {
-    // One sprite, no pressed variant — convey state with tint/scale/nudge.
     if (pressed) bg.setTint(0xd8c298);
     else if (focused) bg.setTint(0xffe08a);
     else if (hovering) bg.setTint(0xfff2cc);
@@ -75,16 +70,21 @@ export function makeMenuButton(
     if (enabled) onClick();
   };
 
-  bg.on("pointerover", () => { hovering = true; render(); });
-  bg.on("pointerout", () => { hovering = false; pressed = false; render(); });
+  bg.on("pointerover", () => {
+    hovering = true;
+    render();
+  });
+  bg.on("pointerout", () => {
+    hovering = false;
+    pressed = false;
+    render();
+  });
   bg.on("pointerdown", () => {
     pressed = true;
     render();
     playUiSound(scene, "sfx-click");
   });
-  // A pointerup ON the object means it was released over it, so a press that
-  // started here is a real click — no fragile "hovering" gate (that was the
-  // bug: the first click before any mouse-move was being dropped).
+
   bg.on("pointerup", () => {
     if (!pressed) return;
     pressed = false;
@@ -120,9 +120,6 @@ export function makeMenuButton(
   };
 }
 
-// Wire up keyboard navigation for a vertical list of menu buttons: Up/Down
-// (or W/S) move the highlight, Enter/Space activate it, and mouse hover syncs
-// the highlight so the two input methods don't fight.
 export function attachMenuNav(scene: Phaser.Scene, buttons: MenuButton[]) {
   if (buttons.length === 0) return;
   let idx = 0;

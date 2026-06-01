@@ -23,12 +23,12 @@ export class PauseScene extends Phaser.Scene {
     const W = this.scale.width;
     const H = this.scale.height;
 
-    // Block clicks reaching the paused scene; dimming is the camera background.
     this.add.zone(0, 0, W, H).setOrigin(0).setInteractive();
 
-    // Menu panel.
     panel(this, W / 2, H / 2 - 6, 380, 380, "ui-panel-dark");
-    closeButton(this, W / 2 + 190 - 26, H / 2 - 6 - 190 + 24, () => this.resume());
+    closeButton(this, W / 2 + 190 - 26, H / 2 - 6 - 190 + 24, () =>
+      this.resume(),
+    );
     fitModal(this, 400, 400, 24, 0.7);
 
     this.add
@@ -49,10 +49,12 @@ export class PauseScene extends Phaser.Scene {
         onClick: () => this.resume(),
       }),
       makeMenuButton(this, cx, by + STEP, "SETTINGS", {
-        onClick: () => this.scene.launch("SettingsScene", { from: "PauseScene" }),
+        onClick: () =>
+          this.scene.launch("SettingsScene", { from: "PauseScene" }),
       }),
       makeMenuButton(this, cx, by + STEP * 2, "CHARACTER", {
-        onClick: () => this.scene.launch("CharacterScene", { from: "PauseScene" }),
+        onClick: () =>
+          this.scene.launch("CharacterScene", { from: "PauseScene" }),
       }),
       makeMenuButton(this, cx, by + STEP * 3, "QUIT TO MAIN MENU", {
         onClick: () => this.quitToMenu(),
@@ -79,7 +81,7 @@ export class PauseScene extends Phaser.Scene {
 
   private quitToMenu() {
     this.scene.stop("SettingsScene");
-    // Stop both gameplay scenes so the main menu starts clean.
+
     this.scene.stop("InteriorScene");
     this.scene.stop("WorldScene");
     gameSocket.disconnect();

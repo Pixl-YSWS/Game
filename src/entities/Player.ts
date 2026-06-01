@@ -16,15 +16,11 @@ import {
 
 export type { PlayerState };
 
-const STEP_MS = 120; // ms per tile — one step every 120 ms (~8 tiles/sec)
-const RUN_STEP_MS = 72; // holding Shift sprints at ~14 tiles/sec
+const STEP_MS = 120;
+const RUN_STEP_MS = 72;
 
-// Resting y of the avatar within the container: feet on the tile. The walk-hop
-// and idle bob animate around this baseline.
 const AVATAR_FOOT_Y = TILE_H / 2 + 3;
 
-// Resolve a player's outfit: an explicit custom skin (encoded outfit string)
-// wins, else the preset at `char`, else a stable default from the id.
 function resolveOutfit(state: PlayerState): Outfit {
   if (state.skin) {
     const o = decodeOutfit(state.skin);
@@ -50,31 +46,29 @@ export class Player extends Phaser.GameObjects.Container {
   public playerId: string;
   public isLocal: boolean;
 
-  // True while the step tween is playing; blocks new local moves.
   private isMoving = false;
-  // Direction held at the end of the current step — drives auto-continuation.
+
   private inputDir = { dx: 0, dy: 0 };
-  // Current facing for the avatar animation.
+
   private dir: Dir = "down";
   private facingLeft = false;
-  // Bubble shown above the head for chat lines / emotes (lazily created).
+
   private bubble?: Phaser.GameObjects.Container;
   private bubbleTimer?: Phaser.Time.TimerEvent;
-  // Mic icon shown above the head while this player is talking (lazily created).
+
   private speakIcon?: Phaser.GameObjects.Image;
   private speakTimer?: Phaser.Time.TimerEvent;
   private speakTween?: Phaser.Tweens.Tween;
   private speakBaseScale = 1;
-  // Gentle breathing bob while standing still (looping); stopped while walking.
+
   private idleBob?: Phaser.Tweens.Tween;
-  // Counts steps so footstep dust puffs on alternate tiles, not every one.
+
   private stepCount = 0;
-  // True while Shift is held — the local player sprints (shorter step time).
+
   private running = false;
-  // Walk-speed multiplier (1 = normal). Set by admin /speed; divides step time.
+
   private speedMul = 1;
-  // Scene time of the last remote move, so remote interpolation can match the
-  // sender's actual cadence (and so look right when a peer is sprinting).
+
   private lastRemoteMoveT = 0;
 
   constructor(
@@ -104,9 +98,6 @@ export class Player extends Phaser.GameObjects.Container {
     this.avatar = new CozyAvatar(scene, resolveOutfit(state));
     this.avatar.setPosition(0, AVATAR_FOOT_Y);
 
-    // Verified Hack Clubbers get a green name + check badge. Rendered large then
-    // scaled down so it stays crisp under the world camera zoom; sits above the
-    // taller 32px avatar so it never overlaps the head.
     const verified = state.verified ?? false;
     this.nameTag = scene.add
       .text(0, -TILE_H, verified ? `✓ ${state.name}` : state.name, {
@@ -130,13 +121,10 @@ export class Player extends Phaser.GameObjects.Container {
     this.playerId = id;
   }
 
-  // Swap to a preset look live (from the picker / a remote's appearance).
   setCharacter(index: number) {
     this.setAppearance(index, undefined);
   }
 
-  // Apply a full appearance: a custom outfit if `skin` is given and valid,
-  // otherwise the preset at `index`. Used by the picker and remote updates.
   setAppearance(index: number, skin?: string) {
     this.avatar.setOutfit(
       resolveOutfit({
@@ -155,8 +143,6 @@ export class Player extends Phaser.GameObjects.Container {
     );
   }
 
-  // Make this avatar clickable (hand cursor + callback). Used for remote
-  // players so you can click someone to wave at them.
   makeClickable(cursor: string, onClick: () => void): this {
     this.setSize(TILE_W, TILE_H + 28);
     this.setInteractive({
@@ -186,8 +172,7 @@ export class Player extends Phaser.GameObjects.Container {
     this.cx = cx;
     this.cy = cy;
     this.isMoving = true;
-    // Diagonal steps cover √2 the distance, so stretch their time to keep the
-    // felt speed even with cardinal steps. The /speed multiplier divides it.
+
     const diag = dx !== 0 && dy !== 0 ? Math.SQRT2 : 1;
     const dur = ((this.running ? RUN_STEP_MS : STEP_MS) * diag) / this.speedMul;
     this.startStepAnim(dx, dy, dur);
@@ -201,14 +186,9 @@ export class Player extends Phaser.GameObjects.Container {
       duration: dur,
       ease: "Linear",
       onComplete: () => {
-        // The player may have been destroyed mid-step (e.g. a world switch
-        // tore down the scene while walking). Bail before touching a dead
-        // scene, otherwise the chained step throws and halts the game loop.
         if (!this.scene) return;
         this.isMoving = false;
-        // If the player is still holding a direction, chain the next step
-        // immediately — no gap between tiles, classic retro feel. attemptStep
-        // handles diagonal wall-sliding.
+
         const { dx: hx, dy: hy } = this.inputDir;
         if (hx !== 0 || hy !== 0) {
           if (!this.attemptStep(hx, hy)) this.returnToIdle();
@@ -221,8 +201,6 @@ export class Player extends Phaser.GameObjects.Container {
     return true;
   }
 
-  // Face the direction of travel. dx wins for diagonals (side-facing reads best
-  // when moving diagonally); left is the side frames mirrored.
   private setDirection(dx: number, dy: number) {
     if (dx !== 0) {
       this.dir = "side";
@@ -234,9 +212,6 @@ export class Player extends Phaser.GameObjects.Container {
     }
   }
 
-  // One footstep: walk animation in the travel direction + a small vertical hop
-  // on the avatar, plus a dust puff on alternate tiles. `dur` keeps the hop in
-  // sync whether walking or sprinting.
   private startStepAnim(dx: number, dy: number, dur: number) {
     this.setDirection(dx, dy);
     this.avatar.setAnim("walk", this.dir, this.facingLeft);
@@ -252,7 +227,6 @@ export class Player extends Phaser.GameObjects.Container {
     if (this.stepCount++ % 2 === 0) this.spawnDust();
   }
 
-  // Settle back to the idle animation at rest height and resume the breathing bob.
   private returnToIdle() {
     if (!this.scene) return;
     this.scene.tweens.killTweensOf(this.avatar);
@@ -279,9 +253,6 @@ export class Player extends Phaser.GameObjects.Container {
     this.idleBob = undefined;
   }
 
-  // A short-lived puff of dust kicked up at the feet on a footstep. Lives in
-  // scene space (not parented to the player) so it stays put as the player
-  // walks on, fading and spreading before it removes itself.
   private spawnDust() {
     if (!this.scene) return;
     const puff = this.scene.add
@@ -299,8 +270,6 @@ export class Player extends Phaser.GameObjects.Container {
     });
   }
 
-  // Step by (dx, dy), which may be diagonal. If a diagonal is blocked, slide
-  // along whichever single axis is open (so you don't stick on wall corners).
   private attemptStep(dx: number, dy: number): boolean {
     if (dx === 0 && dy === 0) return false;
     if (dx !== 0 && dy !== 0) {
@@ -316,13 +285,10 @@ export class Player extends Phaser.GameObjects.Container {
     return this.moveToTile(this.cx + dx, this.cy + dy);
   }
 
-  // Admin /speed: 1 = normal. Clamped to a sane range so movement stays usable.
   setSpeedMultiplier(mul: number) {
     this.speedMul = Phaser.Math.Clamp(mul, 0.25, 8);
   }
 
-  // Admin /tp: snap straight to a tile (no walk tween) and report the new tile
-  // so the caller can sync the server + camera.
   teleport(cx: number, cy: number): boolean {
     const { cols, rows } = this.mapDef;
     if (cx < 0 || cy < 0 || cx >= cols || cy >= rows) return false;
@@ -357,16 +323,11 @@ export class Player extends Phaser.GameObjects.Container {
       D: Phaser.Input.Keyboard.Key;
     },
     _delta: number,
-    // Optional held direction from the on-screen mobile D-pad. Used only when
-    // no key is pressed, so a keyboard always wins if both are active.
+
     touch?: { dx: number; dy: number },
   ): boolean {
-    // Hold Shift to sprint. createCursorKeys() exposes the Shift key, so this
-    // works for both arrow-key and WASD movement.
     this.running = !!cursors.shift?.isDown;
 
-    // Each axis is independent, so holding two keys walks diagonally; a blocked
-    // diagonal slides along the open axis (see attemptStep).
     let dx = 0,
       dy = 0;
     if (cursors.left!.isDown || wasd.A.isDown) dx = -1;
@@ -374,13 +335,11 @@ export class Player extends Phaser.GameObjects.Container {
     if (cursors.up!.isDown || wasd.W.isDown) dy = -1;
     else if (cursors.down!.isDown || wasd.S.isDown) dy = 1;
 
-    // Fall back to the touch D-pad when the keyboard is idle.
     if (dx === 0 && dy === 0 && touch && (touch.dx !== 0 || touch.dy !== 0)) {
       dx = touch.dx;
       dy = touch.dy;
     }
 
-    // Always record so onComplete can chain the next step.
     this.inputDir = { dx, dy };
 
     if (this.isMoving || (dx === 0 && dy === 0)) return false;
@@ -388,8 +347,6 @@ export class Player extends Phaser.GameObjects.Container {
     return this.attemptStep(dx, dy);
   }
 
-  // Flash a mic icon above the head while this player is talking. Called each
-  // time a voice clip from them arrives; the icon lingers `ms` then hides.
   showSpeaking(ms = 1600) {
     if (!this.scene) return;
     if (!this.speakIcon) {
@@ -420,9 +377,6 @@ export class Player extends Phaser.GameObjects.Container {
   }
 
   destroy(fromScene?: boolean) {
-    // Cancel any in-flight step tween *before* teardown so its onComplete
-    // (which chains another move and touches the scene) can't fire on a
-    // half-destroyed object and crash the game loop.
     this.scene?.tweens.killTweensOf(this);
     this.scene?.tweens.killTweensOf(this.avatar);
     this.stopIdleBob();
@@ -437,8 +391,7 @@ export class Player extends Phaser.GameObjects.Container {
     const dy = state.cy - this.cy;
     this.cx = state.cx;
     this.cy = state.cy;
-    // Interpolate over the gap since this peer's last move so a sprinting
-    // peer animates at their real speed instead of a fixed walk cadence.
+
     const now = this.scene.time.now;
     const elapsed = this.lastRemoteMoveT ? now - this.lastRemoteMoveT : STEP_MS;
     this.lastRemoteMoveT = now;
@@ -456,9 +409,6 @@ export class Player extends Phaser.GameObjects.Container {
     });
   }
 
-  // Floating speech / emote bubble above the head. Used by chat and emotes.
-  // For chat, `content` is the line of text; for emotes it's the emote key
-  // (resolved to a sprite from the Kenney emote pack).
   showBubble(content: string, kind: "chat" | "emote" = "chat") {
     if (!this.scene) return;
     this.bubble?.destroy();
@@ -500,17 +450,14 @@ export class Player extends Phaser.GameObjects.Container {
       children.push(bg, label);
     }
 
-    // The bubble lives in world space, so the camera zoom enlarges it; render
-    // the text big (crisp) but scale the whole bubble down to a sane size.
     const rest = 0.4;
 
-    // Anchor so the bubble clears the name tag instead of overlapping it.
     let yOffset: number;
     if (isEmote) {
       yOffset = -TILE_H - 22;
     } else {
-      const nameTopY = this.nameTag.y - this.nameTag.displayHeight; // origin (0.5,1)
-      const bubbleH = (children[0] as Phaser.GameObjects.Rectangle).height; // bg box
+      const nameTopY = this.nameTag.y - this.nameTag.displayHeight;
+      const bubbleH = (children[0] as Phaser.GameObjects.Rectangle).height;
       const gap = 3;
       yOffset = nameTopY - gap - (bubbleH * rest) / 2;
     }

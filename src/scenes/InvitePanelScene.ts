@@ -9,7 +9,6 @@ interface PanelInit {
   from: string;
 }
 
-// One rendered directory row (recycled across scroll/filter re-renders).
 interface Row {
   bg: Phaser.GameObjects.Rectangle;
   name: Phaser.GameObjects.Text;
@@ -17,10 +16,8 @@ interface Row {
   btn: MenuButton;
 }
 
-const VISIBLE = 7; // rows shown at once; the rest scroll with the wheel
+const VISIBLE = 7;
 
-// Overlay panel listing every account, with a live search box, so the player
-// can find someone and send them a persistent village invite.
 export class InvitePanelScene extends Phaser.Scene {
   private fromKey = "WorldScene";
   private all: PlayerDirEntry[] = [];
@@ -68,10 +65,13 @@ export class InvitePanelScene extends Phaser.Scene {
     fitModal(this, panelW, panelH);
 
     this.add
-      .text(W / 2, py + 28, "INVITE TO VILLAGE", { fontFamily: FONT_TITLE, fontSize: "18px", color: "#f0a500" })
+      .text(W / 2, py + 28, "INVITE TO VILLAGE", {
+        fontFamily: FONT_TITLE,
+        fontSize: "18px",
+        color: "#f0a500",
+      })
       .setOrigin(0.5);
 
-    // DOM search input (mirrors the chat box input styling).
     const dom = this.add.dom(W / 2, py + 64, "input").setOrigin(0.5);
     const input = dom.node as HTMLInputElement;
     input.type = "text";
@@ -97,7 +97,7 @@ export class InvitePanelScene extends Phaser.Scene {
       this.applyFilter();
     });
     this.searchDom = dom;
-    // Defer focus until the DOM element is mounted.
+
     this.time.delayedCall(50, () => input.focus());
 
     this.listX = px + 28;
@@ -113,7 +113,11 @@ export class InvitePanelScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     this.toast = this.add
-      .text(W / 2, py + panelH - 78, "", { fontFamily: FONT, fontSize: "11px", color: "#7dda1c" })
+      .text(W / 2, py + panelH - 78, "", {
+        fontFamily: FONT,
+        fontSize: "11px",
+        color: "#7dda1c",
+      })
       .setOrigin(0.5);
 
     makeMenuButton(this, W / 2, py + panelH - 38, "CLOSE", {
@@ -121,12 +125,18 @@ export class InvitePanelScene extends Phaser.Scene {
       onClick: () => this.scene.stop(),
     });
 
-    // Mouse wheel scrolls the list.
-    this.input.on("wheel", (_p: unknown, _o: unknown, _dx: number, dy: number) => {
-      const max = Math.max(0, this.filtered.length - VISIBLE);
-      this.scroll = Phaser.Math.Clamp(this.scroll + (dy > 0 ? 1 : -1), 0, max);
-      this.renderRows();
-    });
+    this.input.on(
+      "wheel",
+      (_p: unknown, _o: unknown, _dx: number, dy: number) => {
+        const max = Math.max(0, this.filtered.length - VISIBLE);
+        this.scroll = Phaser.Math.Clamp(
+          this.scroll + (dy > 0 ? 1 : -1),
+          0,
+          max,
+        );
+        this.renderRows();
+      },
+    );
 
     this.input.keyboard?.on("keydown-ESC", () => this.scene.stop());
 
@@ -155,7 +165,7 @@ export class InvitePanelScene extends Phaser.Scene {
 
   private applyFilter() {
     this.filtered = this.query
-      ? this.all.filter(p => p.name.toLowerCase().includes(this.query))
+      ? this.all.filter((p) => p.name.toLowerCase().includes(this.query))
       : this.all;
     const max = Math.max(0, this.filtered.length - VISIBLE);
     this.scroll = Phaser.Math.Clamp(this.scroll, 0, max);
@@ -163,14 +173,17 @@ export class InvitePanelScene extends Phaser.Scene {
   }
 
   private renderRows() {
-    this.emptyText?.setVisible(this.filtered.length === 0).setText(
-      this.all.length === 0 ? "Loading players…" : "No players match your search",
-    );
+    this.emptyText
+      ?.setVisible(this.filtered.length === 0)
+      .setText(
+        this.all.length === 0
+          ? "Loading players…"
+          : "No players match your search",
+      );
 
     const slice = this.filtered.slice(this.scroll, this.scroll + VISIBLE);
     const rowH = 46;
 
-    // Build/recycle row widgets.
     for (let i = 0; i < VISIBLE; i++) {
       const entry = slice[i];
       let row = this.rows[i];
@@ -181,7 +194,9 @@ export class InvitePanelScene extends Phaser.Scene {
       if (!row) continue;
       const visible = !!entry;
       const y = this.listY + i * rowH;
-      row.bg.setVisible(visible).setPosition(this.listX + this.listW / 2, y + 16);
+      row.bg
+        .setVisible(visible)
+        .setPosition(this.listX + this.listW / 2, y + 16);
       row.dot.setVisible(visible).setPosition(this.listX + 12, y + 16);
       row.name.setVisible(visible);
       row.btn.container.setVisible(visible);
@@ -208,7 +223,11 @@ export class InvitePanelScene extends Phaser.Scene {
       .setStrokeStyle(1, 0xffffff, 0.12);
     const dot = this.add.circle(0, 0, 5, 0x555566);
     const name = this.add
-      .text(0, 0, "", { fontFamily: FONT_NARROW, fontSize: "15px", color: "#ffffff" })
+      .text(0, 0, "", {
+        fontFamily: FONT_NARROW,
+        fontSize: "15px",
+        color: "#ffffff",
+      })
       .setResolution(3);
     const btn = makeMenuButton(this, 0, 0, "INVITE", {
       width: 96,

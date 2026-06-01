@@ -4,23 +4,16 @@ import { COLORS } from "./theme";
 import { playUiSound } from "./UIKit";
 import type { ChatMessage } from "../types/network";
 
-// "/me waves" → an action line instead of a normal "Name: text" line.
 export function formatChatBubble(text: string): string {
   return text.startsWith("/me ") ? text.slice(4) : text;
 }
 
 const MAX_LINES = 9;
-const LINE_TTL = 11000; // ms a line stays before fading when chat is closed
-const LINE_GAP = 4; // vertical gap between stacked chat lines
-// Monocraft — a Minecraft look-alike that reads like a real MC chat log, far
-// easier on the eyes at small sizes than the blocky all-caps UI font. Falls
-// back to Pixelify Sans until Monocraft.ttf is dropped into public/assets/fonts.
+const LINE_TTL = 11000;
+const LINE_GAP = 4;
+
 const CHAT_FONT = '"Monocraft", "Pixelify Sans", "Trebuchet MS", sans-serif';
 
-// Bottom-left world chat, styled after Minecraft: each line sits on its own
-// translucent dark strip so it stays legible over any background, with a DOM
-// <input> bar that appears when the player presses Enter / T. Lives inside the
-// UIScene.
 export class ChatBox {
   private scene: Phaser.Scene;
   private lines: {
@@ -35,8 +28,7 @@ export class ChatBox {
   private unread = 0;
   private readonly x = 12;
   private inputY: number;
-  // Optional slash-command interceptor. Returns true if it handled the line
-  // (so it is NOT sent to the server as chat). Set by UIScene.
+
   onCommand?: (raw: string) => boolean;
 
   constructor(scene: Phaser.Scene) {
@@ -77,8 +69,6 @@ export class ChatBox {
     this.dom.setVisible(false);
     this.inputEl.style.display = "none";
 
-    // Keep keystrokes from leaking to Phaser (which would move the player or
-    // trigger hotkeys while the player is typing).
     this.inputEl.addEventListener("keydown", (e) => {
       e.stopPropagation();
       if (e.key === "Enter") {
@@ -104,13 +94,10 @@ export class ChatBox {
     this.dom.setVisible(true);
     this.hint.setVisible(false);
     this.inputEl.value = "";
-    // Phaser only flips the DOM node to `display:block` during its next render
-    // pass, and focus() is a no-op on a `display:none` element — so reveal it
-    // now (matching what the renderer will do anyway) before focusing,
-    // otherwise the field opens unfocused and the player has to click it.
+
     this.inputEl.style.display = "block";
     this.inputEl.focus();
-    // While typing, keep the whole log fully visible.
+
     for (const l of this.lines) {
       l.fade?.remove();
       l.fade = undefined;
@@ -118,7 +105,6 @@ export class ChatBox {
     }
   }
 
-  // Reflect the unread count on the closed-chat hint.
   private updateHint() {
     if (this.unread > 0) {
       this.hint
@@ -140,29 +126,27 @@ export class ChatBox {
     this.inputEl.style.display = "none";
     this.hint.setVisible(true);
     this.inputEl.blur();
-    // Restart the fade countdown on existing lines.
+
     for (const l of this.lines) this.scheduleFade(l);
   }
 
   private submit() {
     const text = this.inputEl.value.trim();
     if (text) {
-      // Slash-commands are handled locally and never broadcast as chat.
       if (!(text.startsWith("/") && this.onCommand?.(text))) {
         const sent = gameSocket.sendChat(text);
-        if (!sent) this.flashHint("Offline — message will send when you reconnect");
+        if (!sent)
+          this.flashHint("Offline — message will send when you reconnect");
       }
     }
     this.inputEl.value = "";
     this.close();
   }
 
-  // A local-only system line (command feedback, etc.) — not sent anywhere.
   addSystem(text: string) {
     this.addMessage({ id: "__system__", name: "", text: `§ ${text}` });
   }
 
-  // Briefly override the closed-chat hint (used to confirm a queued message).
   private flashHint(msg: string) {
     this.hint.setText(msg).setColor(COLORS.accent).setAlpha(0.95);
     this.scene.time.delayedCall(3500, () => {
@@ -179,7 +163,7 @@ export class ChatBox {
       : action
         ? `✦ ${msg.name} ${msg.text.slice(4)}`
         : `${msg.name}: ${msg.text}`;
-    // White chat for legibility; /me actions green; system feedback amber.
+
     const color = system ? COLORS.accent : action ? COLORS.good : COLORS.text;
 
     const text = this.scene.add
@@ -195,15 +179,12 @@ export class ChatBox {
       .setResolution(3)
       .setScrollFactor(0);
 
-    // Minecraft-style translucent strip behind the line, with a faint outline
-    // so each message stays separated from the world (and its neighbours).
-    // Added before the text is referenced for layout; drawn behind it.
     const bg = this.scene.add
       .rectangle(this.x - 4, 0, text.width + 8, text.height + 2, 0x000000, 0.6)
       .setStrokeStyle(1, 0xffffff, 0.1)
       .setOrigin(0, 1)
       .setScrollFactor(0);
-    // Keep the strip behind the glyphs.
+
     bg.setDepth(text.depth - 1);
 
     const line = { text, bg } as {
@@ -223,7 +204,7 @@ export class ChatBox {
       this.setLineAlpha(line, 1);
     } else {
       this.scheduleFade(line);
-      // Incoming chatter while closed: blip + bump the unread badge.
+
       if (!mine) {
         this.unread++;
         this.updateHint();
@@ -232,8 +213,6 @@ export class ChatBox {
     }
   }
 
-  // Set both the text and its backing strip alpha together (the strip stays a
-  // touch more transparent than the text).
   private setLineAlpha(
     line: { text: Phaser.GameObjects.Text; bg: Phaser.GameObjects.Rectangle },
     a: number,
@@ -258,15 +237,10 @@ export class ChatBox {
     });
   }
 
-  // Chat input width, capped to the viewport so it never runs off-screen on
-  // narrow windows (and shrinks with the canvas under the RESIZE scale mode).
   private inputWidth(): number {
     return Math.min(440, this.scene.scale.width - this.x * 2);
   }
 
-  // Re-anchor to the bottom-left after a canvas resize (window drag /
-  // fullscreen toggle): the input width and every line's Y depend on the
-  // current viewport size.
   relayout() {
     this.inputY = this.scene.scale.height - 16;
     this.inputEl.style.width = `${this.inputWidth()}px`;
@@ -275,9 +249,6 @@ export class ChatBox {
     this.reflow();
   }
 
-  // Stack lines upward from just above the input. Each line is offset by its
-  // own measured height (not a fixed step), so a wrapped multi-line message
-  // pushes the ones above it up instead of overlapping them.
   private reflow() {
     let bottom = this.inputY - 34;
     for (let i = this.lines.length - 1; i >= 0; i--) {

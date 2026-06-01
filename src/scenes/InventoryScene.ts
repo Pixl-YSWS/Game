@@ -10,9 +10,6 @@ interface InventoryInit {
   from: string;
 }
 
-// Overlay listing the items the player owns. While in the shared house,
-// placeable items get a PLACE button that hands off to WorldScene's
-// placement mode.
 export class InventoryScene extends Phaser.Scene {
   private fromKey = "WorldScene";
   private items: InventoryEntry[] = [];
@@ -43,7 +40,10 @@ export class InventoryScene extends Phaser.Scene {
     });
 
     const world = this.scene.get("WorldScene") as
-      | (Phaser.Scene & { isInHouse: () => boolean; beginPlacement: (id: string) => void })
+      | (Phaser.Scene & {
+          isInHouse: () => boolean;
+          beginPlacement: (id: string) => void;
+        })
       | undefined;
     this.inHouse = world?.isInHouse() ?? false;
 
@@ -58,15 +58,26 @@ export class InventoryScene extends Phaser.Scene {
     fitModal(this, panelW, panelH);
 
     this.add
-      .text(W / 2, py + 28, "INVENTORY", { fontFamily: FONT_TITLE, fontSize: "18px", color: "#f0a500" })
+      .text(W / 2, py + 28, "INVENTORY", {
+        fontFamily: FONT_TITLE,
+        fontSize: "18px",
+        color: "#f0a500",
+      })
       .setOrigin(0.5);
 
     this.hintText = this.add
-      .text(W / 2, py + 52, this.inHouse ? "Place furniture in the house" : "Enter the house to place furniture", {
-        fontFamily: FONT_NARROW,
-        fontSize: "12px",
-        color: COLORS.textDim,
-      })
+      .text(
+        W / 2,
+        py + 52,
+        this.inHouse
+          ? "Place furniture in the house"
+          : "Enter the house to place furniture",
+        {
+          fontFamily: FONT_NARROW,
+          fontSize: "12px",
+          color: COLORS.textDim,
+        },
+      )
       .setOrigin(0.5);
 
     this.listX = px + 28;
@@ -74,7 +85,11 @@ export class InventoryScene extends Phaser.Scene {
     this.listW = panelW - 56;
 
     this.emptyText = this.add
-      .text(W / 2, this.listY + 70, "Loading…", { fontFamily: FONT_NARROW, fontSize: "14px", color: COLORS.textDim })
+      .text(W / 2, this.listY + 70, "Loading…", {
+        fontFamily: FONT_NARROW,
+        fontSize: "14px",
+        color: COLORS.textDim,
+      })
       .setOrigin(0.5);
 
     makeMenuButton(this, W / 2, py + panelH - 38, "CLOSE", {
@@ -114,7 +129,10 @@ export class InventoryScene extends Phaser.Scene {
         .rectangle(cx, y + 18, this.listW, 42, 0xffffff, 0.05)
         .setStrokeStyle(1, 0xffffff, 0.12);
       const glyph = this.add
-        .text(this.listX + 22, y + 18, item.glyph, { fontFamily: FONT_EMOJI, fontSize: "24px" })
+        .text(this.listX + 22, y + 18, item.glyph, {
+          fontFamily: FONT_EMOJI,
+          fontSize: "24px",
+        })
         .setOrigin(0.5);
       const label = this.add
         .text(this.listX + 48, y + 9, `${item.name}  ×${entry.count}`, {
@@ -125,19 +143,24 @@ export class InventoryScene extends Phaser.Scene {
         .setResolution(3);
       this.cards.push(bg, glyph, label);
 
-      // Placeable items get a PLACE button while inside the house.
       if (item.placeable && this.inHouse) {
-        const place = makeMenuButton(this, this.listX + this.listW - 56, y + 18, "PLACE", {
-          width: 96,
-          height: 32,
-          onClick: () => {
-            const world = this.scene.get("WorldScene") as
-              | (Phaser.Scene & { beginPlacement: (id: string) => void })
-              | undefined;
-            world?.beginPlacement(entry.itemId);
-            this.scene.stop();
+        const place = makeMenuButton(
+          this,
+          this.listX + this.listW - 56,
+          y + 18,
+          "PLACE",
+          {
+            width: 96,
+            height: 32,
+            onClick: () => {
+              const world = this.scene.get("WorldScene") as
+                | (Phaser.Scene & { beginPlacement: (id: string) => void })
+                | undefined;
+              world?.beginPlacement(entry.itemId);
+              this.scene.stop();
+            },
           },
-        });
+        );
         this.cards.push(place.container);
       }
     });
