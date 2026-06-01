@@ -1,24 +1,61 @@
-// Server-side chat profanity filter. Runs on every chat line before it's
-// broadcast, so a censored word can never reach another client. The match is
-// case-insensitive and replaces each offending run with asterisks (Minecraft
-// style), preserving length so the sentence still reads naturally.
+// HEHEHE... OFC THEY R BANNED
 
-// Curated block list. Kept deliberately short and obvious; extend as needed.
 const BAD_WORDS = [
-  "fuck", "fucker", "fucking", "motherfucker",
-  "shit", "bullshit", "bitch", "bastard",
-  "asshole", "dickhead", "dick", "piss",
-  "cunt", "slut", "whore", "douche",
-  "nigger", "nigga", "faggot", "fag", "retard",
+  "fuck",
+  "fucker",
+  "fucking",
+  "motherfucker",
+  "shit",
+  "bullshit",
+  "shitty",
+  "bitch",
+  "bitches",
+  "bastard",
+  "asshole",
+  "ass",
+  "jackass",
+  "dickhead",
+  "dick",
+  "piss",
+  "pissed",
+  "cunt",
+  "slut",
+  "whore",
+  "douche",
+  "douchebag",
+
+  "nigger",
+  "nigga",
+  "ngga",
+  "nga",
+  "faggot",
+  "fag",
+  "retard",
+  "retarded",
+
+  "fck",
+  "fk",
+  "fucc",
+  "fuk",
+  "fukc",
+  "sh1t",
+  "shyt",
+  "b1tch",
+  "a55hole",
+  "dik",
+  "wtf",
+  "stfu",
+  "gtfo",
+  "tf",
 ];
 
-// One big alternation, longest-first so "motherfucker" wins over "fuck".
 const PATTERN = new RegExp(
-  `(${[...BAD_WORDS].sort((a, b) => b.length - a.length).join("|")})`,
+  `\\b(${BAD_WORDS.sort((a, b) => b.length - a.length)
+    .map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    .join("|")})\\b`,
   "gi",
 );
 
-/** Replace any blocked word with asterisks of the same length. */
 export function censorChat(text: string): string {
   return text.replace(PATTERN, (m) => "*".repeat(m.length));
 }
