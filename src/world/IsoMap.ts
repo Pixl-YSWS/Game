@@ -23,6 +23,8 @@ export class IsoMap {
 
   private animTimers: Phaser.Time.TimerEvent[] = [];
 
+  private waterStamps: { img: Phaser.GameObjects.Image; frames: string[] }[] = [];
+
   public boundsX = 0;
   public boundsY = 0;
   public boundsW = 0;
@@ -38,6 +40,7 @@ export class IsoMap {
     this.animTimers.length = 0;
     for (const img of this.stamps) img.destroy();
     this.stamps.length = 0;
+    this.waterStamps.length = 0;
   }
 
   build() {
@@ -49,6 +52,8 @@ export class IsoMap {
     this.boundsY = 0;
     this.boundsW = cols * TILE_W;
     this.boundsH = rows * TILE_H;
+
+    this.startWaterAnim();
   }
 
   private buildCozy() {
@@ -64,6 +69,8 @@ export class IsoMap {
           this.stampTile(GRASS, x, y, 0);
           const f = sandFrame(this.waterBits(col, row));
           this.stampSub(TS.beach, f.sx, f.sy, 16, 16, x, y, 0.2);
+        } else if (g === WATER) {
+          this.stampWaterTile(x, y);
         } else if (g >= 0) {
           this.stampTile(g, x, y, 0);
           if (g === GRASS || g === GRASS_DARK)
@@ -107,6 +114,38 @@ export class IsoMap {
       const f = pick(SAND_FRINGE[dir]);
       this.stampSub(TS.beach, f.sx, f.sy, 16, 16, wx, wy, 0.3);
     }
+  }
+
+  private stampWaterTile(wx: number, wy: number) {
+    const key = TS.water;
+    const texture = this.scene.textures.get(key);
+    const frames: string[] = [];
+    for (let fx = 0; fx < 4; fx++) {
+      const sx = fx * SRC_TILE;
+      const fk = `${key}_wf${fx}`;
+      if (!texture.has(fk)) texture.add(fk, 0, sx, 0, SRC_TILE, SRC_TILE);
+      frames.push(fk);
+    }
+    const img = this.scene.add.image(wx, wy, key, frames[0]).setOrigin(0, 0);
+    img.setScale(TILE_W / SRC_TILE, TILE_H / SRC_TILE);
+    img.setDepth(0);
+    this.stamps.push(img);
+    this.waterStamps.push({ img, frames });
+  }
+
+  private startWaterAnim() {
+    if (this.waterStamps.length === 0) return;
+    let i = 0;
+    this.animTimers.push(
+      this.scene.time.addEvent({
+        delay: 250,
+        loop: true,
+        callback: () => {
+          i = (i + 1) % 4;
+          for (const ws of this.waterStamps) ws.img.setFrame(ws.frames[i]);
+        },
+      }),
+    );
   }
 
   private stampTile(id: number, wx: number, wy: number, depth: number) {

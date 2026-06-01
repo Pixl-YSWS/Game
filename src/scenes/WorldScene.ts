@@ -2,11 +2,12 @@ import Phaser from "phaser";
 import { IsoMap } from "../world/IsoMap";
 import { Player } from "../entities/Player";
 import { Npc } from "../entities/Npc";
+import { Animal } from "../entities/Animal";
 import type { PlayerState, WorldRef, WorldState } from "../types/network";
-import type { MapDef } from "../types/map";
+import type { MapDef, MapObject } from "../types/map";
 import { generateMap, generateVillage } from "../world/MapGen";
 import { makeHouseInterior } from "../world/HouseMap";
-import { TS, TILE_SRC, WATER } from "../world/tileset";
+import { TS } from "../world/tileset";
 import { gameSocket } from "../network/socket";
 import { TILE_H, TILE_W, cartToIso, isoToCart } from "../utils/IsoUtils";
 import { getShopItem } from "../shop/catalog";
@@ -33,6 +34,7 @@ export class WorldScene extends Phaser.Scene {
   private isoMap?: IsoMap;
 
   private ocean?: Phaser.GameObjects.TileSprite;
+  private oceanTimer?: Phaser.Time.TimerEvent;
   private localPlayer?: Player;
   private mapDef?: MapDef;
   private loadingText?: Phaser.GameObjects.Text;
@@ -82,6 +84,8 @@ export class WorldScene extends Phaser.Scene {
   private portalObjects: Phaser.GameObjects.GameObject[] = [];
   private portalLabel?: Phaser.GameObjects.Text;
   private portalTween?: Phaser.Tweens.Tween;
+
+  private animals: Animal[] = [];
 
   private npcs: Npc[] = [];
 
@@ -169,12 +173,15 @@ export class WorldScene extends Phaser.Scene {
     this.scale.on("resize", this.onResize, this);
 
     this.events.once("shutdown", () => {
+      this.oceanTimer?.remove(false);
+      this.oceanTimer = undefined;
       this.clearDoorIndicators();
       this.clearPortal();
       this.hideLoadingOverlay();
       this.clearHouseObjects();
       this.cancelPlacement();
       this.clearNpcs();
+      this.clearAnimals();
       this.clearConnError();
       this.ui?.closeDialogue();
       this.scale.off("resize", this.onResize, this);
@@ -536,6 +543,50 @@ export class WorldScene extends Phaser.Scene {
     this.npcs.length = 0;
   }
 
+  private extractAnimals(): MapObject[] {
+    const animals: MapObject[] = [];
+    if (!this.mapDef?.objects) return animals;
+    const rest: MapObject[] = [];
+    for (const obj of this.mapDef.objects) {
+      if (Animal.isAnimal(obj.key)) {
+        animals.push(obj);
+        const tw = Math.ceil(obj.w / 16);
+        const th = Math.ceil(obj.h / 16);
+        for (let r = 0; r < th; r++) {
+          for (let c = 0; c < tw; c++) {
+            const gr = obj.cy + r;
+            const gc = obj.cx + c;
+            if (
+              gr >= 0 &&
+              gr < this.mapDef.decoLayer.length &&
+              gc >= 0 &&
+              gc < this.mapDef.decoLayer[0].length
+            ) {
+              this.mapDef.decoLayer[gr][gc] = -1;
+            }
+          }
+        }
+      } else {
+        rest.push(obj);
+      }
+    }
+    this.mapDef.objects = rest;
+    return animals;
+  }
+
+  private rebuildAnimals(objs: MapObject[]) {
+    this.clearAnimals();
+    if (!this.mapDef) return;
+    for (const obj of objs) {
+      this.animals.push(new Animal(this, obj, this.mapDef));
+    }
+  }
+
+  private clearAnimals() {
+    for (const a of this.animals) a.destroy();
+    this.animals.length = 0;
+  }
+
   private refreshNpcPrompt() {
     if (!this.localPlayer) return;
     if (this.ui?.isDialogueOpen) {
@@ -663,9 +714,12 @@ export class WorldScene extends Phaser.Scene {
   private buildOcean() {
     if (!this.isoMap) return;
     const tex = this.textures.get(TS.water);
-    const src = TILE_SRC[WATER];
-    if (!tex.has("ocean"))
-      tex.add("ocean", 0, src.fx * 16, src.fy * 16, 16, 16);
+    const frames: string[] = [];
+    for (let fx = 0; fx < 4; fx++) {
+      const fk = `ocean_${fx}`;
+      if (!tex.has(fk)) tex.add(fk, 0, fx * 16, 0, 16, 16);
+      frames.push(fk);
+    }
     const pad = 3000;
     this.ocean = this.add
       .tileSprite(
@@ -674,16 +728,27 @@ export class WorldScene extends Phaser.Scene {
         this.isoMap.boundsW + pad * 2,
         this.isoMap.boundsH + pad * 2,
         TS.water,
-        "ocean",
+        frames[0],
       )
       .setOrigin(0.5)
       .setDepth(-100);
+    let i = 0;
+    this.oceanTimer = this.time.addEvent({
+      delay: 250,
+      loop: true,
+      callback: () => {
+        i = (i + 1) % 4;
+        this.ocean?.setFrame(frames[i]);
+      },
+    });
   }
 
   private rebuildWorld(state: WorldState) {
     this.world = state.world;
 
     this.isoMap?.destroy();
+    this.oceanTimer?.remove(false);
+    this.oceanTimer = undefined;
     this.ocean?.destroy();
     this.ocean = undefined;
     this.localPlayer?.destroy();
@@ -693,6 +758,7 @@ export class WorldScene extends Phaser.Scene {
     this.clearDoorIndicators();
     this.clearPortal();
     this.clearHouseObjects();
+    this.clearAnimals();
     this.cancelPlacement();
 
     this.mapDef =
@@ -707,12 +773,14 @@ export class WorldScene extends Phaser.Scene {
 
               portal: "spawn",
             });
+    const animalObjects = this.extractAnimals();
     this.isoMap = new IsoMap(this, this.mapDef);
     this.isoMap.build();
     if (state.world.kind !== "house") this.buildOcean();
     this.rebuildDoorIndicators();
     this.rebuildPortal();
     this.rebuildNpcs();
+    this.rebuildAnimals(animalObjects);
     this.ui?.closeDialogue();
 
     const cam = this.cameras.main;
