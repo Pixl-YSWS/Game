@@ -15,7 +15,8 @@ interface Person {
   accountId: string;
   name: string;
   role: ModRole;
-  muted: boolean;
+  chatMuted: boolean;
+  voiceMuted: boolean;
   online: boolean;
 }
 
@@ -111,13 +112,13 @@ export class AdminScene extends Phaser.Scene {
     const seen = new Set<string>();
     const people: Person[] = [];
     for (const p of data.online) {
-      people.push({ accountId: p.accountId, name: p.name, role: p.role, muted: p.muted, online: true });
+      people.push({ accountId: p.accountId, name: p.name, role: p.role, chatMuted: p.chatMuted, voiceMuted: p.voiceMuted, online: true });
       seen.add(p.accountId);
     }
     // Offline muted accounts, so they can still be unmuted from here.
     for (const m of data.mutes) {
       if (seen.has(m.accountId)) continue;
-      people.push({ accountId: m.accountId, name: m.name, role: roleMap.get(m.accountId) ?? null, muted: true, online: false });
+      people.push({ accountId: m.accountId, name: m.name, role: roleMap.get(m.accountId) ?? null, chatMuted: m.chat, voiceMuted: m.voice, online: false });
     }
     // Staff first, then everyone else by name.
     people.sort((a, b) => (rank(b.role) - rank(a.role)) || a.name.localeCompare(b.name));
@@ -150,24 +151,35 @@ export class AdminScene extends Phaser.Scene {
         .text(this.listX + 14, y - 7, p.name + tag, { fontFamily: FONT_CHAT, fontSize: "15px", color: nameColor })
         .setOrigin(0, 0.5)
         .setResolution(3);
+      const status = p.chatMuted && p.voiceMuted
+        ? "chat + mic muted"
+        : p.chatMuted
+          ? "chat muted"
+          : p.voiceMuted
+            ? "mic muted"
+            : p.online ? "online" : "offline";
+      const muted = p.chatMuted || p.voiceMuted;
       const sub = this.add
-        .text(this.listX + 14, y + 10, p.muted ? "muted" : p.online ? "online" : "offline", {
-          fontFamily: FONT_CHAT, fontSize: "11px", color: p.muted ? COLORS.bad : COLORS.textDim,
+        .text(this.listX + 14, y + 10, status, {
+          fontFamily: FONT_CHAT, fontSize: "11px", color: muted ? COLORS.bad : COLORS.textDim,
         })
         .setOrigin(0, 0.5)
         .setResolution(3);
       this.rowObjects.push(label, sub);
 
       // Right-aligned action buttons. Mods can't be muted; only full admins
-      // can change roles, and never another admin.
-      let bx = this.listX + this.listW - 60;
+      // can change roles, and never another admin. Chat and mic mute toggle
+      // independently.
+      let bx = this.listX + this.listW - 52;
+      const step = 100;
       const canMute = p.role === null;
-      if (p.muted) {
-        this.actionButton(bx, y, "Unmute", "grey", () => gameSocket.adminUnmute(p.accountId));
-        bx -= 116;
-      } else if (canMute) {
-        this.actionButton(bx, y, "Mute", "blue", () => gameSocket.adminMute(p.accountId));
-        bx -= 116;
+      if (canMute) {
+        this.actionButton(bx, y, p.chatMuted ? "Unmute Chat" : "Mute Chat", p.chatMuted ? "grey" : "blue", () =>
+          p.chatMuted ? gameSocket.adminUnmute(p.accountId, "chat") : gameSocket.adminMute(p.accountId, "chat"));
+        bx -= step;
+        this.actionButton(bx, y, p.voiceMuted ? "Unmute Mic" : "Mute Mic", p.voiceMuted ? "grey" : "blue", () =>
+          p.voiceMuted ? gameSocket.adminUnmute(p.accountId, "voice") : gameSocket.adminMute(p.accountId, "voice"));
+        bx -= step;
       }
       if (this.myRole === "admin" && p.role !== "admin") {
         if (p.role === "subadmin") {
@@ -181,7 +193,7 @@ export class AdminScene extends Phaser.Scene {
 
   private actionButton(x: number, y: number, text: string, variant: "blue" | "grey", onClick: () => void) {
     const btn = makeMenuButton(this, x, y, text, {
-      width: 108,
+      width: 94,
       height: 32,
       variant,
       onClick: () => {

@@ -32,6 +32,13 @@ export interface MapObject {
   h: number;
   cx: number; // anchor tile (top-left)
   cy: number;
+  // Optional looping animation: extra source-rect frames (same w/h) cycled at
+  // `fps`. `sx`/`sy` is frame 0. Used for farm animals.
+  frames?: { sx: number; sy: number }[];
+  fps?: number;
+  // Flat ground decals (e.g. grass patches): rendered just above the ground so
+  // the player walks over them, instead of depth-sorting like a tall object.
+  flat?: boolean;
 }
 
 export interface MapDef {

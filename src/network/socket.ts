@@ -4,6 +4,7 @@ import type {
   ClientToServerEvents,
   MovePayload,
   WorldRef,
+  MuteChannel,
 } from "../types/network";
 import { getSessionToken } from "./playerIdentity";
 
@@ -233,11 +234,11 @@ class GameSocket {
   requestAdminData() {
     this.socket?.emit("admin:list");
   }
-  adminMute(accountId: string, reason?: string) {
-    this.socket?.emit("admin:mute", { accountId, reason });
+  adminMute(accountId: string, channel: MuteChannel = "both", reason?: string) {
+    this.socket?.emit("admin:mute", { accountId, channel, reason });
   }
-  adminUnmute(accountId: string) {
-    this.socket?.emit("admin:unmute", { accountId });
+  adminUnmute(accountId: string, channel: MuteChannel = "both") {
+    this.socket?.emit("admin:unmute", { accountId, channel });
   }
   adminSetRole(accountId: string, role: "subadmin" | "none") {
     this.socket?.emit("admin:setRole", { accountId, role });

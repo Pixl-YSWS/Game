@@ -18,7 +18,7 @@ import type {
   InventoryEntry,
   Project,
 } from "../src/types/network.ts";
-import { generateMap } from "../src/world/MapGen.ts";
+import { generateMap, generateVillage } from "../src/world/MapGen.ts";
 import { makeHouseInterior } from "../src/world/HouseMap.ts";
 import { getShopItem } from "../src/shop/catalog.ts";
 import { setupAuth, type Account } from "./auth.ts";
@@ -329,11 +329,20 @@ db.run(`
 db.run(`
   CREATE TABLE IF NOT EXISTS mutes (
     account_id TEXT PRIMARY KEY,
+    chat       INTEGER NOT NULL DEFAULT 1,
+    voice      INTEGER NOT NULL DEFAULT 1,
     reason     TEXT,
     muted_by   TEXT,
     created_at INTEGER NOT NULL
   )
 `);
+// Migrate older single-flag mute tables: add the per-channel columns, defaulting
+// existing rows to fully muted (chat + voice) so prior behaviour is preserved.
+{
+  const cols = db.query<{ name: string }, []>("PRAGMA table_info(mutes)").all().map((c) => c.name);
+  if (!cols.includes("chat")) db.run("ALTER TABLE mutes ADD COLUMN chat INTEGER NOT NULL DEFAULT 1");
+  if (!cols.includes("voice")) db.run("ALTER TABLE mutes ADD COLUMN voice INTEGER NOT NULL DEFAULT 1");
+}
 const selectRole = db.query<{ role: string }, [string]>(
   "SELECT role FROM admins WHERE account_id = ?",
 );
@@ -345,24 +354,27 @@ const deleteRole = db.query<unknown, [string]>("DELETE FROM admins WHERE account
 const selectAdmins = db.query<{ account_id: string; role: string }, []>(
   "SELECT account_id, role FROM admins ORDER BY role, account_id",
 );
-const isMutedRow = db.query<{ n: number }, [string]>(
-  "SELECT COUNT(*) AS n FROM mutes WHERE account_id = ?",
+const selectMute = db.query<{ chat: number; voice: number; reason: string | null }, [string]>(
+  "SELECT chat, voice, reason FROM mutes WHERE account_id = ?",
 );
-const upsertMute = db.query<unknown, [string, string | null, string, number]>(
-  "INSERT INTO mutes (account_id, reason, muted_by, created_at) VALUES (?, ?, ?, ?) " +
-    "ON CONFLICT(account_id) DO UPDATE SET reason = excluded.reason, muted_by = excluded.muted_by",
+const upsertMute = db.query<unknown, [string, number, number, string | null, string, number]>(
+  "INSERT INTO mutes (account_id, chat, voice, reason, muted_by, created_at) VALUES (?, ?, ?, ?, ?, ?) " +
+    "ON CONFLICT(account_id) DO UPDATE SET chat = excluded.chat, voice = excluded.voice, reason = excluded.reason, muted_by = excluded.muted_by",
 );
 const deleteMute = db.query<unknown, [string]>("DELETE FROM mutes WHERE account_id = ?");
-const selectMutes = db.query<{ account_id: string; reason: string | null }, []>(
-  "SELECT account_id, reason FROM mutes ORDER BY created_at DESC",
+const selectMutes = db.query<{ account_id: string; chat: number; voice: number; reason: string | null }, []>(
+  "SELECT account_id, chat, voice, reason FROM mutes ORDER BY created_at DESC",
 );
 
 function roleOf(accountId: string): ModRole {
   const r = selectRole.get(accountId)?.role;
   return r === "admin" || r === "subadmin" ? r : null;
 }
-function isMuted(accountId: string): boolean {
-  return (isMutedRow.get(accountId)?.n ?? 0) > 0;
+function isChatMuted(accountId: string): boolean {
+  return (selectMute.get(accountId)?.chat ?? 0) === 1;
+}
+function isVoiceMuted(accountId: string): boolean {
+  return (selectMute.get(accountId)?.voice ?? 0) === 1;
 }
 // Auto-grant the built-in root admin on login, by email.
 function ensureRootAdmin(account: Account) {
@@ -515,7 +527,9 @@ function mapFor(world: WorldRef) {
   if (!m) {
     m = world.kind === "house"
       ? makeHouseInterior()
-      : generateMap(worldSeed(world), { houses: world.kind !== "openworld" });
+      : world.kind === "village"
+        ? generateVillage()
+        : generateMap(worldSeed(world), { houses: false });
     mapCache.set(key, m);
   }
   return m;
@@ -1038,8 +1052,8 @@ io.on("connection", (socket) => {
     // huge payloads to everyone in the room.
     const clean = text.replace(/[\x00-\x1f]/g, " ").trim().slice(0, 160);
     if (!clean) return;
-    // Muted players can't broadcast — tell only them so it isn't silent.
-    if (isMuted(player.playerId)) {
+    // Chat-muted players can't broadcast — tell only them so it isn't silent.
+    if (isChatMuted(player.playerId)) {
       socket.emit("mod:notice", { text: "You are muted and can't send messages." });
       return;
     }
@@ -1073,6 +1087,8 @@ io.on("connection", (socket) => {
       accountId: r.account_id,
       name: nameForAccount(r.account_id) ?? r.account_id,
       reason: r.reason ?? undefined,
+      chat: r.chat === 1,
+      voice: r.voice === 1,
     }));
     // Distinct online accounts (a player may have one live socket each).
     const seen = new Set<string>();
@@ -1084,7 +1100,8 @@ io.on("connection", (socket) => {
         accountId: p.playerId,
         name: p.name,
         role: roleOf(p.playerId),
-        muted: isMuted(p.playerId),
+        chatMuted: isChatMuted(p.playerId),
+        voiceMuted: isVoiceMuted(p.playerId),
       });
     }
     online.sort((a, b) => a.name.localeCompare(b.name));
@@ -1097,23 +1114,49 @@ io.on("connection", (socket) => {
     sendAdminData();
   });
 
-  socket.on("admin:mute", ({ accountId, reason }) => {
+  socket.on("admin:mute", ({ accountId, channel, reason }) => {
     const me = players.get(socket.id);
     if (!me || roleOf(me.playerId) === null) return; // admin or sub-admin
     if (typeof accountId !== "string" || !accountId) return;
     if (accountId === me.playerId) return; // can't mute yourself
     if (roleOf(accountId) !== null) return; // mods can't mute other mods
-    upsertMute.run(accountId, typeof reason === "string" ? reason.slice(0, 120) : null, me.playerId, Date.now());
-    noticeTo(accountId, "You have been muted by a moderator.");
+    const ch = channel === "chat" || channel === "voice" ? channel : "both";
+    // Merge with the existing mute so muting one channel leaves the other intact.
+    const cur = selectMute.get(accountId);
+    const chat = ch === "voice" ? cur?.chat === 1 : true;
+    const voice = ch === "chat" ? cur?.voice === 1 : true;
+    const note = typeof reason === "string" ? reason.slice(0, 120) : (cur?.reason ?? null);
+    upsertMute.run(accountId, chat ? 1 : 0, voice ? 1 : 0, note, me.playerId, Date.now());
+    noticeTo(
+      accountId,
+      ch === "chat"
+        ? "A moderator muted you in chat."
+        : ch === "voice"
+          ? "A moderator muted your mic."
+          : "You have been muted by a moderator.",
+    );
     sendAdminData();
   });
 
-  socket.on("admin:unmute", ({ accountId }) => {
+  socket.on("admin:unmute", ({ accountId, channel }) => {
     const me = players.get(socket.id);
     if (!me || roleOf(me.playerId) === null) return;
     if (typeof accountId !== "string" || !accountId) return;
-    deleteMute.run(accountId);
-    noticeTo(accountId, "You have been unmuted.");
+    const cur = selectMute.get(accountId);
+    if (!cur) return;
+    const ch = channel === "chat" || channel === "voice" ? channel : "both";
+    const chat = ch === "voice" ? cur.chat === 1 : false;
+    const voice = ch === "chat" ? cur.voice === 1 : false;
+    if (!chat && !voice) deleteMute.run(accountId);
+    else upsertMute.run(accountId, chat ? 1 : 0, voice ? 1 : 0, cur.reason, me.playerId, Date.now());
+    noticeTo(
+      accountId,
+      ch === "chat"
+        ? "A moderator unmuted you in chat."
+        : ch === "voice"
+          ? "A moderator unmuted your mic."
+          : "You have been unmuted.",
+    );
     sendAdminData();
   });
 
@@ -1152,8 +1195,8 @@ io.on("connection", (socket) => {
   socket.on("voice:clip", ({ data, mime }) => {
     const player = players.get(socket.id);
     if (!player) return;
-    if (isMuted(player.playerId)) {
-      socket.emit("mod:notice", { text: "You are muted and can't talk." });
+    if (isVoiceMuted(player.playerId)) {
+      socket.emit("mod:notice", { text: "Your mic is muted and you can't talk." });
       return;
     }
     if (typeof mime !== "string" || !mime.startsWith("audio/")) return;

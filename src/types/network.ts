@@ -123,14 +123,20 @@ export interface MuteEntry {
   accountId: string;
   name: string;
   reason?: string;
+  chat: boolean;
+  voice: boolean;
 }
 // An online player as seen by the admin panel (with their mod status).
 export interface AdminPlayerEntry {
   accountId: string;
   name: string;
   role: ModRole;
-  muted: boolean;
+  chatMuted: boolean;
+  voiceMuted: boolean;
 }
+
+// Which channel a mute/unmute affects: text chat, voice mic, or both at once.
+export type MuteChannel = "chat" | "voice" | "both";
 
 export interface ServerToClientEvents {
   init: (data: { id: string; accountId: string; name: string; char: number; skin?: string; verified: boolean; role: ModRole; world: WorldState; pixels: number; unread: number; dayCycle: DayCycle }) => void;
@@ -266,9 +272,10 @@ export interface ClientToServerEvents {
   // ── Admin / moderation (server validates the caller's role) ──────────
   // Request the admin-panel snapshot (responds with admin:data).
   "admin:list": () => void;
-  // Mute / unmute an account from world chat (admin or sub-admin).
-  "admin:mute": (payload: { accountId: string; reason?: string }) => void;
-  "admin:unmute": (payload: { accountId: string }) => void;
+  // Mute / unmute an account's text chat, voice mic, or both (admin or
+  // sub-admin). Omitting `channel` defaults to "both".
+  "admin:mute": (payload: { accountId: string; channel?: MuteChannel; reason?: string }) => void;
+  "admin:unmute": (payload: { accountId: string; channel?: MuteChannel }) => void;
   // Promote to sub-admin or demote back to a normal player (full admin only).
   "admin:setRole": (payload: { accountId: string; role: "subadmin" | "none" }) => void;
 }

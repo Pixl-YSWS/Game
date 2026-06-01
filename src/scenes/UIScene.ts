@@ -112,9 +112,9 @@ export class UIScene extends Phaser.Scene {
     this.buildSocialButtons();
     this.buildMobileControls();
 
-    // Procedural background music, gated on the sound setting and the day
-    // cycle. Resume the audio context on the first input (autoplay policy).
-    musicEngine.start(() => this.dayPhase());
+    // Looping background music, gated on the sound setting. Resume playback on
+    // the first input to satisfy the browser autoplay policy.
+    musicEngine.start();
     musicEngine.setEnabled(loadSettings().soundEnabled);
     this.input.once("pointerdown", () => musicEngine.resume());
     this.input.keyboard?.once("keydown", () => musicEngine.resume());

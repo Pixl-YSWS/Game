@@ -4,7 +4,7 @@ import { Player } from "../entities/Player";
 import { Npc } from "../entities/Npc";
 import type { PlayerState, WorldRef, WorldState } from "../types/network";
 import type { MapDef } from "../types/map";
-import { generateMap } from "../world/MapGen";
+import { generateMap, generateVillage } from "../world/MapGen";
 import { makeHouseInterior } from "../world/HouseMap";
 import { gameSocket } from "../network/socket";
 import { TILE_H, TILE_W, cartToIso, isoToCart } from "../utils/IsoUtils";
@@ -666,10 +666,16 @@ export class WorldScene extends Phaser.Scene {
       gameSocket.enterWorld({ kind: "openworld" });
       return;
     }
-    // Private village: local single-player interior.
+    // Private village: local single-player interior. Carry the player's
+    // appearance in so their avatar matches the one shown outside.
     for (const ind of this.doorIndicators) ind.label.setVisible(false);
     this.scene.pause();
-    this.scene.launch("InteriorScene", { returnTo: { cx: doorCx, cy: doorCy } });
+    this.scene.launch("InteriorScene", {
+      returnTo: { cx: doorCx, cy: doorCy },
+      char: this.myChar,
+      skin: this.mySkin,
+      verified: this.myVerified,
+    });
   }
 
   private syncDepth(player: Player) {
@@ -699,15 +705,18 @@ export class WorldScene extends Phaser.Scene {
     this.mapDef =
       state.world.kind === "house"
         ? makeHouseInterior()
-        : generateMap(state.seed, {
-            houses: state.world.kind !== "openworld",
-            // The open world gets a single house whose door leads into the
-            // shared multiplayer house.
-            sharedHouse: state.world.kind === "openworld",
-            // Portal back/forth: near spawn in the open world, fixed
-            // bottom-right in a village.
-            portal: state.world.kind === "openworld" ? "spawn" : "bottomRight",
-          });
+        : state.world.kind === "village"
+          ? // Private villages use a single fixed hand-authored layout (the
+            // seed is ignored — see generateVillage).
+            generateVillage()
+          : generateMap(state.seed, {
+              houses: false,
+              // The open world gets a single house whose door leads into the
+              // shared multiplayer house.
+              sharedHouse: true,
+              // Portal back/forth: near spawn in the open world.
+              portal: "spawn",
+            });
     this.isoMap = new IsoMap(this, this.mapDef);
     this.isoMap.build();
     this.rebuildDoorIndicators();

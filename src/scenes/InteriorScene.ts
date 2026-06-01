@@ -59,12 +59,18 @@ function makeInteriorMap(): MapDef {
 
 interface InteriorInitData {
   returnTo: { cx: number; cy: number };
+  // The local player's appearance, forwarded from WorldScene so the avatar
+  // inside the house matches the one outside.
+  char?: number;
+  skin?: string;
+  verified?: boolean;
 }
 
 export class InteriorScene extends Phaser.Scene {
   private localPlayer?: Player;
   private mapDef?: MapDef;
   private returnTo!: { cx: number; cy: number };
+  private appearance: { char?: number; skin?: string; verified?: boolean } = {};
   private exitTile!: { cx: number; cy: number };
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private wasd!: {
@@ -84,6 +90,7 @@ export class InteriorScene extends Phaser.Scene {
 
   init(data: InteriorInitData) {
     this.returnTo = data.returnTo;
+    this.appearance = { char: data.char, skin: data.skin, verified: data.verified };
     this.exiting = false;
   }
 
@@ -108,7 +115,12 @@ export class InteriorScene extends Phaser.Scene {
     const { cx, cy } = this.mapDef.spawnPoint;
     this.localPlayer = new Player(
       this,
-      { id: "local", cx, cy, name: "You" },
+      {
+        id: "local", cx, cy, name: "You",
+        char: this.appearance.char,
+        skin: this.appearance.skin,
+        verified: this.appearance.verified,
+      },
       true,
       this.mapDef,
     );
