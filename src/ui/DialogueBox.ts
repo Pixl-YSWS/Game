@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { FONT, FONT_NARROW } from "./theme";
+import { FONT, FONT_DIALOUG } from "./theme";
 import { panel } from "./UIKit";
 
 interface DialogueState {
@@ -28,7 +28,14 @@ export class DialogueBox {
     const x = (screenW - this.W) / 2;
     const y = screenH - this.H - 16;
 
-    this.bg = panel(scene, x + this.W / 2, y + this.H / 2, this.W, this.H, "ui-panel-dark")
+    this.bg = panel(
+      scene,
+      x + this.W / 2,
+      y + this.H / 2,
+      this.W,
+      this.H,
+      "ui-panel-dark",
+    )
       .setScrollFactor(0)
       .setDepth(10000)
       .setVisible(false);
@@ -45,7 +52,7 @@ export class DialogueBox {
 
     this.bodyText = scene.add
       .text(x + 22, y + 46, "", {
-        fontFamily: FONT_NARROW,
+        fontFamily: FONT_DIALOUG,
         fontSize: "15px",
         color: "#ffffff",
         wordWrap: { width: this.W - 44 },

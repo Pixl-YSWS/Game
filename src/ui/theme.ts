@@ -12,6 +12,7 @@ export const FONT_TITLE = "Pixelify Sans";
  *  to Pixelify Sans until Monocraft.ttf is added to public/assets/fonts.
  *  Used where the blocky all-caps Kenney font is too dense to read small. */
 export const FONT_CHAT = '"Monocraft", "Pixelify Sans", sans-serif';
+export const FONT_DIALOUG = '"Monocraft", "Pixelify Sans", sans-serif';
 /** System emoji font stack — for item glyphs (Kenney has no emoji coverage). */
 export const FONT_EMOJI =
   '"Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji", sans-serif';
@@ -103,7 +104,9 @@ function upscaleCursor(
         ctx.imageSmoothingEnabled = false; // keep pixels crisp
         ctx.drawImage(img, 0, 0, c.width, c.height);
         const url = c.toDataURL("image/png");
-        resolve(`url(${url}) ${src.hotX * scale} ${src.hotY * scale}, ${src.fallback}`);
+        resolve(
+          `url(${url}) ${src.hotX * scale} ${src.hotY * scale}, ${src.fallback}`,
+        );
       } catch {
         resolve(fallback);
       }

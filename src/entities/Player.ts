@@ -31,7 +31,9 @@ function resolveOutfit(state: PlayerState): Outfit {
     if (o) return clampOutfit(o);
   }
   const idx =
-    state.char !== undefined && state.char >= 0 && state.char < PRESET_OUTFITS.length
+    state.char !== undefined &&
+    state.char >= 0 &&
+    state.char < PRESET_OUTFITS.length
       ? state.char
       : defaultOutfitIndex(state.id);
   return PRESET_OUTFITS[idx];
@@ -90,7 +92,14 @@ export class Player extends Phaser.GameObjects.Container {
     this.isLocal = isLocal;
     this.mapDef = mapDef;
 
-    this.shadow = scene.add.ellipse(0, 5, TILE_W * 0.7, TILE_H * 0.4, 0x000000, 0.25);
+    this.shadow = scene.add.ellipse(
+      0,
+      5,
+      TILE_W * 0.7,
+      TILE_H * 0.4,
+      0x000000,
+      0.25,
+    );
 
     this.avatar = new CozyAvatar(scene, resolveOutfit(state));
     this.avatar.setPosition(0, AVATAR_FOOT_Y);
@@ -100,7 +109,7 @@ export class Player extends Phaser.GameObjects.Container {
     // taller 32px avatar so it never overlaps the head.
     const verified = state.verified ?? false;
     this.nameTag = scene.add
-      .text(0, -TILE_H - 12, verified ? `✓ ${state.name}` : state.name, {
+      .text(0, -TILE_H, verified ? `✓ ${state.name}` : state.name, {
         fontSize: "16px",
         fontFamily: FONT_CHAT,
         color: verified ? COLORS.good : "#ffffff",
@@ -129,8 +138,21 @@ export class Player extends Phaser.GameObjects.Container {
   // Apply a full appearance: a custom outfit if `skin` is given and valid,
   // otherwise the preset at `index`. Used by the picker and remote updates.
   setAppearance(index: number, skin?: string) {
-    this.avatar.setOutfit(resolveOutfit({ id: this.playerId, cx: this.cx, cy: this.cy, name: "", char: index, skin }));
-    this.avatar.setAnim(this.isMoving ? "walk" : "idle", this.dir, this.facingLeft);
+    this.avatar.setOutfit(
+      resolveOutfit({
+        id: this.playerId,
+        cx: this.cx,
+        cy: this.cy,
+        name: "",
+        char: index,
+        skin,
+      }),
+    );
+    this.avatar.setAnim(
+      this.isMoving ? "walk" : "idle",
+      this.dir,
+      this.facingLeft,
+    );
   }
 
   // Make this avatar clickable (hand cursor + callback). Used for remote
@@ -138,7 +160,12 @@ export class Player extends Phaser.GameObjects.Container {
   makeClickable(cursor: string, onClick: () => void): this {
     this.setSize(TILE_W, TILE_H + 28);
     this.setInteractive({
-      hitArea: new Phaser.Geom.Rectangle(-TILE_W / 2, -TILE_H - 16, TILE_W, TILE_H + 28),
+      hitArea: new Phaser.Geom.Rectangle(
+        -TILE_W / 2,
+        -TILE_H - 16,
+        TILE_W,
+        TILE_H + 28,
+      ),
       hitAreaCallback: Phaser.Geom.Rectangle.Contains,
       cursor,
     });
@@ -280,8 +307,10 @@ export class Player extends Phaser.GameObjects.Container {
       if (this.canMoveToTile(this.cx + dx, this.cy + dy)) {
         return this.moveToTile(this.cx + dx, this.cy + dy);
       }
-      if (this.canMoveToTile(this.cx + dx, this.cy)) return this.moveToTile(this.cx + dx, this.cy);
-      if (this.canMoveToTile(this.cx, this.cy + dy)) return this.moveToTile(this.cx, this.cy + dy);
+      if (this.canMoveToTile(this.cx + dx, this.cy))
+        return this.moveToTile(this.cx + dx, this.cy);
+      if (this.canMoveToTile(this.cx, this.cy + dy))
+        return this.moveToTile(this.cx, this.cy + dy);
       return false;
     }
     return this.moveToTile(this.cx + dx, this.cy + dy);
@@ -458,7 +487,14 @@ export class Player extends Phaser.GameObjects.Container {
       const padX = 6;
       const padY = 4;
       const bg = this.scene.add
-        .rectangle(0, 0, label.width + padX * 2, label.height + padY * 2, 0x0a0f1c, 0.82)
+        .rectangle(
+          0,
+          0,
+          label.width + padX * 2,
+          label.height + padY * 2,
+          0x0a0f1c,
+          0.82,
+        )
         .setStrokeStyle(1, 0xffffff, 0.25)
         .setOrigin(0.5);
       children.push(bg, label);
@@ -485,15 +521,23 @@ export class Player extends Phaser.GameObjects.Container {
     this.bubble = bubble;
 
     bubble.setScale(rest * 0.6);
-    this.scene.tweens.add({ targets: bubble, scale: rest, duration: 120, ease: "Back.easeOut" });
-    this.bubbleTimer = this.scene.time.delayedCall(isEmote ? 1800 : 4000, () => {
-      if (!this.scene) return;
-      this.scene.tweens.add({
-        targets: bubble,
-        alpha: 0,
-        duration: 200,
-        onComplete: () => bubble.destroy(),
-      });
+    this.scene.tweens.add({
+      targets: bubble,
+      scale: rest,
+      duration: 120,
+      ease: "Back.easeOut",
     });
+    this.bubbleTimer = this.scene.time.delayedCall(
+      isEmote ? 1800 : 4000,
+      () => {
+        if (!this.scene) return;
+        this.scene.tweens.add({
+          targets: bubble,
+          alpha: 0,
+          duration: 200,
+          onComplete: () => bubble.destroy(),
+        });
+      },
+    );
   }
 }

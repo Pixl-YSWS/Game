@@ -6,6 +6,7 @@ import type { PlayerState, WorldRef, WorldState } from "../types/network";
 import type { MapDef } from "../types/map";
 import { generateMap, generateVillage } from "../world/MapGen";
 import { makeHouseInterior } from "../world/HouseMap";
+import { TS, TILE_SRC, WATER } from "../world/tileset";
 import { gameSocket } from "../network/socket";
 import { TILE_H, TILE_W, cartToIso, isoToCart } from "../utils/IsoUtils";
 import { getShopItem } from "../shop/catalog";
@@ -30,6 +31,9 @@ import { playUiSound } from "../ui/UIKit";
 
 export class WorldScene extends Phaser.Scene {
   private isoMap?: IsoMap;
+  // Tiled water that extends beyond the island so zooming out shows open sea
+  // rather than empty void.
+  private ocean?: Phaser.GameObjects.TileSprite;
   private localPlayer?: Player;
   private mapDef?: MapDef;
   private loadingText?: Phaser.GameObjects.Text;
@@ -116,7 +120,6 @@ export class WorldScene extends Phaser.Scene {
   // Optional world to request right after connecting, set from the main menu.
   private initialWorld?: WorldRef;
 
-
   constructor() {
     super({ key: "WorldScene" });
   }
@@ -126,19 +129,30 @@ export class WorldScene extends Phaser.Scene {
   }
 
   create() {
-    this.input.on("wheel", (_: unknown, __: unknown, ___: unknown, deltaY: number) => {
-      const cam = this.cameras.main;
-      // Min 3× so the player can't zoom out far enough to see past the map
-      // edges / empty space; max 8× for a close look.
-      cam.setZoom(Phaser.Math.Clamp(cam.zoom - deltaY * 0.001, 3, 8));
-    });
+    this.input.on(
+      "wheel",
+      (_: unknown, __: unknown, ___: unknown, deltaY: number) => {
+        if (deltaY === 0) return;
+        const cam = this.cameras.main;
+        // Step by whole integers only: fractional zoom makes pixel art shimmer/
+        // blur. The ocean backdrop fills past the island, so zooming out stays
+        // clean down to 2×; max 8× for a close look.
+        const next = Math.round(cam.zoom) + (deltaY > 0 ? -1 : 1);
+        cam.setZoom(Phaser.Math.Clamp(next, 2, 8));
+      },
+    );
 
     this.loadingText = this.add
-      .text(this.scale.width / 2, this.scale.height / 2, "Connecting to server...", {
-        fontFamily: FONT,
-        fontSize: "12px",
-        color: "#ffffff",
-      })
+      .text(
+        this.scale.width / 2,
+        this.scale.height / 2,
+        "Connecting to server...",
+        {
+          fontFamily: FONT,
+          fontSize: "12px",
+          color: "#ffffff",
+        },
+      )
       .setOrigin(0.5)
       .setScrollFactor(0);
 
@@ -214,8 +228,12 @@ export class WorldScene extends Phaser.Scene {
     // Movement: the bound keys fill the W/A/S/D slots; arrow keys stay on as
     // fixed alternates; the run key drives sprint via cursors.shift.
     this.cursors = {
-      up: k("UP"), down: k("DOWN"), left: k("LEFT"), right: k("RIGHT"),
-      space: k("SPACE"), shift: k(b.run),
+      up: k("UP"),
+      down: k("DOWN"),
+      left: k("LEFT"),
+      right: k("RIGHT"),
+      space: k("SPACE"),
+      shift: k(b.run),
     } as Phaser.Types.Input.Keyboard.CursorKeys;
     this.wasd = { W: k(b.up), A: k(b.left), S: k(b.down), D: k(b.right) };
 
@@ -225,9 +243,17 @@ export class WorldScene extends Phaser.Scene {
     k(b.inbox).on("down", () => this.openInbox());
     k(b.bag).on("down", () => this.openInventory());
 
+    // Keep the door/portal/NPC "press <key>" prompts in step with the bound key.
+    const lbl = this.interactKeyLabel();
+    for (const ind of this.doorIndicators) ind.label.setText(lbl);
+    for (const ind of this.npcIndicators) ind.label.setText(lbl);
+    this.portalLabel?.setText(lbl);
+    this.refreshStatus();
+
     // Chat opens on the bound key (Enter by default); T is always an alternate.
     const openChat = () => {
-      if (this.ui && !this.ui.isChatOpen && !this.ui.isDialogueOpen) this.ui.openChat();
+      if (this.ui && !this.ui.isChatOpen && !this.ui.isDialogueOpen)
+        this.ui.openChat();
     };
     k(b.chat).on("down", openChat);
     if (b.chat !== "T") k("T").on("down", openChat);
@@ -235,7 +261,8 @@ export class WorldScene extends Phaser.Scene {
     // Players list: hold to show (Minecraft-style).
     const players = k(b.players);
     players.on("down", () => {
-      if (!this.ui?.isChatOpen && !this.ui?.isDialogueOpen) this.ui?.showPlayerList();
+      if (!this.ui?.isChatOpen && !this.ui?.isDialogueOpen)
+        this.ui?.showPlayerList();
     });
     players.on("up", () => this.ui?.hidePlayerList());
   }
@@ -302,12 +329,24 @@ export class WorldScene extends Phaser.Scene {
 
     // Movement is locked while a dialogue line or the chat input is open —
     // feeds inputs into a no-op so any held key gets cleared rather than queued.
-    if (!this.ui?.isDialogueOpen && !this.ui?.isChatOpen && !this.loadingOverlay) {
-      this.localPlayer.handleInput(this.cursors, this.wasd, delta, this.touchDir);
+    if (
+      !this.ui?.isDialogueOpen &&
+      !this.ui?.isChatOpen &&
+      !this.loadingOverlay
+    ) {
+      this.localPlayer.handleInput(
+        this.cursors,
+        this.wasd,
+        delta,
+        this.touchDir,
+      );
     }
 
     const { cx, cy } = this.localPlayer;
-    if (gameSocket.connected && (cx !== this.lastSentCx || cy !== this.lastSentCy)) {
+    if (
+      gameSocket.connected &&
+      (cx !== this.lastSentCx || cy !== this.lastSentCy)
+    ) {
       gameSocket.sendMove(cx, cy);
       this.lastSentCx = cx;
       this.lastSentCy = cy;
@@ -338,7 +377,9 @@ export class WorldScene extends Phaser.Scene {
       const p = this.input.activePointer;
       const t = isoToCart(p.worldX, p.worldY);
       const w = cartToIso(t.cx, t.cy);
-      this.placeGhost.setPosition(w.x + TILE_W / 2, w.y + TILE_H / 2).setDepth(t.cy + 1);
+      this.placeGhost
+        .setPosition(w.x + TILE_W / 2, w.y + TILE_H / 2)
+        .setDepth(t.cy + 1);
     }
   }
 
@@ -471,7 +512,7 @@ export class WorldScene extends Phaser.Scene {
     for (const d of this.mapDef.doors) {
       const { x, y } = cartToIso(d.cx, d.cy);
       const label = this.add
-        .text(x + TILE_W / 2, y - 4, "E", {
+        .text(x + TILE_W / 2, y - 4, this.interactKeyLabel(), {
           fontFamily: FONT,
           fontSize: "8px",
           color: "#ffff66",
@@ -491,6 +532,11 @@ export class WorldScene extends Phaser.Scene {
       });
       this.doorIndicators.push({ cx: d.cx, cy: d.cy, label, bobTween });
     }
+  }
+
+  // The key glyph shown on door / portal prompts, from the player's keybinds.
+  private interactKeyLabel(): string {
+    return getKeybinds().interact || "E";
   }
 
   private clearDoorIndicators() {
@@ -526,7 +572,7 @@ export class WorldScene extends Phaser.Scene {
       this.npcs.push(npc);
       const { x, y } = cartToIso(def.cx, def.cy);
       const label = this.add
-        .text(x + TILE_W / 2, y - TILE_H, "E", {
+        .text(x + TILE_W / 2, y - TILE_H, this.interactKeyLabel(), {
           fontFamily: FONT,
           fontSize: "8px",
           color: "#ffff66",
@@ -595,9 +641,15 @@ export class WorldScene extends Phaser.Scene {
     const depth = this.portalTile.cy + 1;
 
     // Layered ellipses read as a glowing teleport pad even without art.
-    const glow = this.add.ellipse(cx, cy, TILE_W * 1.6, TILE_H * 1.0, 0x66ccff, 0.25).setDepth(depth);
-    const ring = this.add.ellipse(cx, cy, TILE_W * 1.1, TILE_H * 0.7, 0xaa66ff, 0.5).setDepth(depth);
-    const core = this.add.ellipse(cx, cy, TILE_W * 0.6, TILE_H * 0.4, 0xffffff, 0.85).setDepth(depth);
+    const glow = this.add
+      .ellipse(cx, cy, TILE_W * 1.6, TILE_H * 1.0, 0x66ccff, 0.25)
+      .setDepth(depth);
+    const ring = this.add
+      .ellipse(cx, cy, TILE_W * 1.1, TILE_H * 0.7, 0xaa66ff, 0.5)
+      .setDepth(depth);
+    const core = this.add
+      .ellipse(cx, cy, TILE_W * 0.6, TILE_H * 0.4, 0xffffff, 0.85)
+      .setDepth(depth);
     this.portalObjects.push(glow, ring, core);
     this.portalTween = this.tweens.add({
       targets: [glow, ring],
@@ -611,7 +663,7 @@ export class WorldScene extends Phaser.Scene {
     });
 
     this.portalLabel = this.add
-      .text(cx, y - 4, "E", {
+      .text(cx, y - 4, this.interactKeyLabel(), {
         fontFamily: FONT,
         fontSize: "8px",
         color: "#ffff66",
@@ -686,6 +738,29 @@ export class WorldScene extends Phaser.Scene {
     if (player.depth !== d) player.setDepth(d);
   }
 
+  // A large tiled-water plane centred on the island, sitting below the ground
+  // (depth -100) so when the camera is zoomed out past the map edges the player
+  // sees open sea instead of empty background.
+  private buildOcean() {
+    if (!this.isoMap) return;
+    const tex = this.textures.get(TS.water);
+    const src = TILE_SRC[WATER];
+    if (!tex.has("ocean"))
+      tex.add("ocean", 0, src.fx * 16, src.fy * 16, 16, 16);
+    const pad = 3000;
+    this.ocean = this.add
+      .tileSprite(
+        this.isoMap.centre.x,
+        this.isoMap.centre.y,
+        this.isoMap.boundsW + pad * 2,
+        this.isoMap.boundsH + pad * 2,
+        TS.water,
+        "ocean",
+      )
+      .setOrigin(0.5)
+      .setDepth(-100);
+  }
+
   // ── World construction ────────────────────────────────────────────
 
   private rebuildWorld(state: WorldState) {
@@ -693,6 +768,8 @@ export class WorldScene extends Phaser.Scene {
 
     // Tear down existing scene objects so the new map can stamp cleanly.
     this.isoMap?.destroy();
+    this.ocean?.destroy();
+    this.ocean = undefined;
     this.localPlayer?.destroy();
     this.localPlayer = undefined;
     for (const remote of this.remotePlayers.values()) remote.destroy();
@@ -719,6 +796,7 @@ export class WorldScene extends Phaser.Scene {
             });
     this.isoMap = new IsoMap(this, this.mapDef);
     this.isoMap.build();
+    if (state.world.kind !== "house") this.buildOcean();
     this.rebuildDoorIndicators();
     this.rebuildPortal();
     this.rebuildNpcs();
@@ -728,9 +806,14 @@ export class WorldScene extends Phaser.Scene {
     cam.stopFollow();
     cam.centerOn(this.isoMap.centre.x, this.isoMap.centre.y);
     cam.setZoom(loadSettings().defaultZoom);
+    // Pad the bounds with ocean margin so the camera keeps the player centred
+    // right up to the island's edge (the sea fills the surrounding view).
+    const M = 600;
     cam.setBounds(
-      this.isoMap.boundsX, this.isoMap.boundsY,
-      this.isoMap.boundsW, this.isoMap.boundsH,
+      this.isoMap.boundsX - M,
+      this.isoMap.boundsY - M,
+      this.isoMap.boundsW + M * 2,
+      this.isoMap.boundsH + M * 2,
     );
 
     this.doorTiles.clear();
@@ -741,7 +824,15 @@ export class WorldScene extends Phaser.Scene {
     const { cx, cy } = state.spawn;
     this.localPlayer = new Player(
       this,
-      { id: gameSocket.id ?? "local", cx, cy, name: "You", char: this.myChar, skin: this.mySkin, verified: this.myVerified },
+      {
+        id: gameSocket.id ?? "local",
+        cx,
+        cy,
+        name: "You",
+        char: this.myChar,
+        skin: this.mySkin,
+        verified: this.myVerified,
+      },
       true,
       this.mapDef,
     );
@@ -797,7 +888,8 @@ export class WorldScene extends Phaser.Scene {
   // world is already built behind it — we're just holding the curtain.
   private scheduleHideLoadingOverlay() {
     if (!this.loadingOverlay) return;
-    const remaining = WorldScene.MIN_LOADING_MS - (this.time.now - this.loadingShownAt);
+    const remaining =
+      WorldScene.MIN_LOADING_MS - (this.time.now - this.loadingShownAt);
     if (remaining <= 0) {
       this.hideLoadingOverlay();
       return;
@@ -861,49 +953,68 @@ export class WorldScene extends Phaser.Scene {
       this.returnToLogin("This account was opened somewhere else.", false);
     });
 
-    gameSocket.on("init", ({ accountId, name, char, skin, verified, role, world, pixels, unread, dayCycle }) => {
-      setAccountId(accountId);
-      setAccountName(name);
-      this.myVerified = verified;
-      this.ui?.setAdminRole(role);
-      // Reconcile appearance with the server's stored one. A locally-drawn
-      // custom skin wins (push it); otherwise adopt the server's skin if it has
-      // one; otherwise fall back to preset reconciliation.
-      const localSkin = getCustomSkin();
-      this.myChar = char;
-      if (localSkin && localSkin !== skin) {
-        this.mySkin = localSkin;
-        gameSocket.setSkin(localSkin);
-      } else if (skin) {
-        this.mySkin = skin;
-        setCustomSkin(skin);
-      } else {
-        this.mySkin = undefined;
-        clearCustomSkin();
-        const pref = getCharIndex();
-        if (pref >= 0 && pref !== char) {
-          this.myChar = pref;
-          gameSocket.setCharacter(pref);
+    gameSocket.on(
+      "init",
+      ({
+        accountId,
+        name,
+        char,
+        skin,
+        verified,
+        role,
+        world,
+        pixels,
+        unread,
+        dayCycle,
+      }) => {
+        setAccountId(accountId);
+        setAccountName(name);
+        this.myVerified = verified;
+        this.ui?.setAdminRole(role);
+        // Reconcile appearance with the server's stored one. A locally-drawn
+        // custom skin wins (push it); otherwise adopt the server's skin if it has
+        // one; otherwise fall back to preset reconciliation.
+        const localSkin = getCustomSkin();
+        this.myChar = char;
+        if (localSkin && localSkin !== skin) {
+          this.mySkin = localSkin;
+          gameSocket.setSkin(localSkin);
+        } else if (skin) {
+          this.mySkin = skin;
+          setCustomSkin(skin);
         } else {
-          setCharIndex(char);
+          this.mySkin = undefined;
+          clearCustomSkin();
+          const pref = getCharIndex();
+          if (pref >= 0 && pref !== char) {
+            this.myChar = pref;
+            gameSocket.setCharacter(pref);
+          } else {
+            setCharIndex(char);
+          }
         }
-      }
-      this.ui?.setWallet(pixels, 0);
-      this.ui?.setUnread(unread);
-      this.ui?.setDayCycle(dayCycle.tNow, dayCycle.dayLengthMs, dayCycle.serverNow);
-      this.rebuildWorld(world);
-      // If the main menu asked for a specific world, request it now that the
-      // server knows who we are. Skip if it already matches.
-      const wanted = this.initialWorld;
-      this.initialWorld = undefined;
-      if (!wanted) return;
-      const sameVillage =
-        wanted.kind === "village" &&
-        world.world.kind === "village" &&
-        world.world.ownerPlayerId === wanted.ownerPlayerId;
-      const sameOpen = wanted.kind === "openworld" && world.world.kind === "openworld";
-      if (!sameVillage && !sameOpen) gameSocket.enterWorld(wanted);
-    });
+        this.ui?.setWallet(pixels, 0);
+        this.ui?.setUnread(unread);
+        this.ui?.setDayCycle(
+          dayCycle.tNow,
+          dayCycle.dayLengthMs,
+          dayCycle.serverNow,
+        );
+        this.rebuildWorld(world);
+        // If the main menu asked for a specific world, request it now that the
+        // server knows who we are. Skip if it already matches.
+        const wanted = this.initialWorld;
+        this.initialWorld = undefined;
+        if (!wanted) return;
+        const sameVillage =
+          wanted.kind === "village" &&
+          world.world.kind === "village" &&
+          world.world.ownerPlayerId === wanted.ownerPlayerId;
+        const sameOpen =
+          wanted.kind === "openworld" && world.world.kind === "openworld";
+        if (!sameVillage && !sameOpen) gameSocket.enterWorld(wanted);
+      },
+    );
 
     gameSocket.on("wallet:update", ({ pixels, delta }) => {
       this.ui?.setWallet(pixels, delta);
@@ -947,7 +1058,10 @@ export class WorldScene extends Phaser.Scene {
 
     gameSocket.on("chat:message", (msg) => {
       this.ui?.addChatMessage(msg);
-      this.playerBySocketId(msg.id)?.showBubble(formatChatBubble(msg.text), "chat");
+      this.playerBySocketId(msg.id)?.showBubble(
+        formatChatBubble(msg.text),
+        "chat",
+      );
     });
 
     gameSocket.on("player:emote", ({ id, emote }) => {
@@ -972,7 +1086,9 @@ export class WorldScene extends Phaser.Scene {
     gameSocket.on("mod:notice", ({ text }) => {
       this.flashStatus(text);
       if (/sub-admin|moderator role/i.test(text)) {
-        this.ui?.setAdminRole(/now a sub-admin/i.test(text) ? "subadmin" : null);
+        this.ui?.setAdminRole(
+          /now a sub-admin/i.test(text) ? "subadmin" : null,
+        );
       }
     });
 
@@ -981,7 +1097,9 @@ export class WorldScene extends Phaser.Scene {
       this.clearHouseObjects();
       for (const obj of objects) this.renderHouseObject(obj);
     });
-    gameSocket.on("house:object:added", ({ object }) => this.renderHouseObject(object));
+    gameSocket.on("house:object:added", ({ object }) =>
+      this.renderHouseObject(object),
+    );
     gameSocket.on("house:object:removed", ({ id }) => {
       this.houseObjects.get(id)?.destroy();
       this.houseObjects.delete(id);
@@ -1053,13 +1171,18 @@ export class WorldScene extends Phaser.Scene {
       .setAlpha(0.6)
       .setDepth(99998);
     this.placeHint = this.add
-      .text(this.scale.width / 2, 40, `Placing ${item.name} — click a tile  •  ESC to cancel`, {
-        fontFamily: FONT,
-        fontSize: "9px",
-        color: "#ffffff",
-        backgroundColor: "#000000aa",
-        padding: { x: 8, y: 6 },
-      })
+      .text(
+        this.scale.width / 2,
+        40,
+        `Placing ${item.name} — click a tile  •  ESC to cancel`,
+        {
+          fontFamily: FONT,
+          fontSize: "9px",
+          color: "#ffffff",
+          backgroundColor: "#000000aa",
+          padding: { x: 8, y: 6 },
+        },
+      )
       .setOrigin(0.5, 0)
       .setScrollFactor(0)
       .setDepth(99999);

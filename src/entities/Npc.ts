@@ -7,11 +7,11 @@ import { texNpcChar, ANIM, IDLE_FRAME_MS } from "../world/cozyChar";
 // Each NPC id maps to a pre-assembled character sheet (char1–char9) so every
 // villager gets a unique look without paper-doll layering.
 const NPC_CHAR_LOOKUP: Record<string, number> = {
-  "villager_quill": 1,
-  "villager_mara": 2,
-  "merchant_oda": 3,
-  "curator_pip": 4,
-  "house_innkeeper": 5,
+  villager_quill: 1,
+  villager_mara: 2,
+  merchant_oda: 3,
+  curator_pip: 4,
+  house_innkeeper: 5,
 };
 
 function npcCharIndex(id: string): number {
@@ -29,7 +29,14 @@ export class Npc extends Phaser.GameObjects.Container {
     super(scene, x + TILE_W / 2, y + TILE_H / 2);
     this.def = def;
 
-    const shadow = scene.add.ellipse(0, 5, TILE_W * 0.7, TILE_H * 0.4, 0x000000, 0.25);
+    const shadow = scene.add.ellipse(
+      0,
+      5,
+      TILE_W * 0.7,
+      TILE_H * 0.4,
+      0x000000,
+      0.25,
+    );
 
     const charN = npcCharIndex(def.id);
     const idleFrames = ANIM.idle.down;
@@ -48,7 +55,7 @@ export class Npc extends Phaser.GameObjects.Container {
     });
 
     this.nameTag = scene.add
-      .text(0, -TILE_H - 12, def.name, {
+      .text(0, -TILE_H, def.name, {
         fontSize: "16px",
         fontFamily: FONT,
         color: "#ffd24a",
@@ -65,7 +72,12 @@ export class Npc extends Phaser.GameObjects.Container {
 
     this.setSize(TILE_W, TILE_H + 28);
     this.setInteractive({
-      hitArea: new Phaser.Geom.Rectangle(-TILE_W / 2, -TILE_H - 16, TILE_W, TILE_H + 28),
+      hitArea: new Phaser.Geom.Rectangle(
+        -TILE_W / 2,
+        -TILE_H - 16,
+        TILE_W,
+        TILE_H + 28,
+      ),
       hitAreaCallback: Phaser.Geom.Rectangle.Contains,
       cursor: CURSORS.pointer,
     });
