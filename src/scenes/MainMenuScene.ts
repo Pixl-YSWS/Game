@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import { makeMenuButton, attachMenuNav, type MenuButton } from "../utils/MenuButton";
 import { FONT, FONT_TITLE, COLORS } from "../ui/theme";
-import { getAccountName, getSessionToken, clearSession } from "../network/playerIdentity";
+import { getAccountId, getAccountName, getSessionToken, clearSession } from "../network/playerIdentity";
 import { gameSocket, SERVER_URL } from "../network/socket";
 import type { WorldRef } from "../types/network";
 
@@ -110,10 +110,12 @@ export class MainMenuScene extends Phaser.Scene {
     const rows = 5 + villages.length;
     let y = this.scale.height / 2 - 24 - ((rows - 5) * STEP) / 2;
 
-    // PLAY continues from your last saved world; first-time players land
-    // in their own village (server default).
+    // JOIN VILLAGE always drops you into your own private village; JOIN OPEN
+    // WORLD enters the shared world.
     const buttons: MenuButton[] = [
-      makeMenuButton(this, cx, y, "PLAY", { onClick: () => this.startWorld(undefined) }),
+      makeMenuButton(this, cx, y, "JOIN VILLAGE", {
+        onClick: () => this.startWorld({ kind: "village", ownerPlayerId: getAccountId() }),
+      }),
       makeMenuButton(this, cx, (y += STEP), "JOIN OPEN WORLD", {
         onClick: () => this.startWorld({ kind: "openworld" }),
       }),
