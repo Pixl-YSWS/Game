@@ -5,6 +5,7 @@ import type { MapDef } from "../types/map";
 import { FONT_CHAT, COLORS, EMOTE_ATLAS } from "../ui/theme";
 import { emoteFrame } from "../ui/emotes";
 import { CozyAvatar } from "./CozyAvatar";
+import { WATER } from "../world/tileset";
 import {
   PRESET_OUTFITS,
   defaultOutfitIndex,
@@ -21,6 +22,10 @@ const STEP_MS = 120;
 const RUN_STEP_MS = 72;
 
 const AVATAR_FOOT_Y = TILE_H / 2 + 3;
+
+// Swimming: hide this many source px of the lower body and move slower.
+const SWIM_SUBMERGE_PX = 7;
+const SWIM_SPEED_MUL = 0.6;
 
 function resolveOutfit(state: PlayerState): Outfit {
   if (state.skin) {
@@ -63,6 +68,9 @@ export class Player extends Phaser.GameObjects.Container {
   private speakBaseScale = 1;
 
   private idleBob?: Phaser.Tweens.Tween;
+
+  private isSwimming = false;
+  private ripple?: Phaser.GameObjects.Ellipse;
 
   private stepCount = 0;
 
@@ -118,6 +126,7 @@ export class Player extends Phaser.GameObjects.Container {
     scene.add.existing(this);
     this.setDepth(state.cy + 1.5);
     this.startIdleBob();
+    this.updateSwimState();
   }
 
   assignId(id: string) {
@@ -180,9 +189,12 @@ export class Player extends Phaser.GameObjects.Container {
     this.cx = cx;
     this.cy = cy;
     this.isMoving = true;
+    this.updateSwimState();
 
     const diag = dx !== 0 && dy !== 0 ? Math.SQRT2 : 1;
-    const dur = ((this.running ? RUN_STEP_MS : STEP_MS) * diag) / this.speedMul;
+    const swim = this.isSwimming ? SWIM_SPEED_MUL : 1;
+    const dur =
+      ((this.running ? RUN_STEP_MS : STEP_MS) * diag) / (this.speedMul * swim);
     this.startStepAnim(dx, dy, dur);
 
     const { x, y } = cartToIso(cx, cy);
@@ -376,6 +388,7 @@ export class Player extends Phaser.GameObjects.Container {
     const { x, y } = cartToIso(cx, cy);
     this.setPosition(x + TILE_W / 2, y + TILE_H / 2);
     this.returnToIdle();
+    this.updateSwimState();
     return true;
   }
 
@@ -384,11 +397,45 @@ export class Player extends Phaser.GameObjects.Container {
       this.mapDef;
     if (cx < 0 || cy < 0 || cx >= cols || cy >= rows) return false;
     const groundIdx = groundLayer[cy]?.[cx];
-    if (groundIdx === undefined || !walkableGround.has(groundIdx)) return false;
+    if (groundIdx === undefined) return false;
+    // Water is enterable too — the player swims across it.
+    if (!walkableGround.has(groundIdx) && groundIdx !== WATER) return false;
     const decoIdx = decoLayer[cy]?.[cx];
     if (decoIdx !== undefined && decoIdx >= 0 && solidDeco.has(decoIdx))
       return false;
     return true;
+  }
+
+  private isWaterTile(cx: number, cy: number): boolean {
+    return this.mapDef.groundLayer[cy]?.[cx] === WATER;
+  }
+
+  /** Sync the swimming visual (submerged body + ripple) to the current tile. */
+  private updateSwimState() {
+    const swimming = this.isWaterTile(this.cx, this.cy);
+    if (swimming === this.isSwimming) return;
+    this.isSwimming = swimming;
+    this.avatar.setSubmerged(swimming ? SWIM_SUBMERGE_PX : 0);
+    this.shadow.setVisible(!swimming);
+    if (swimming) {
+      if (!this.ripple) {
+        this.ripple = this.scene.add
+          .ellipse(0, AVATAR_FOOT_Y - SWIM_SUBMERGE_PX, TILE_W * 0.85, 6, 0x9fd8ff, 0.5)
+          .setOrigin(0.5, 0.5);
+        this.addAt(this.ripple, 1);
+        this.scene.tweens.add({
+          targets: this.ripple,
+          scaleX: 1.18,
+          duration: 900,
+          yoyo: true,
+          repeat: -1,
+          ease: "Sine.easeInOut",
+        });
+      }
+      this.ripple.setVisible(true);
+    } else {
+      this.ripple?.setVisible(false);
+    }
   }
 
   handleInput(
@@ -468,6 +515,7 @@ export class Player extends Phaser.GameObjects.Container {
     const dy = state.cy - this.cy;
     this.cx = state.cx;
     this.cy = state.cy;
+    this.updateSwimState();
 
     const now = this.scene.time.now;
     const elapsed = this.lastRemoteMoveT ? now - this.lastRemoteMoveT : STEP_MS;

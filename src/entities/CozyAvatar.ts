@@ -1,6 +1,8 @@
 import Phaser from "phaser";
 import {
   ANIM,
+  FRAME_W,
+  FRAME_H,
   IDLE_FRAME_MS,
   WALK_FRAME_MS,
   outfitLayers,
@@ -17,6 +19,8 @@ export class CozyAvatar extends Phaser.GameObjects.Container {
   private idx = 0;
   private timer?: Phaser.Time.TimerEvent;
   private timerDelay = 0;
+  // How many source px of the lower body to hide (submerged while swimming).
+  private submergePx = 0;
 
   constructor(scene: Phaser.Scene, outfit: Outfit) {
     super(scene, 0, 0);
@@ -63,10 +67,22 @@ export class CozyAvatar extends Phaser.GameObjects.Container {
     return ANIM[this.kind][this.dir];
   }
 
+  /** Hide the bottom `px` source pixels of the body (0 = fully visible). */
+  setSubmerged(px: number) {
+    this.submergePx = Math.max(0, Math.min(FRAME_H, px));
+    this.applyCrop();
+  }
+
+  private applyCrop() {
+    const h = FRAME_H - this.submergePx;
+    for (const l of this.layers) l.setCrop(0, 0, FRAME_W, h);
+  }
+
   private applyFrame() {
     const fr = this.frames();
     const f = fr[this.idx % fr.length];
     for (const l of this.layers) l.setFrame(f);
+    this.applyCrop();
   }
 
   private applyFlip() {
