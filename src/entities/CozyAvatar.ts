@@ -4,6 +4,7 @@ import {
   IDLE_FRAME_MS,
   WALK_FRAME_MS,
   outfitLayers,
+  texNpcChar,
   type Dir,
   type Outfit,
 } from "../world/cozyChar";
@@ -24,11 +25,19 @@ export class CozyAvatar extends Phaser.GameObjects.Container {
   }
 
   setOutfit(outfit: Outfit) {
+    this.rebuildLayers(outfitLayers(outfit));
+  }
+
+  /** Render one of the pre-assembled character sheets (1..9) as a single layer. */
+  setPresetChar(n: number) {
+    this.rebuildLayers([texNpcChar(n)]);
+  }
+
+  private rebuildLayers(keys: (string | null)[]) {
     for (const l of this.layers) l.destroy();
     this.layers = [];
-    for (const key of outfitLayers(outfit)) {
+    for (const key of keys) {
       if (!key) continue;
-
       const sprite = this.scene.add.sprite(0, 0, key, 0).setOrigin(0.5, 1);
       this.layers.push(sprite);
       this.add(sprite);

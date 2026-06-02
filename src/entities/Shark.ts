@@ -2,22 +2,38 @@ import Phaser from "phaser";
 import { cartToIso, TILE_W, TILE_H } from "../utils/IsoUtils";
 import type { MapObject, MapDef } from "../types/map";
 import { TS, WATER } from "../world/tileset";
+import { FONT_CHAT } from "../ui/theme";
+import { popHeart } from "./Animal";
 
 const SRC_TILE = 16;
+
+/** Every shark is, of course, a Blåhaj. */
+export const SHARK_NAME = "Blåhaj";
+
+const DECIDE_MOVE_MS = 90;
+const DECIDE_IDLE_MS = 350;
+const DECIDE_STUCK_MS = 700;
+const SWIM_DUR_MIN = 280;
+const SWIM_DUR_MAX = 380;
+
+type PlayerPos = { cx: number; cy: number };
 
 export class Shark extends Phaser.GameObjects.Container {
   public cx: number;
   public cy: number;
   private sprite: Phaser.GameObjects.Image;
+  private nameTag!: Phaser.GameObjects.Text;
   private obj: MapObject;
   private mapDef: MapDef;
   private isMoving = false;
   private animTimer?: Phaser.Time.TimerEvent;
-  private wanderTimer?: Phaser.Time.TimerEvent;
+  private decideTimer?: Phaser.Time.TimerEvent;
   private moveTween?: Phaser.Tweens.Tween;
   private bobTween?: Phaser.Tweens.Tween;
+  private happyTween?: Phaser.Tweens.Tween;
   private animKeys: string[];
   private animFps: number;
+  private getPlayerPos: () => PlayerPos | null;
 
   static SHARK_KEYS: ReadonlySet<string> = new Set([TS.fish]);
 
@@ -25,13 +41,19 @@ export class Shark extends Phaser.GameObjects.Container {
     return Shark.SHARK_KEYS.has(key);
   }
 
-  constructor(scene: Phaser.Scene, obj: MapObject, mapDef: MapDef) {
+  constructor(
+    scene: Phaser.Scene,
+    obj: MapObject,
+    mapDef: MapDef,
+    getPlayerPos: () => PlayerPos | null,
+  ) {
     const { x, y } = cartToIso(obj.cx, obj.cy);
     super(scene, x, y);
     this.cx = obj.cx;
     this.cy = obj.cy;
     this.obj = obj;
     this.mapDef = mapDef;
+    this.getPlayerPos = getPlayerPos;
 
     const texture = scene.textures.get(obj.key);
     const register = (sx: number, sy: number) => {
@@ -40,9 +62,10 @@ export class Shark extends Phaser.GameObjects.Container {
       return fk;
     };
 
-    const frames = obj.frames && obj.frames.length > 0
-      ? obj.frames
-      : [{ sx: obj.sx, sy: obj.sy }];
+    const frames =
+      obj.frames && obj.frames.length > 0
+        ? obj.frames
+        : [{ sx: obj.sx, sy: obj.sy }];
     this.animKeys = frames.map((f) => register(f.sx, f.sy));
     this.animFps = obj.fps ?? 4;
 
@@ -51,12 +74,27 @@ export class Shark extends Phaser.GameObjects.Container {
       .setOrigin(0, 0);
     this.sprite.setScale(TILE_W / SRC_TILE, TILE_H / SRC_TILE);
     this.add(this.sprite);
+
+    const w = (obj.w / SRC_TILE) * TILE_W;
+    this.nameTag = scene.add
+      .text(w / 2, -3, SHARK_NAME, {
+        fontSize: "16px",
+        fontFamily: FONT_CHAT,
+        color: "#bfe9ff",
+        stroke: "#06324a",
+        strokeThickness: 5,
+      })
+      .setOrigin(0.5, 1)
+      .setResolution(4)
+      .setScale(0.34);
+    this.add(this.nameTag);
+
     scene.add.existing(this);
 
     this.setDepth(obj.cy + obj.h / SRC_TILE);
 
     this.startSwimAnim();
-    this.scheduleWander();
+    this.scheduleDecide(400 + Math.random() * 300);
   }
 
   private startSwimAnim() {
@@ -74,38 +112,178 @@ export class Shark extends Phaser.GameObjects.Container {
     }
   }
 
-  private scheduleWander() {
-    this.wanderTimer?.remove(false);
-    this.wanderTimer = this.scene.time.addEvent({
-      delay: 1500 + Math.random() * 2500,
-      callback: () => this.wander(),
+  private scheduleDecide(delay: number) {
+    this.decideTimer?.remove(false);
+    this.decideTimer = this.scene.time.addEvent({
+      delay,
+      callback: () => this.decide(),
     });
   }
 
-  private wander() {
-    if (this.isMoving) return;
-
-    const dirs: [number, number][] = [
-      [0, -1],
-      [0, 1],
-      [-1, 0],
-      [1, 0],
-    ];
-    for (let i = dirs.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [dirs[i], dirs[j]] = [dirs[j], dirs[i]];
+  private decide() {
+    if (this.isMoving) {
+      this.scheduleDecide(DECIDE_MOVE_MS);
+      return;
     }
 
-    for (const [dx, dy] of dirs) {
-      const nc = this.cx + dx;
-      const nr = this.cy + dy;
-      if (this.canMoveTo(nc, nr)) {
-        this.swimTo(nc, nr, dx);
-        return;
+    const player = this.getPlayerPos();
+    if (!player) {
+      this.scheduleDecide(500);
+      return;
+    }
+
+    const target = this.findClosestWaterTileTo(player.cx, player.cy);
+    if (!target) {
+      this.scheduleDecide(DECIDE_STUCK_MS);
+      return;
+    }
+
+    const dx = target.cx - this.cx;
+    const dy = target.cy - this.cy;
+    const dist = Math.abs(dx) + Math.abs(dy);
+
+    if (dist === 0) {
+      this.faceTowards(player.cx);
+      this.startHappyWiggle();
+      this.scheduleDecide(DECIDE_IDLE_MS + Math.random() * 250);
+      return;
+    }
+
+    const step = this.pathStepToward(target.cx, target.cy);
+    if (!step) {
+      this.faceTowards(player.cx);
+      this.scheduleDecide(DECIDE_STUCK_MS);
+      return;
+    }
+
+    const [nc, nr] = step;
+    this.swimTo(nc, nr, Math.sign(nc - this.cx));
+    this.scheduleDecide(DECIDE_MOVE_MS);
+  }
+
+  private findClosestWaterTileTo(
+    px: number,
+    py: number,
+  ): { cx: number; cy: number } | null {
+    const cols = this.mapDef.cols;
+    const rows = this.mapDef.rows;
+    const maxR = Math.max(cols, rows);
+    for (let radius = 0; radius <= maxR; radius++) {
+      for (let dy = -radius; dy <= radius; dy++) {
+        for (let dx = -radius; dx <= radius; dx++) {
+          if (Math.max(Math.abs(dx), Math.abs(dy)) !== radius) continue;
+          const c = px + dx;
+          const r = py + dy;
+          if (c < 0 || r < 0 || c >= cols || r >= rows) continue;
+          if (this.mapDef.groundLayer[r][c] === WATER) {
+            return { cx: c, cy: r };
+          }
+        }
       }
     }
+    return null;
+  }
 
-    this.scheduleWander();
+  private pathStepToward(
+    targetCx: number,
+    targetCy: number,
+  ): [number, number] | null {
+    const startKey = `${this.cx},${this.cy}`;
+    const targetKey = `${targetCx},${targetCy}`;
+    if (startKey === targetKey) return null;
+
+    const visited = new Set<string>([startKey]);
+    const queue: [number, number, [number, number][]][] = [
+      [this.cx, this.cy, []],
+    ];
+    const dirs: [number, number][] = [
+      [1, 0],
+      [-1, 0],
+      [0, 1],
+      [0, -1],
+    ];
+
+    while (queue.length > 0) {
+      const [c, r, path] = queue.shift()!;
+      for (const [dc, dr] of dirs) {
+        const nc = c + dc;
+        const nr = r + dr;
+        if (!this.canMoveTo(nc, nr)) continue;
+        const key = `${nc},${nr}`;
+        if (visited.has(key)) continue;
+        visited.add(key);
+        const newPath: [number, number][] = [...path, [nc, nr]];
+        if (key === targetKey) return newPath[0];
+        queue.push([nc, nr, newPath]);
+      }
+    }
+    return null;
+  }
+
+  private faceTowards(targetCx: number) {
+    if (targetCx > this.cx) {
+      this.sprite.setFlipX(false);
+    } else if (targetCx < this.cx) {
+      this.sprite.setFlipX(true);
+    }
+  }
+
+  private startHappyWiggle() {
+    this.stopHappyWiggle();
+    this.happyTween = this.scene.tweens.add({
+      targets: this.sprite,
+      angle: { from: -8, to: 8 },
+      duration: 220,
+      yoyo: true,
+      repeat: 2,
+      ease: "Sine.easeInOut",
+      onComplete: () => {
+        this.sprite.angle = 0;
+      },
+    });
+  }
+
+  private stopHappyWiggle() {
+    this.happyTween?.remove();
+    this.happyTween = undefined;
+    this.sprite.angle = 0;
+  }
+
+  /** World-space anchor (top-centre) for a floating prompt above Blåhaj. */
+  getPetAnchor(): { x: number; y: number } {
+    const w = (this.obj.w / SRC_TILE) * TILE_W;
+    return { x: this.x + w / 2, y: this.y - 12 };
+  }
+
+  /** True if (px,py) is orthogonally adjacent to (or on) the shark's tiles. */
+  isNear(px: number, py: number): boolean {
+    const tw = Math.ceil(this.obj.w / SRC_TILE);
+    const th = Math.ceil(this.obj.h / SRC_TILE);
+    for (let r = 0; r < th; r++)
+      for (let c = 0; c < tw; c++)
+        if (Math.abs(this.cx + c - px) + Math.abs(this.cy + r - py) <= 1)
+          return true;
+    return false;
+  }
+
+  makeClickable(cursor: string, onClick: () => void): this {
+    const w = (this.obj.w / SRC_TILE) * TILE_W;
+    const h = (this.obj.h / SRC_TILE) * TILE_H;
+    this.setSize(w, h);
+    this.setInteractive({
+      hitArea: new Phaser.Geom.Rectangle(0, 0, w, h),
+      hitAreaCallback: Phaser.Geom.Rectangle.Contains,
+      cursor,
+    });
+    this.on("pointerdown", onClick);
+    return this;
+  }
+
+  /** Blåhaj loves being petted: a floating heart + a happy wiggle. */
+  pet() {
+    const w = (this.obj.w / SRC_TILE) * TILE_W;
+    popHeart(this.scene, this.x + w / 2, this.y - 4);
+    this.startHappyWiggle();
   }
 
   private canMoveTo(cx: number, cy: number): boolean {
@@ -129,14 +307,15 @@ export class Shark extends Phaser.GameObjects.Container {
 
   private swimTo(cx: number, cy: number, dx: number) {
     this.isMoving = true;
+    this.stopHappyWiggle();
     this.cx = cx;
     this.cy = cy;
 
-    if (dx > 0) this.sprite.setFlipX(true);
-    else if (dx < 0) this.sprite.setFlipX(false);
+    if (dx > 0) this.sprite.setFlipX(false);
+    else if (dx < 0) this.sprite.setFlipX(true);
 
     const dest = cartToIso(cx, cy);
-    const dur = 600 + Math.random() * 300;
+    const dur = SWIM_DUR_MIN + Math.random() * (SWIM_DUR_MAX - SWIM_DUR_MIN);
 
     this.bobTween = this.scene.tweens.add({
       targets: this.sprite,
@@ -160,16 +339,16 @@ export class Shark extends Phaser.GameObjects.Container {
         this.isMoving = false;
         this.sprite.y = 0;
         this.setDepth(this.cy + this.obj.h / SRC_TILE);
-        this.scheduleWander();
       },
     });
   }
 
   destroy(fromScene?: boolean) {
     this.animTimer?.remove(false);
-    this.wanderTimer?.remove(false);
+    this.decideTimer?.remove(false);
     this.moveTween?.remove();
     this.bobTween?.remove();
+    this.happyTween?.remove();
     super.destroy(fromScene);
   }
 }

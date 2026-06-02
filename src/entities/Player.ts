@@ -9,6 +9,7 @@ import {
   PRESET_OUTFITS,
   defaultOutfitIndex,
   decodeOutfit,
+  decodePresetChar,
   clampOutfit,
   type Dir,
   type Outfit,
@@ -96,6 +97,8 @@ export class Player extends Phaser.GameObjects.Container {
     );
 
     this.avatar = new CozyAvatar(scene, resolveOutfit(state));
+    const presetChar = decodePresetChar(state.skin);
+    if (presetChar) this.avatar.setPresetChar(presetChar);
     this.avatar.setPosition(0, AVATAR_FOOT_Y);
 
     const verified = state.verified ?? false;
@@ -126,16 +129,21 @@ export class Player extends Phaser.GameObjects.Container {
   }
 
   setAppearance(index: number, skin?: string) {
-    this.avatar.setOutfit(
-      resolveOutfit({
-        id: this.playerId,
-        cx: this.cx,
-        cy: this.cy,
-        name: "",
-        char: index,
-        skin,
-      }),
-    );
+    const presetChar = decodePresetChar(skin);
+    if (presetChar) {
+      this.avatar.setPresetChar(presetChar);
+    } else {
+      this.avatar.setOutfit(
+        resolveOutfit({
+          id: this.playerId,
+          cx: this.cx,
+          cy: this.cy,
+          name: "",
+          char: index,
+          skin,
+        }),
+      );
+    }
     this.avatar.setAnim(
       this.isMoving ? "walk" : "idle",
       this.dir,
@@ -283,6 +291,75 @@ export class Player extends Phaser.GameObjects.Container {
       return false;
     }
     return this.moveToTile(this.cx + dx, this.cy + dy);
+  }
+
+  /**
+   * Vault over a single blocking tile (e.g. a fence) in the facing/held
+   * direction, FPS-style, landing on the open tile two cells away.
+   */
+  tryJump(): boolean {
+    if (this.isMoving) return false;
+
+    let dx = this.inputDir.dx;
+    let dy = this.inputDir.dy;
+    if (dx === 0 && dy === 0) {
+      if (this.dir === "up") dy = -1;
+      else if (this.dir === "down") dy = 1;
+      else dx = this.facingLeft ? -1 : 1;
+    }
+    // Collapse diagonals to a single axis (prefer horizontal).
+    if (dx !== 0 && dy !== 0) dy = 0;
+    if (dx === 0 && dy === 0) return false;
+
+    const mid = { cx: this.cx + dx, cy: this.cy + dy };
+    const land = { cx: this.cx + 2 * dx, cy: this.cy + 2 * dy };
+    // Only vault when something blocks the next tile and the far tile is clear.
+    if (this.canMoveToTile(mid.cx, mid.cy)) return false;
+    if (!this.canMoveToTile(land.cx, land.cy)) return false;
+
+    this.setDirection(dx, dy);
+    this.isMoving = true;
+    this.cx = land.cx;
+    this.cy = land.cy;
+
+    const { x, y } = cartToIso(land.cx, land.cy);
+    const dur = 320;
+
+    this.avatar.setAnim("walk", this.dir, this.facingLeft);
+    this.stopIdleBob();
+    this.scene.tweens.killTweensOf(this.avatar);
+    // Arc the avatar up and back down for a hop.
+    this.scene.tweens.add({
+      targets: this.avatar,
+      y: AVATAR_FOOT_Y - 18,
+      duration: dur / 2,
+      ease: "Sine.easeOut",
+      yoyo: true,
+      onComplete: () => {
+        this.avatar.y = AVATAR_FOOT_Y;
+      },
+    });
+
+    this.scene.tweens.add({
+      targets: this,
+      x: x + TILE_W / 2,
+      y: y + TILE_H / 2,
+      duration: dur,
+      ease: "Linear",
+      onComplete: () => {
+        if (!this.scene) return;
+        this.isMoving = false;
+        this.spawnDust();
+        const { dx: hx, dy: hy } = this.inputDir;
+        if (hx !== 0 || hy !== 0) {
+          if (!this.attemptStep(hx, hy)) this.returnToIdle();
+        } else {
+          this.returnToIdle();
+        }
+      },
+    });
+
+    return true;
   }
 
   setSpeedMultiplier(mul: number) {

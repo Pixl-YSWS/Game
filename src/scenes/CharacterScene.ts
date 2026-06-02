@@ -11,6 +11,11 @@ import {
   decodeOutfit,
   encodeOutfit,
   clampOutfit,
+  encodePresetChar,
+  decodePresetChar,
+  texNpcChar,
+  NPC_CHARS,
+  ANIM,
   NUM_BODY,
   NUM_HAIR,
   NUM_TOP,
@@ -28,6 +33,10 @@ export class CharacterScene extends Phaser.Scene {
   private valueLabels: Partial<Record<keyof Outfit, Phaser.GameObjects.Text>> =
     {};
   private steppers: MenuButton[] = [];
+  // Which pre-assembled character is selected (1..9), or null when using a
+  // custom outfit from the steppers.
+  private selectedPreset: number | null = null;
+  private presetHighlights: Phaser.GameObjects.Rectangle[] = [];
 
   constructor() {
     super({ key: "CharacterScene" });
@@ -36,6 +45,7 @@ export class CharacterScene extends Phaser.Scene {
   init(data: CharInit) {
     this.fromKey = data?.from;
     const existing = getCustomSkin();
+    this.selectedPreset = decodePresetChar(existing);
     this.outfit = (existing && decodeOutfit(existing)) || {
       ...PRESET_OUTFITS[0],
     };
@@ -53,7 +63,7 @@ export class CharacterScene extends Phaser.Scene {
     this.add.zone(0, 0, W, H).setOrigin(0).setInteractive();
 
     const panelW = 540;
-    const panelH = 380;
+    const panelH = 470;
     const px = (W - panelW) / 2;
     const py = (H - panelH) / 2;
     panel(this, W / 2, H / 2, panelW, panelH, "ui-panel-dark");
@@ -69,9 +79,9 @@ export class CharacterScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     const previewX = px + 120;
-    const previewY = py + panelH / 2 + 10;
+    const previewY = py + 150;
     this.add
-      .rectangle(previewX, previewY - 4, 150, 200, 0x000000, 0.22)
+      .rectangle(previewX, previewY - 4, 150, 190, 0x000000, 0.22)
       .setStrokeStyle(1, 0xffffff, 0.12);
     this.add.ellipse(previewX, previewY + 78, 70, 26, 0x000000, 0.25);
     this.preview = new CozyAvatar(this, this.outfit);
@@ -90,20 +100,72 @@ export class CharacterScene extends Phaser.Scene {
     y += rowGap;
     this.buildStepper("Bottom", "bottom", 1, NUM_BOTTOM, rowX, y, rowW);
 
-    makeMenuButton(this, px + 120, py + panelH - 32, "RANDOM", {
-      width: 150,
-      height: 38,
+    makeMenuButton(this, rowX + rowW / 2, y + rowGap - 4, "RANDOM", {
+      width: rowW,
+      height: 34,
       variant: "grey",
       onClick: () => this.randomise(),
     });
-    makeMenuButton(this, W / 2 + 130, py + panelH - 32, "DONE", {
-      width: 200,
+
+    this.buildCharacterPicker(px, py + 312, panelW);
+
+    makeMenuButton(this, W / 2, py + panelH - 30, "DONE", {
+      width: 220,
       height: 42,
       onClick: () => this.scene.stop(),
     });
 
     this.refresh();
     this.input.keyboard?.on("keydown-ESC", () => this.scene.stop());
+  }
+
+  private buildCharacterPicker(px: number, y: number, panelW: number) {
+    this.add
+      .text(px + panelW / 2, y, "— OR PICK A CHARACTER —", {
+        fontFamily: FONT_NARROW,
+        fontSize: "12px",
+        color: COLORS.textDim,
+      })
+      .setOrigin(0.5);
+
+    const idleFrame = ANIM.idle.down[0];
+    const margin = 34;
+    const usable = panelW - margin * 2;
+    const gap = usable / NPC_CHARS;
+    const cellY = y + 42;
+    for (let n = 1; n <= NPC_CHARS; n++) {
+      const cx = px + margin + gap * (n - 0.5);
+      const bg = this.add
+        .rectangle(cx, cellY, gap - 6, 56, 0x000000, 0.25)
+        .setStrokeStyle(2, 0xf0a500, 0)
+        .setInteractive({ useHandCursor: true });
+      this.presetHighlights[n] = bg;
+      this.add
+        .sprite(cx, cellY + 22, texNpcChar(n), idleFrame)
+        .setOrigin(0.5, 1)
+        .setScale(1.5);
+      bg.on("pointerdown", () => this.selectPreset(n));
+    }
+  }
+
+  private selectPreset(n: number) {
+    this.selectedPreset = n;
+    this.preview?.setPresetChar(n);
+    this.preview?.setAnim("idle", "down", false);
+    this.updatePresetHighlights();
+    const encoded = encodePresetChar(n);
+    setCustomSkin(encoded);
+    if (gameSocket.connected) gameSocket.setSkin(encoded);
+  }
+
+  private updatePresetHighlights() {
+    for (let n = 1; n <= NPC_CHARS; n++) {
+      this.presetHighlights[n]?.setStrokeStyle(
+        2,
+        0xf0a500,
+        this.selectedPreset === n ? 1 : 0,
+      );
+    }
   }
 
   private buildStepper(
@@ -173,11 +235,18 @@ export class CharacterScene extends Phaser.Scene {
     );
     this.valueLabels.top?.setText(`${this.outfit.top} / ${NUM_TOP}`);
     this.valueLabels.bottom?.setText(`${this.outfit.bottom} / ${NUM_BOTTOM}`);
-    this.preview?.setOutfit(this.outfit);
+    if (this.selectedPreset) {
+      this.preview?.setPresetChar(this.selectedPreset);
+    } else {
+      this.preview?.setOutfit(this.outfit);
+    }
     this.preview?.setAnim("idle", "down", false);
+    this.updatePresetHighlights();
   }
 
   private apply() {
+    // Tweaking the steppers means going back to a custom outfit.
+    this.selectedPreset = null;
     this.refresh();
     const encoded = encodeOutfit(this.outfit);
     setCustomSkin(encoded);

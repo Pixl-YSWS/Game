@@ -219,6 +219,17 @@ export class WorldScene extends Phaser.Scene {
     this.wasd = { W: k(b.up), A: k(b.left), S: k(b.down), D: k(b.right) };
 
     k(b.interact).on("down", () => this.mobileInteract());
+    this.cursors.space?.on("down", () => {
+      if (this.ui?.isChatOpen || this.ui?.isDialogueOpen || this.loadingOverlay)
+        return;
+      this.localPlayer?.tryJump();
+    });
+    k("P").on("down", () => {
+      if (this.ui?.isChatOpen || this.ui?.isDialogueOpen || this.loadingOverlay)
+        return;
+      if (this.localPlayer)
+        this.petAdjacentCritter(this.localPlayer.cx, this.localPlayer.cy);
+    });
     k(b.invite).on("down", () => this.openInvitePanel());
     k(b.inbox).on("down", () => this.openInbox());
     k(b.bag).on("down", () => this.openInventory());
@@ -322,6 +333,7 @@ export class WorldScene extends Phaser.Scene {
 
     this.refreshDoorPrompt();
     this.refreshNpcPrompt();
+    this.refreshPetPrompt();
     this.refreshPortalPrompt();
     if (cx !== this.lastTileCx || cy !== this.lastTileCy) {
       this.lastTileCx = cx;
@@ -383,7 +395,28 @@ export class WorldScene extends Phaser.Scene {
       this.enterHouse(cx, cy);
       return;
     }
-    if (this.isAdjacentToPortal(cx, cy)) this.usePortal();
+    if (this.isAdjacentToPortal(cx, cy)) {
+      this.usePortal();
+      return;
+    }
+    this.petAdjacentCritter(cx, cy);
+  }
+
+  /** Pet the nearest adjacent cow/chicken/Blåhaj, if any. */
+  private petAdjacentCritter(cx: number, cy: number): boolean {
+    for (const animal of this.animals) {
+      if (animal.isNear(cx, cy)) {
+        animal.pet();
+        return true;
+      }
+    }
+    for (const shark of this.sharks) {
+      if (shark.isNear(cx, cy)) {
+        shark.pet();
+        return true;
+      }
+    }
+    return false;
   }
 
   private isAdjacentToPortal(cx: number, cy: number): boolean {
@@ -580,8 +613,16 @@ export class WorldScene extends Phaser.Scene {
   private rebuildAnimals(objs: MapObject[]) {
     this.clearAnimals();
     if (!this.mapDef) return;
+    // Shared tile-occupancy set so animals don't walk onto each other.
+    const occupancy = new Set<string>();
     for (const obj of objs) {
-      this.animals.push(new Animal(this, obj, this.mapDef));
+      const animal = new Animal(this, obj, this.mapDef, occupancy);
+      animal.makeClickable(CURSORS.pointer, () => {
+        if (this.localPlayer && animal.isNear(this.localPlayer.cx, this.localPlayer.cy))
+          animal.pet();
+        else this.flashStatus("Walk closer to pet");
+      });
+      this.animals.push(animal);
     }
   }
 
@@ -609,13 +650,57 @@ export class WorldScene extends Phaser.Scene {
     this.clearSharks();
     if (!this.mapDef) return;
     for (const obj of objs) {
-      this.sharks.push(new Shark(this, obj, this.mapDef));
+      const shark = new Shark(this, obj, this.mapDef, () => {
+        const p = this.localPlayer;
+        return p ? { cx: p.cx, cy: p.cy } : null;
+      });
+      shark.makeClickable(CURSORS.pointer, () => {
+        if (this.localPlayer && shark.isNear(this.localPlayer.cx, this.localPlayer.cy))
+          shark.pet();
+        else this.flashStatus("Walk closer to pet Blåhaj");
+      });
+      this.sharks.push(shark);
     }
   }
 
   private clearSharks() {
     for (const s of this.sharks) s.destroy();
     this.sharks.length = 0;
+  }
+
+  private petPrompt?: Phaser.GameObjects.Text;
+
+  /** Nearest cow/chicken/Blåhaj the player is standing next to, if any. */
+  private nearestPettable(cx: number, cy: number): Animal | Shark | undefined {
+    for (const a of this.animals) if (a.isNear(cx, cy)) return a;
+    for (const s of this.sharks) if (s.isNear(cx, cy)) return s;
+    return undefined;
+  }
+
+  private refreshPetPrompt() {
+    const hidden = this.ui?.isDialogueOpen || this.ui?.isChatOpen;
+    const target =
+      !hidden && this.localPlayer
+        ? this.nearestPettable(this.localPlayer.cx, this.localPlayer.cy)
+        : undefined;
+    if (!target) {
+      this.petPrompt?.setVisible(false);
+      return;
+    }
+    if (!this.petPrompt) {
+      this.petPrompt = this.add
+        .text(0, 0, "[P] pet", {
+          fontFamily: FONT,
+          fontSize: "8px",
+          color: "#ffd24a",
+          stroke: "#000000",
+          strokeThickness: 3,
+        })
+        .setOrigin(0.5, 1)
+        .setDepth(99999);
+    }
+    const a = target.getPetAnchor();
+    this.petPrompt.setPosition(a.x, a.y).setVisible(true);
   }
 
   private refreshNpcPrompt() {
@@ -1100,6 +1185,12 @@ export class WorldScene extends Phaser.Scene {
       this.houseObjects.get(id)?.destroy();
       this.houseObjects.delete(id);
     });
+
+    if (gameSocket.connected) {
+      const wanted = this.initialWorld ?? this.world;
+      this.initialWorld = undefined;
+      gameSocket.enterWorld(wanted);
+    }
   }
 
   private playerBySocketId(id: string): Player | undefined {

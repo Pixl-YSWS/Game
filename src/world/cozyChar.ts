@@ -60,10 +60,25 @@ export function clampOutfit(o: Outfit): Outfit {
 }
 
 const OUTFIT_RE = /^cv1:b([1-3])h([0-6])t([1-6])o([1-6])$/;
+// Pre-assembled character descriptor, e.g. "cvc:3" => Pre-assembled char #3.
+const PRESET_CHAR_RE = /^cvc:([1-9])$/;
 
-/** True if `s` is a well-formed outfit descriptor. */
+/** True if `s` is a well-formed appearance descriptor (outfit or preset char). */
 export function isValidSkin(s: unknown): s is string {
-  return typeof s === "string" && OUTFIT_RE.test(s);
+  return (
+    typeof s === "string" && (OUTFIT_RE.test(s) || PRESET_CHAR_RE.test(s))
+  );
+}
+
+export function encodePresetChar(n: number): string {
+  return `cvc:${clamp(n, 1, NPC_CHARS)}`;
+}
+
+/** Returns the pre-assembled character number (1..9), or null if not one. */
+export function decodePresetChar(s: unknown): number | null {
+  if (typeof s !== "string") return null;
+  const m = PRESET_CHAR_RE.exec(s);
+  return m ? +m[1] : null;
 }
 
 export function encodeOutfit(o: Outfit): string {

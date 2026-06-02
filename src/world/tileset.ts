@@ -139,8 +139,11 @@ export function houseSolidCells(cx: number, cy: number): [number, number][] {
 }
 
 const f32 = (col: number, row: number) => ({ sx: col * 32, sy: row * 32 });
+// Cow sheet (32×32): row 0 = walk cycle (legs move), row 2 = graze (head down),
+// row 3 = idle (legs planted, head/tail bob), row 4 = lie down.
+export const COW_WALK = { frames: [f32(0, 0), f32(1, 0), f32(2, 0), f32(3, 0)] };
 export const COW_ANIMS = {
-  idle: { frames: [f32(0, 0), f32(1, 0), f32(2, 0), f32(3, 0)], fps: 3 },
+  idle: { frames: [f32(0, 3), f32(1, 3), f32(2, 3), f32(3, 3)], fps: 3 },
   graze: { frames: [f32(0, 2), f32(1, 2)], fps: 2 },
   lie: { frames: [f32(1, 4), f32(2, 4), f32(3, 4)], fps: 1.5 },
 } as const;
@@ -168,8 +171,9 @@ export function cowSolidCells(cx: number, cy: number): [number, number][] {
 }
 
 const f16 = (col: number, row: number) => ({ sx: col * 16, sy: row * 16 });
+// Row 2 is the head-down pecking pose — the chicken's idle "eating" loop.
 const CHICKEN_PECK = {
-  frames: [f16(0, 0), f16(1, 0), f16(0, 1), f16(1, 1)],
+  frames: [f16(0, 2), f16(1, 2)],
   fps: 3,
 };
 export function chickenObject(cx: number, cy: number): MapObject {
@@ -287,10 +291,9 @@ export function fenceObject(
   return { key: TS.fence, sx: part.sx, sy: part.sy, w: 16, h: 16, cx, cy };
 }
 
-const SHARK_SWIM: { sx: number; sy: number }[] = [
-  { sx: 64, sy: 0 },
-  { sx: 0, sy: 16 },
-];
+// Fish_big.png is a 3×2 grid of distinct 32×16 fish, not an animation strip.
+// The right-facing grey shark lives at (sx 64, sy 0); use it as a single static
+// sprite and let Shark's bob + move tweens sell the swimming motion.
 export function sharkObject(cx: number, cy: number): MapObject {
   return {
     key: TS.fish,
@@ -300,7 +303,5 @@ export function sharkObject(cx: number, cy: number): MapObject {
     h: 16,
     cx,
     cy,
-    frames: SHARK_SWIM.map((f) => ({ sx: f.sx, sy: f.sy })),
-    fps: 4,
   };
 }

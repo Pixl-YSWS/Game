@@ -886,6 +886,16 @@ io.on("connection", (socket) => {
     const player = players.get(socket.id);
     if (!player) return;
 
+    // Re-entering the world you're already in (e.g. a client returning from
+    // the main menu and rebuilding its scene). `switchWorld` no-ops on the
+    // same room, so resend the current state directly.
+    if (worldKey(target) === worldKey(player.world)) {
+      socket.emit("world:state", worldStateFor(player));
+      if (player.world.kind === "house")
+        socket.emit("house:objects", { objects: houseObjectsList() });
+      return;
+    }
+
     if (target.kind === "openworld" || target.kind === "house") {
       if (target.kind === "openworld" && !canEnterOpenworld(player)) {
         socket.emit("world:denied", {

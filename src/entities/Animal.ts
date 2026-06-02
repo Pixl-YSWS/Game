@@ -2,6 +2,28 @@ import Phaser from "phaser";
 import { cartToIso, TILE_W, TILE_H } from "../utils/IsoUtils";
 import type { MapObject, MapDef } from "../types/map";
 import { TS } from "../world/tileset";
+import { EMOTE_ATLAS } from "../ui/theme";
+import { emoteFrame } from "../ui/emotes";
+
+export function popHeart(
+  scene: Phaser.Scene,
+  x: number,
+  y: number,
+): void {
+  const heart = scene.add
+    .image(x, y, EMOTE_ATLAS, emoteFrame("heart"))
+    .setDisplaySize(12, 12)
+    .setDepth(100000);
+  scene.tweens.add({
+    targets: heart,
+    y: y - 14,
+    alpha: { from: 1, to: 0 },
+    scale: { from: heart.scale * 0.6, to: heart.scale },
+    duration: 750,
+    ease: "Quad.easeOut",
+    onComplete: () => heart.destroy(),
+  });
+}
 
 const SRC_TILE = 16;
 
@@ -12,11 +34,13 @@ interface FrameDef {
 
 function walkFrames(key: string): FrameDef[] {
   if (key === TS.cow) {
-    const f = (col: number) => ({ sx: col * 32, sy: 96 });
+    // Row 0 is the real walk cycle (legs alternate); row 3 is a standing idle.
+    const f = (col: number) => ({ sx: col * 32, sy: 0 });
     return [f(0), f(1), f(2), f(3)];
   }
   if (key === TS.chicken) {
-    const f = (col: number) => ({ sx: col * 16, sy: 32 });
+    // Row 0 = upright stepping (walk); row 2 = head-down peck (idle/eat).
+    const f = (col: number) => ({ sx: col * 16, sy: 0 });
     return [f(0), f(1)];
   }
   return [];
@@ -36,7 +60,11 @@ export class Animal extends Phaser.GameObjects.Container {
   private animTimer?: Phaser.Time.TimerEvent;
   private wanderTimer?: Phaser.Time.TimerEvent;
   private moveTween?: Phaser.Tweens.Tween;
-  private bobTween?: Phaser.Tweens.Tween;
+  private walkDir: [number, number] = [0, 0];
+  private stepsLeft = 0;
+  // Tiles this animal occupies (shared with siblings so they don't overlap).
+  private occupied: Set<string>;
+  private held = new Set<string>();
 
   static ANIMAL_KEYS: ReadonlySet<string> = new Set([TS.cow, TS.chicken]);
 
@@ -44,13 +72,23 @@ export class Animal extends Phaser.GameObjects.Container {
     return Animal.ANIMAL_KEYS.has(key);
   }
 
-  constructor(scene: Phaser.Scene, obj: MapObject, mapDef: MapDef) {
+  constructor(
+    scene: Phaser.Scene,
+    obj: MapObject,
+    mapDef: MapDef,
+    occupied?: Set<string>,
+  ) {
     const { x, y } = cartToIso(obj.cx, obj.cy);
     super(scene, x, y);
     this.cx = obj.cx;
     this.cy = obj.cy;
     this.obj = obj;
     this.mapDef = mapDef;
+    this.occupied = occupied ?? new Set<string>();
+    for (const t of this.footprintTiles(obj.cx, obj.cy)) {
+      this.occupied.add(t);
+      this.held.add(t);
+    }
 
     const texture = scene.textures.get(obj.key);
     const register = (sx: number, sy: number) => {
@@ -99,8 +137,9 @@ export class Animal extends Phaser.GameObjects.Container {
   }
 
   private scheduleWander() {
+    // Long, varied rests so the animals graze/stand around instead of fidgeting.
     this.wanderTimer = this.scene.time.addEvent({
-      delay: 3000 + Math.random() * 5000,
+      delay: 6000 + Math.random() * 9000,
       callback: () => this.wander(),
     });
   }
@@ -118,15 +157,31 @@ export class Animal extends Phaser.GameObjects.Container {
     }
 
     for (const [dx, dy] of dirs) {
-      const nc = this.cx + dx;
-      const nr = this.cy + dy;
-      if (this.canMoveTo(nc, nr)) {
-        this.walkTo(nc, nr);
+      if (this.canMoveTo(this.cx + dx, this.cy + dy)) {
+        // Stroll a few tiles in one direction rather than a single twitchy step.
+        this.walkDir = [dx, dy];
+        this.stepsLeft = 2 + Math.floor(Math.random() * 4);
+        const turned = this.faceTowards(dx);
+        if (turned) {
+          this.playAnim(this.idleAnimKeys, this.idleFps);
+          this.scene.time.delayedCall(220, () => this.stepStroll(true));
+        } else {
+          this.stepStroll(true);
+        }
         return;
       }
     }
 
     this.scheduleWander();
+  }
+
+  private footprintTiles(cx: number, cy: number): string[] {
+    const tw = Math.ceil(this.obj.w / SRC_TILE);
+    const th = Math.ceil(this.obj.h / SRC_TILE);
+    const tiles: string[] = [];
+    for (let r = 0; r < th; r++)
+      for (let c = 0; c < tw; c++) tiles.push(`${cx + c},${cy + r}`);
+    return tiles;
   }
 
   private canMoveTo(cx: number, cy: number): boolean {
@@ -143,45 +198,130 @@ export class Animal extends Phaser.GameObjects.Container {
         const d = this.mapDef.decoLayer[gr]?.[gc];
         if (d !== undefined && d >= 0 && this.mapDef.solidDeco.has(d))
           return false;
+        // Blocked if another animal holds this tile (ignore our own tiles).
+        const key = `${gc},${gr}`;
+        if (this.occupied.has(key) && !this.held.has(key)) return false;
       }
     }
     return true;
   }
 
-  private walkTo(cx: number, cy: number) {
+  /** Returns true if the facing actually changed. */
+  private faceTowards(dx: number): boolean {
+    // Cow/chicken sheets are drawn facing right; flip to face left when going left.
+    if (dx === 0) return false;
+    const want = dx < 0;
+    if (this.sprite.flipX === want) return false;
+    this.sprite.setFlipX(want);
+    return true;
+  }
+
+  // Walk one tile in walkDir, then chain to the next step until the stroll ends.
+  private stepStroll(first: boolean) {
+    const [dx, dy] = this.walkDir;
+    const nc = this.cx + dx;
+    const nr = this.cy + dy;
+    if (this.stepsLeft <= 0 || !this.canMoveTo(nc, nr)) {
+      this.endStroll();
+      return;
+    }
+    this.stepsLeft--;
     this.isMoving = true;
-    this.cx = cx;
-    this.cy = cy;
 
-    this.playAnim(this.walkAnimKeys, 5);
+    // Reserve the destination now (hold both tiles during transit) so no other
+    // animal can step into it; release the vacated tiles once we arrive.
+    const oldFoot = this.footprintTiles(this.cx, this.cy);
+    const newFoot = this.footprintTiles(nc, nr);
+    for (const t of newFoot) {
+      this.occupied.add(t);
+      this.held.add(t);
+    }
+    this.cx = nc;
+    this.cy = nr;
 
-    const dest = cartToIso(cx, cy);
-    const dur = 400 + Math.random() * 300;
+    // Start the walk cycle once at the top of a stroll and let it run across all
+    // the steps so the legs keep moving without restarting each tile.
+    if (first) this.playAnim(this.walkAnimKeys, 6);
 
-    this.bobTween = this.scene.tweens.add({
-      targets: this.sprite,
-      y: -3,
-      duration: dur / 4,
-      yoyo: true,
-      repeat: 3,
-      ease: "Sine.easeInOut",
-    });
+    const dest = cartToIso(nc, nr);
+    const dur = 360 + Math.random() * 160;
 
+    // No vertical bob — the walk-cycle frames carry the motion, the body just
+    // glides along x/y, so the animal walks instead of hopping.
     this.moveTween = this.scene.tweens.add({
       targets: this,
       x: dest.x,
       y: dest.y,
       duration: dur,
-      ease: "Quad.easeInOut",
+      ease: "Linear",
       onUpdate: () => {
         this.setDepth(Math.floor(this.y / TILE_H) + this.obj.h / SRC_TILE);
       },
       onComplete: () => {
-        this.isMoving = false;
-        this.sprite.y = 0;
-        this.setDepth(this.cy + this.obj.h / SRC_TILE);
-        this.playAnim(this.idleAnimKeys, this.idleFps);
-        this.scheduleWander();
+        const keep = new Set(newFoot);
+        for (const t of oldFoot)
+          if (!keep.has(t)) {
+            this.occupied.delete(t);
+            this.held.delete(t);
+          }
+        this.stepStroll(false);
+      },
+    });
+  }
+
+  private endStroll() {
+    this.isMoving = false;
+    this.sprite.y = 0;
+    this.setDepth(this.cy + this.obj.h / SRC_TILE);
+    this.playAnim(this.idleAnimKeys, this.idleFps);
+    this.scheduleWander();
+  }
+
+  /** World-space anchor (top-centre) for a floating prompt above the animal. */
+  getPetAnchor(): { x: number; y: number } {
+    const w = (this.obj.w / SRC_TILE) * TILE_W;
+    return { x: this.x + w / 2, y: this.y - 4 };
+  }
+
+  /** True if (px,py) is orthogonally adjacent to (or on) the animal's tiles. */
+  isNear(px: number, py: number): boolean {
+    const tw = Math.ceil(this.obj.w / SRC_TILE);
+    const th = Math.ceil(this.obj.h / SRC_TILE);
+    for (let r = 0; r < th; r++)
+      for (let c = 0; c < tw; c++)
+        if (Math.abs(this.cx + c - px) + Math.abs(this.cy + r - py) <= 1)
+          return true;
+    return false;
+  }
+
+  makeClickable(cursor: string, onClick: () => void): this {
+    const w = (this.obj.w / SRC_TILE) * TILE_W;
+    const h = (this.obj.h / SRC_TILE) * TILE_H;
+    this.setSize(w, h);
+    this.setInteractive({
+      hitArea: new Phaser.Geom.Rectangle(0, 0, w, h),
+      hitAreaCallback: Phaser.Geom.Rectangle.Contains,
+      cursor,
+    });
+    this.on("pointerdown", onClick);
+    return this;
+  }
+
+  /** Happy reaction when the player pets it: a wiggle + a floating heart. */
+  pet() {
+    const w = (this.obj.w / SRC_TILE) * TILE_W;
+    popHeart(this.scene, this.x + w / 2, this.y - 4);
+    this.scene.tweens.killTweensOf(this.sprite);
+    this.sprite.angle = 0;
+    this.scene.tweens.add({
+      targets: this.sprite,
+      angle: { from: -7, to: 7 },
+      duration: 90,
+      yoyo: true,
+      repeat: 3,
+      ease: "Sine.easeInOut",
+      onComplete: () => {
+        this.sprite.angle = 0;
       },
     });
   }
@@ -190,7 +330,8 @@ export class Animal extends Phaser.GameObjects.Container {
     this.animTimer?.remove(false);
     this.wanderTimer?.remove(false);
     this.moveTween?.remove();
-    this.bobTween?.remove();
+    for (const t of this.held) this.occupied.delete(t);
+    this.held.clear();
     super.destroy(fromScene);
   }
 }
