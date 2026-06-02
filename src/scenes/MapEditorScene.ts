@@ -1,13 +1,6 @@
 import Phaser from "phaser";
 import { makeMenuButton, type MenuButton } from "../utils/MenuButton";
-import {
-  FONT,
-  FONT_TITLE,
-  FONT_CHAT,
-  COLORS,
-  CURSORS,
-  FONT_DIALOUG,
-} from "../ui/theme";
+import { FONT, FONT_TITLE, FONT_CHAT, COLORS, CURSORS } from "../ui/theme";
 import { panel, closeButton } from "../ui/UIKit";
 import { gameSocket } from "../network/socket";
 import type { WorldScene } from "./WorldScene";
