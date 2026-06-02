@@ -14,12 +14,16 @@ export const TS = {
   chicken: "cv-chicken",
   beach: "cv-beach",
   fish: "cv-fish",
+  ifloor: "cv-ifloor",
+  iwall: "cv-iwall",
+  iprops: "cv-iprops",
 } as const;
 
 const PV = "assets/CozyValley_Premium_1.3/CozyValley_Premium_1.3";
 const P = `${PV}/Tilesets`;
 const B = "assets/CozyValley_Basic_1.0/CozyValley_Basic_1.0/Tilesets";
-const EX = "assets/CozyTowns_v1/Housing/Exterior";
+const HOUSING = "assets/CozyTowns_v1/Housing";
+const EX = `${HOUSING}/Exterior`;
 
 export interface SheetSpec {
   key: string;
@@ -39,6 +43,9 @@ export const worldSheetSpecs: SheetSpec[] = [
   { key: TS.chicken, path: `${PV}/Animals/Chicken/Chicken_brown.png` },
   { key: TS.beach, path: `${P}/Beach.png` },
   { key: TS.fish, path: `${PV}/Animals/Fish/Fish_big.png` },
+  { key: TS.ifloor, path: `${HOUSING}/Interior/Floors_white.png` },
+  { key: TS.iwall, path: `${HOUSING}/Interior/Walls_white.png` },
+  { key: TS.iprops, path: `${HOUSING}/Props/Base/BaseProps_white.png` },
 ];
 
 export const GRASS = 1;
@@ -54,6 +61,10 @@ export const FLOWER_C = 12;
 export const FLOWER_D = 13;
 export const ROCK_A = 14;
 export const ROCK_B = 15;
+
+// Interior tiles (used only by InteriorScene).
+export const IFLOOR = 50;
+export const IWALL = 51;
 
 export interface TileSrc {
   key: string;
@@ -72,6 +83,8 @@ export const TILE_SRC: Record<number, TileSrc> = {
   [FLOWER_D]: { key: TS.flowers, fx: 3, fy: 0 },
   [ROCK_A]: { key: TS.grounddecor, fx: 0, fy: 1 },
   [ROCK_B]: { key: TS.grounddecor, fx: 1, fy: 1 },
+  [IFLOOR]: { key: TS.ifloor, fx: 2, fy: 0 },
+  [IWALL]: { key: TS.iwall, fx: 0, fy: 0 },
 };
 
 export const WALKABLE_GROUND: ReadonlySet<number> = new Set([
@@ -289,6 +302,35 @@ export function fenceObject(
   cy: number,
 ): MapObject {
   return { key: TS.fence, sx: part.sx, sy: part.sy, w: 16, h: 16, cx, cy };
+}
+
+// Furniture frames inside BaseProps_white.png (measured pixel rects).
+export interface InteriorProp {
+  sx: number;
+  sy: number;
+  w: number;
+  h: number;
+}
+export const IPROPS = {
+  bookshelf: { sx: 2, sy: 0, w: 27, h: 32 },
+  wardrobe: { sx: 32, sy: 0, w: 28, h: 48 },
+  bedDouble: { sx: 130, sy: 99, w: 42, h: 39 },
+  bedSingle: { sx: 180, sy: 99, w: 24, h: 37 },
+  rug: { sx: 33, sy: 65, w: 46, h: 30 },
+  sofa: { sx: 176, sy: 45, w: 31, h: 20 },
+  lamp: { sx: 114, sy: 115, w: 13, h: 29 },
+  window: { sx: 180, sy: 2, w: 23, h: 21 },
+  picture: { sx: 148, sy: 2, w: 23, h: 22 },
+  table: { sx: 50, sy: 35, w: 28, h: 29 },
+} as const;
+
+export function interiorPropObject(
+  p: InteriorProp,
+  cx: number,
+  cy: number,
+  flat = false,
+): MapObject {
+  return { key: TS.iprops, sx: p.sx, sy: p.sy, w: p.w, h: p.h, cx, cy, flat };
 }
 
 // Fish_big.png is a 3×2 grid of distinct 32×16 fish, not an animation strip.

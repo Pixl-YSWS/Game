@@ -2,38 +2,82 @@ import Phaser from "phaser";
 import { IsoMap } from "../world/IsoMap";
 import { Player } from "../entities/Player";
 import { TILE_H } from "../utils/IsoUtils";
-import type { MapDef } from "../types/map";
+import type { MapDef, MapObject } from "../types/map";
 import { getKeybinds } from "../data/Settings";
 import { gameSocket } from "../network/socket";
+import {
+  IFLOOR,
+  IWALL,
+  SOLID,
+  IPROPS,
+  interiorPropObject,
+  type InteriorProp,
+} from "../world/tileset";
 
 const COLS = 32;
 const ROWS = 18;
-const ROOM_COLS = 10;
-const ROOM_ROWS = 8;
+const ROOM_COLS = 14;
+const ROOM_ROWS = 10;
 const ROOM_X = Math.floor((COLS - ROOM_COLS) / 2);
 const ROOM_Y = Math.floor((ROWS - ROOM_ROWS) / 2);
+const ROOM_X1 = ROOM_X + ROOM_COLS - 1;
+const ROOM_Y1 = ROOM_Y + ROOM_ROWS - 1;
 const DOOR_COL = ROOM_X + Math.floor(ROOM_COLS / 2);
-const DOOR_ROW = ROOM_Y + ROOM_ROWS - 1;
+const DOOR_ROW = ROOM_Y1;
 
 function makeInteriorMap(): MapDef {
-  const ground = Array.from({ length: ROWS }, () => new Array(COLS).fill(0));
+  const ground = Array.from({ length: ROWS }, () => new Array(COLS).fill(-1));
   const deco = Array.from({ length: ROWS }, () => new Array(COLS).fill(-1));
 
-  for (let r = ROOM_Y; r <= ROOM_Y + ROOM_ROWS - 1; r++) {
-    for (let c = ROOM_X; c <= ROOM_X + ROOM_COLS - 1; c++) {
-      ground[r][c] = 1;
-    }
+  // Wood floor across the whole room.
+  for (let r = ROOM_Y; r <= ROOM_Y1; r++)
+    for (let c = ROOM_X; c <= ROOM_X1; c++) ground[r][c] = IFLOOR;
+
+  // Wallpaper walls: a 2-tile-tall back wall plus a 1-tile border on the other
+  // sides, with a doorway gap at the bottom centre.
+  for (let c = ROOM_X; c <= ROOM_X1; c++) {
+    deco[ROOM_Y][c] = IWALL;
+    deco[ROOM_Y + 1][c] = IWALL;
+    if (c !== DOOR_COL) deco[ROOM_Y1][c] = IWALL;
+  }
+  for (let r = ROOM_Y; r <= ROOM_Y1; r++) {
+    deco[r][ROOM_X] = IWALL;
+    deco[r][ROOM_X1] = IWALL;
   }
 
-  for (let c = ROOM_X; c < ROOM_X + ROOM_COLS; c++) {
-    deco[ROOM_Y][c] = 45;
-    if (c !== DOOR_COL) deco[DOOR_ROW][c] = 68;
-  }
-  for (let r = ROOM_Y + 1; r < DOOR_ROW; r++) {
-    deco[r][ROOM_X] = 56;
-    deco[r][ROOM_X + ROOM_COLS - 1] = 80;
-  }
-  deco[DOOR_ROW][DOOR_COL] = 43;
+  const objects: MapObject[] = [];
+  const place = (
+    prop: InteriorProp,
+    cx: number,
+    cy: number,
+    opts: { flat?: boolean; solid?: boolean } = {},
+  ) => {
+    objects.push(interiorPropObject(prop, cx, cy, opts.flat));
+    if (opts.solid) {
+      const tw = Math.max(1, Math.round(prop.w / 16));
+      const th = Math.max(1, Math.round(prop.h / 16));
+      for (let r = 0; r < th; r++)
+        for (let c = 0; c < tw; c++) {
+          const gc = cx + c;
+          const gr = cy + r;
+          if (gr > ROOM_Y + 1 && gr < ROOM_Y1 && gc > ROOM_X && gc < ROOM_X1)
+            deco[gr][gc] = SOLID;
+        }
+    }
+  };
+
+  // Wall decorations (sit on the back wall, no collision needed).
+  place(IPROPS.window, ROOM_X + 3, ROOM_Y);
+  place(IPROPS.picture, ROOM_X + 9, ROOM_Y);
+
+  // Furniture.
+  place(IPROPS.bookshelf, ROOM_X + 1, ROOM_Y + 2, { solid: true });
+  place(IPROPS.wardrobe, ROOM_X + 3, ROOM_Y + 2, { solid: true });
+  place(IPROPS.bedDouble, ROOM_X + 9, ROOM_Y + 2, { solid: true });
+  place(IPROPS.rug, ROOM_X + 4, ROOM_Y + 6, { flat: true });
+  place(IPROPS.table, ROOM_X + 5, ROOM_Y + 5, { solid: true });
+  place(IPROPS.sofa, ROOM_X + 9, ROOM_Y + 6, { solid: true });
+  place(IPROPS.lamp, ROOM_X + 1, ROOM_Y + 7, { solid: true });
 
   return {
     key: "interior_default",
@@ -41,11 +85,13 @@ function makeInteriorMap(): MapDef {
     rows: ROWS,
     tilesetKey: "tiles-town",
     tilesetCols: 12,
+    cozy: true,
+    objects,
     groundLayer: ground,
     decoLayer: deco,
-    walkableGround: new Set([0, 1, 2]),
-    solidDeco: new Set([44, 45, 56, 68, 80, 82, 94]),
-    flatDeco: new Set([43]),
+    walkableGround: new Set([IFLOOR]),
+    solidDeco: new Set([SOLID, IWALL]),
+    flatDeco: new Set(),
     spawnPoint: { cx: DOOR_COL, cy: DOOR_ROW - 1 },
     doors: [],
     npcs: [],
