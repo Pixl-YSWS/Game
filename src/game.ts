@@ -13,6 +13,7 @@ import { InvitePanelScene } from "./scenes/InvitePanelScene";
 import { InboxScene } from "./scenes/InboxScene";
 import { InventoryScene } from "./scenes/InventoryScene";
 import { AdminScene } from "./scenes/AdminScene";
+import { MapEditorScene } from "./scenes/MapEditorScene";
 import { ProjectsScene } from "./scenes/ProjectsScene";
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
@@ -40,6 +41,7 @@ const config: Phaser.Types.Core.GameConfig = {
     InboxScene,
     InventoryScene,
     AdminScene,
+    MapEditorScene,
     ProjectsScene,
   ],
   scale: {

@@ -4,11 +4,23 @@ import { Player } from "../entities/Player";
 import { Npc } from "../entities/Npc";
 import { Animal } from "../entities/Animal";
 import { Shark } from "../entities/Shark";
-import type { PlayerState, WorldRef, WorldState } from "../types/network";
-import type { MapDef, MapObject } from "../types/map";
+import type {
+  PlayerState,
+  WorldRef,
+  WorldState,
+  MapEdit,
+  NpcEdit,
+} from "../types/network";
+import type { MapDef, MapObject, NpcDef } from "../types/map";
 import { generateMap, generateVillage } from "../world/MapGen";
 import { makeHouseInterior } from "../world/HouseMap";
 import { TS } from "../world/tileset";
+import {
+  applyMapOverrides,
+  applyNpcEdits,
+  editKey,
+  type EditLayer,
+} from "../world/mapOverrides";
 import { gameSocket } from "../network/socket";
 import { TILE_H, TILE_W, cartToIso, isoToCart } from "../utils/IsoUtils";
 import { getShopItem } from "../shop/catalog";
@@ -71,6 +83,28 @@ export class WorldScene extends Phaser.Scene {
   private placingItem?: string;
   private placeGhost?: Phaser.GameObjects.Text;
   private placeHint?: Phaser.GameObjects.Text;
+
+  // ── Admin map editor state ──
+  // Committed server overrides for the current world, the pristine
+  // seed-generated layers (so edits can be recomputed/undone), and the
+  // admin's uncommitted brush strokes.
+  private overrides: MapEdit[] = [];
+  private baseGround?: number[][];
+  private baseDeco?: number[][];
+  private editMode = false;
+  private editBrush?: { layer: EditLayer; tile: number };
+  private editNpcTool?: "add" | "move" | "remove";
+  private pendingEdits = new Map<string, MapEdit>();
+  private lastPaintKey?: string;
+  private awaitingOverrideEcho = false;
+  private editorBlockRect?: Phaser.Geom.Rectangle;
+  private repaintQueued = false;
+
+  // NPC editing
+  private npcEdits: NpcEdit[] = [];
+  private baseNpcs: NpcDef[] = [];
+  private pendingNpcEdits: NpcEdit[] = [];
+  private pickedNpcId?: string;
 
   private doorIndicators: {
     cx: number;
@@ -153,6 +187,8 @@ export class WorldScene extends Phaser.Scene {
     this.connectMultiplayer();
 
     this.input.keyboard!.on("keydown-ESC", () => {
+      // While the map editor is open it owns ESC (to close itself).
+      if (this.editMode) return;
       if (this.placingItem) {
         this.cancelPlacement();
         return;
@@ -165,11 +201,28 @@ export class WorldScene extends Phaser.Scene {
     });
 
     this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
+      if (this.editMode && this.editBrush) {
+        this.lastPaintKey = undefined;
+        this.paintAt(pointer);
+        return;
+      }
+      if (this.editMode && this.editNpcTool) {
+        this.handleNpcClick(pointer);
+        return;
+      }
       if (!this.placingItem) return;
       const { worldX, worldY } = pointer;
       const { cx, cy } = isoToCart(worldX, worldY);
       gameSocket.placeHouseItem(this.placingItem, cx, cy);
       this.cancelPlacement();
+    });
+
+    // Drag-painting in map-editor mode.
+    this.input.on("pointermove", (pointer: Phaser.Input.Pointer) => {
+      if (this.editMode && this.editBrush && pointer.isDown) this.paintAt(pointer);
+    });
+    this.input.on("pointerup", () => {
+      this.lastPaintKey = undefined;
     });
 
     this.scale.on("resize", this.onResize, this);
@@ -308,10 +361,17 @@ export class WorldScene extends Phaser.Scene {
   update(_time: number, delta: number) {
     if (!this.localPlayer) return;
 
+    // Flush at most one queued map-editor repaint per frame (see paintAt).
+    if (this.repaintQueued) {
+      this.repaintQueued = false;
+      this.repaintMap();
+    }
+
     if (
       !this.ui?.isDialogueOpen &&
       !this.ui?.isChatOpen &&
-      !this.loadingOverlay
+      !this.loadingOverlay &&
+      !this.editMode
     ) {
       this.localPlayer.handleInput(
         this.cursors,
@@ -451,6 +511,7 @@ export class WorldScene extends Phaser.Scene {
 
   private onNpcClick(npc: Npc) {
     if (!this.localPlayer) return;
+    if (this.editMode) return;
     if (this.ui?.isChatOpen || this.ui?.isDialogueOpen) return;
     const dx = Math.abs(npc.def.cx - this.localPlayer.cx);
     const dy = Math.abs(npc.def.cy - this.localPlayer.cy);
@@ -528,6 +589,7 @@ export class WorldScene extends Phaser.Scene {
 
   private onDoorClick(cx: number, cy: number) {
     if (!this.localPlayer) return;
+    if (this.editMode) return;
     if (this.ui?.isChatOpen || this.ui?.isDialogueOpen) return;
     const dx = Math.abs(cx - this.localPlayer.cx);
     const dy = Math.abs(cy - this.localPlayer.cy);
@@ -774,6 +836,7 @@ export class WorldScene extends Phaser.Scene {
       .setInteractive({ cursor: CURSORS.pointer });
     zone.on("pointerdown", () => {
       if (!this.localPlayer) return;
+      if (this.editMode) return;
       if (this.ui?.isChatOpen || this.ui?.isDialogueOpen) return;
       if (!this.isAdjacentToPortal(this.localPlayer.cx, this.localPlayer.cy)) {
         this.flashStatus("Walk to the portal first");
@@ -859,6 +922,223 @@ export class WorldScene extends Phaser.Scene {
     });
   }
 
+  // ── Admin map editor API (driven by MapEditorScene) ──────────────────────
+
+  isEditableWorld(): boolean {
+    // Every world WorldScene renders (open world, shared house, villages) is
+    // editable. Private building interiors live in InteriorScene and aren't.
+    return (
+      this.world.kind === "openworld" ||
+      this.world.kind === "house" ||
+      this.world.kind === "village"
+    );
+  }
+
+  getPendingEditCount(): number {
+    return this.pendingEdits.size + this.pendingNpcEdits.length;
+  }
+
+  setEditMode(on: boolean) {
+    this.editMode = on && this.isEditableWorld();
+    this.lastPaintKey = undefined;
+    if (!this.editMode) {
+      this.editBrush = undefined;
+      this.editNpcTool = undefined;
+      this.pickedNpcId = undefined;
+    }
+  }
+
+  setEditBrush(layer: EditLayer, tile: number) {
+    this.editBrush = { layer, tile };
+    this.editNpcTool = undefined;
+    this.pickedNpcId = undefined;
+  }
+
+  setEditNpcTool(op: "add" | "move" | "remove") {
+    this.editNpcTool = op;
+    this.editBrush = undefined;
+    this.pickedNpcId = undefined;
+  }
+
+  // Screen-space rectangle of the editor panel, so clicks on the panel don't
+  // also paint the world behind it.
+  setEditorBlockRect(rect?: Phaser.Geom.Rectangle) {
+    this.editorBlockRect = rect;
+  }
+
+  commitMapEdits(label?: string): number {
+    const tiles = [...this.pendingEdits.values()];
+    const npcs = [...this.pendingNpcEdits];
+    if (tiles.length === 0 && npcs.length === 0) return 0;
+    this.awaitingOverrideEcho = true;
+    gameSocket.mapEdit({ tiles, npcs, label });
+    return tiles.length + npcs.length;
+  }
+
+  discardMapEdits() {
+    if (this.pendingEdits.size === 0 && this.pendingNpcEdits.length === 0)
+      return;
+    this.pendingEdits.clear();
+    this.pendingNpcEdits.length = 0;
+    this.pickedNpcId = undefined;
+    this.lastPaintKey = undefined;
+    this.repaintQueued = false;
+    this.rebuildMapLayers();
+    this.rebuildNpcLayers();
+    this.repaintMap();
+    this.events.emit("map:pendingChanged", 0);
+  }
+
+  private rebuildMapLayers() {
+    if (!this.mapDef || !this.baseGround || !this.baseDeco) return;
+    this.mapDef.groundLayer = this.baseGround.map((r) => [...r]);
+    this.mapDef.decoLayer = this.baseDeco.map((r) => [...r]);
+    applyMapOverrides(this.mapDef, this.overrides);
+    applyMapOverrides(this.mapDef, [...this.pendingEdits.values()]);
+  }
+
+  private rebuildNpcLayers() {
+    if (!this.mapDef) return;
+    this.mapDef.npcs = applyNpcEdits(this.baseNpcs, [
+      ...this.npcEdits,
+      ...this.pendingNpcEdits,
+    ]);
+    this.rebuildNpcs();
+  }
+
+  private findNpcNear(cx: number, cy: number): NpcDef | undefined {
+    if (!this.mapDef) return undefined;
+    let best: NpcDef | undefined;
+    let bestD = 2; // accept exact tile or an adjacent one
+    for (const n of this.mapDef.npcs) {
+      const d = Math.abs(n.cx - cx) + Math.abs(n.cy - cy);
+      if (d < bestD) {
+        bestD = d;
+        best = n;
+      }
+    }
+    return best;
+  }
+
+  private handleNpcClick(pointer: Phaser.Input.Pointer) {
+    if (!this.mapDef || !this.editNpcTool) return;
+    if (
+      this.editorBlockRect &&
+      this.editorBlockRect.contains(pointer.x, pointer.y)
+    )
+      return;
+    const { cx, cy } = isoToCart(pointer.worldX, pointer.worldY);
+    if (cx < 0 || cy < 0 || cx >= this.mapDef.cols || cy >= this.mapDef.rows)
+      return;
+
+    if (this.editNpcTool === "add") {
+      const name = window.prompt("NPC name:", "Villager");
+      if (name === null) return; // cancelled
+      const id = `npc_${Date.now()}_${Math.floor(Math.random() * 1e4)}`;
+      this.pendingNpcEdits.push({
+        op: "add",
+        id,
+        cx,
+        cy,
+        name: name.trim() || "Villager",
+      });
+      this.flashStatus(`Added ${name.trim() || "Villager"}`);
+    } else if (this.editNpcTool === "remove") {
+      const npc = this.findNpcNear(cx, cy);
+      if (!npc) {
+        this.flashStatus("Click an NPC to remove");
+        return;
+      }
+      this.pendingNpcEdits.push({ op: "remove", id: npc.id, cx, cy });
+      this.flashStatus(`Removed ${npc.name}`);
+    } else {
+      // move
+      if (!this.pickedNpcId) {
+        const npc = this.findNpcNear(cx, cy);
+        if (!npc) {
+          this.flashStatus("Click an NPC to move");
+          return;
+        }
+        this.pickedNpcId = npc.id;
+        this.flashStatus(`Moving ${npc.name} — click destination`);
+        return;
+      }
+      this.pendingNpcEdits.push({ op: "move", id: this.pickedNpcId, cx, cy });
+      this.pickedNpcId = undefined;
+      this.flashStatus("NPC moved");
+    }
+    this.rebuildNpcLayers();
+    this.events.emit("map:pendingChanged", this.getPendingEditCount());
+  }
+
+  // Re-stamp only the tile map + ocean, leaving players, camera, NPCs, doors
+  // and objects untouched (tile edits never move them).
+  private repaintMap() {
+    if (!this.mapDef) return;
+    this.isoMap?.destroy();
+    this.oceanTimer?.remove(false);
+    this.oceanTimer = undefined;
+    this.ocean?.destroy();
+    this.ocean = undefined;
+    this.isoMap = new IsoMap(this, this.mapDef);
+    this.isoMap.build();
+    if (this.world.kind !== "house") this.buildOcean();
+  }
+
+  private paintAt(pointer: Phaser.Input.Pointer) {
+    if (!this.editMode || !this.editBrush || !this.mapDef) return;
+    // Ignore clicks that land on the editor panel itself.
+    if (
+      this.editorBlockRect &&
+      this.editorBlockRect.contains(pointer.x, pointer.y)
+    )
+      return;
+    const { cx, cy } = isoToCart(pointer.worldX, pointer.worldY);
+    if (cx < 0 || cy < 0 || cx >= this.mapDef.cols || cy >= this.mapDef.rows)
+      return;
+    const { layer, tile } = this.editBrush;
+    const key = editKey(layer, cx, cy);
+    if (key === this.lastPaintKey) return;
+    this.lastPaintKey = key;
+
+    this.pendingEdits.set(key, { layer, cx, cy, tile });
+    if (layer === "ground") this.mapDef.groundLayer[cy][cx] = tile;
+    else this.mapDef.decoLayer[cy][cx] = tile;
+    // Coalesce repaints: a fast drag can fire many pointermove events per
+    // frame, and a full map re-stamp each time would thrash the GPU and can
+    // crash the WebGL context. Queue one repaint and flush it in update().
+    this.repaintQueued = true;
+    this.events.emit("map:pendingChanged", this.getPendingEditCount());
+  }
+
+  // Live update: server pushed new committed edits for this world.
+  private onMapOverrides = (data: {
+    world: WorldRef;
+    overrides: MapEdit[];
+    npcEdits: NpcEdit[];
+  }) => {
+    if (this.worldKeyMatches(data.world)) {
+      this.overrides = data.overrides;
+      this.npcEdits = data.npcEdits;
+      if (this.awaitingOverrideEcho) {
+        this.pendingEdits.clear();
+        this.pendingNpcEdits.length = 0;
+        this.awaitingOverrideEcho = false;
+        this.events.emit("map:pendingChanged", 0);
+      }
+      this.rebuildMapLayers();
+      this.rebuildNpcLayers();
+      this.repaintMap();
+    }
+  };
+
+  private worldKeyMatches(other: WorldRef): boolean {
+    if (this.world.kind !== other.kind) return false;
+    if (this.world.kind === "village" && other.kind === "village")
+      return this.world.ownerPlayerId === other.ownerPlayerId;
+    return true;
+  }
+
   private rebuildWorld(state: WorldState) {
     this.world = state.world;
 
@@ -890,6 +1170,23 @@ export class WorldScene extends Phaser.Scene {
 
               portal: "spawn",
             });
+    // Snapshot the pristine seed-generated layers, then layer the persisted
+    // admin overrides on top. Keeping the base lets us recompute the map after
+    // a revert without regenerating from the seed.
+    this.overrides = state.overrides ?? [];
+    this.npcEdits = state.npcEdits ?? [];
+    this.pendingEdits.clear();
+    this.pendingNpcEdits.length = 0;
+    this.pickedNpcId = undefined;
+    this.lastPaintKey = undefined;
+    this.repaintQueued = false;
+    this.editMode = false;
+    this.baseGround = this.mapDef.groundLayer.map((r) => [...r]);
+    this.baseDeco = this.mapDef.decoLayer.map((r) => [...r]);
+    this.baseNpcs = this.mapDef.npcs.map((n) => ({ ...n }));
+    applyMapOverrides(this.mapDef, this.overrides);
+    this.mapDef.npcs = applyNpcEdits(this.baseNpcs, this.npcEdits);
+
     const animalObjects = this.extractAnimals();
     const sharkObjects = this.extractSharks();
     this.isoMap = new IsoMap(this, this.mapDef);
@@ -1105,6 +1402,8 @@ export class WorldScene extends Phaser.Scene {
       this.ui?.setWallet(pixels, delta);
     });
     gameSocket.on("world:state", (state) => this.rebuildWorld(state));
+
+    gameSocket.on("map:overrides", this.onMapOverrides);
 
     gameSocket.on("player:join", (state) => {
       if (state.id !== gameSocket.id) this.spawnRemote(state);

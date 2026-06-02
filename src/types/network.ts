@@ -16,11 +16,59 @@ export type WorldRef =
   | { kind: "house" }
   | { kind: "village"; ownerPlayerId: string };
 
+export interface MapEdit {
+  layer: "ground" | "deco";
+  cx: number;
+  cy: number;
+  tile: number;
+}
+
+// An admin NPC operation. `add` spawns a new villager; `move` relocates any
+// NPC (generated or added) by id; `remove` deletes one by id.
+export interface NpcEdit {
+  op: "add" | "move" | "remove";
+  id: string;
+  cx: number;
+  cy: number;
+  name?: string;
+  dialogue?: string[];
+}
+
+// One saved batch of admin edits to a world. Stored server-side so changes
+// persist and can be individually reverted.
+export interface MapRevision {
+  id: number;
+  authorId: string;
+  authorName: string;
+  label?: string;
+  tiles: MapEdit[];
+  npcs: NpcEdit[];
+  active: boolean;
+  createdAt: number;
+}
+
+// History row sent to the editor UI — the heavy edit payloads are summarised
+// by counts.
+export interface MapRevisionMeta {
+  id: number;
+  authorName: string;
+  label?: string;
+  tileCount: number;
+  npcCount: number;
+  active: boolean;
+  createdAt: number;
+}
+
 export interface WorldState {
   world: WorldRef;
   seed: number;
   spawn: { cx: number; cy: number };
   players: PlayerState[];
+
+  // Persisted admin tile-edits applied on top of the seed-generated map.
+  overrides?: MapEdit[];
+  // Persisted admin NPC edits applied (in order) on top of the base NPC list.
+  npcEdits?: NpcEdit[];
 }
 
 export interface PlayerDirEntry {
@@ -134,6 +182,21 @@ export interface ServerToClientEvents {
     online: AdminPlayerEntry[];
   }) => void;
   "world:state": (data: WorldState) => void;
+
+  // Live broadcast to everyone in a world when its persisted edits change
+  // (an admin saved or reverted a revision).
+  "map:overrides": (data: {
+    world: WorldRef;
+    overrides: MapEdit[];
+    npcEdits: NpcEdit[];
+  }) => void;
+
+  // Sent to the admin map editor in response to map:history.
+  "map:history": (data: {
+    world: WorldRef;
+    editable: boolean;
+    revisions: MapRevisionMeta[];
+  }) => void;
   "player:join": (state: PlayerState) => void;
   "player:move": (data: { id: string; cx: number; cy: number }) => void;
   "player:leave": (id: string) => void;
@@ -279,6 +342,16 @@ export interface ClientToServerEvents {
     accountId: string;
     role: "subadmin" | "none";
   }) => void;
+
+  // Admin map editor (full admins only). Edits apply to the admin's CURRENT
+  // world; the server determines the target from live presence.
+  "map:edit": (payload: {
+    tiles?: MapEdit[];
+    npcs?: NpcEdit[];
+    label?: string;
+  }) => void;
+  "map:history": () => void;
+  "map:setActive": (payload: { id: number; active: boolean }) => void;
 }
 
 export type MovePayload = { cx: number; cy: number };

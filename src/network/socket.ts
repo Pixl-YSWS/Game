@@ -5,6 +5,8 @@ import type {
   MovePayload,
   WorldRef,
   MuteChannel,
+  MapEdit,
+  NpcEdit,
 } from "../types/network";
 import { getSessionToken } from "./playerIdentity";
 
@@ -225,6 +227,16 @@ class GameSocket {
   }
   adminSetRole(accountId: string, role: "subadmin" | "none") {
     this.socket?.emit("admin:setRole", { accountId, role });
+  }
+
+  mapEdit(payload: { tiles?: MapEdit[]; npcs?: NpcEdit[]; label?: string }) {
+    this.socket?.emit("map:edit", payload);
+  }
+  requestMapHistory() {
+    this.socket?.emit("map:history");
+  }
+  mapSetActive(id: number, active: boolean) {
+    this.socket?.emit("map:setActive", { id, active });
   }
 
   get id(): string | undefined {

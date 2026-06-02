@@ -82,6 +82,7 @@ export class UIScene extends Phaser.Scene {
   
   private adminRole: ModRole = null;
   private adminBtn?: { bg: Phaser.GameObjects.NineSlice; icon: Phaser.GameObjects.Text; tooltip: Phaser.GameObjects.Text };
+  private mapEditBtn?: { bg: Phaser.GameObjects.NineSlice; icon: Phaser.GameObjects.Text; tooltip: Phaser.GameObjects.Text };
 
   
   
@@ -308,6 +309,13 @@ export class UIScene extends Phaser.Scene {
     this.adminBtn?.bg.setVisible(show).setActive(show);
     this.adminBtn?.icon.setVisible(show);
     if (!show) this.adminBtn?.tooltip.setVisible(false);
+
+    // Map editing is reserved for full admins (not sub-admins/mods).
+    const showMap = role === "admin";
+    if (showMap && !this.mapEditBtn) this.buildMapEditorButton();
+    this.mapEditBtn?.bg.setVisible(showMap).setActive(showMap);
+    this.mapEditBtn?.icon.setVisible(showMap);
+    if (!showMap) this.mapEditBtn?.tooltip.setVisible(false);
   }
 
   
@@ -344,6 +352,41 @@ export class UIScene extends Phaser.Scene {
     if (this.scene.isActive("AdminScene")) return;
     const from = this.scene.isActive("InteriorScene") ? "InteriorScene" : "WorldScene";
     this.scene.launch("AdminScene", { from, role: this.adminRole });
+  }
+
+  private buildMapEditorButton() {
+    const SIZE = this.ICON_SIZE, GAP = this.ICON_GAP;
+    const x = this.scale.width - 12 - SIZE / 2 - 4 * (SIZE + GAP);
+    const cy = 12 + SIZE / 2;
+    const bg = uiNineslice(this, x, cy, "ui-panel-dark", SIZE, SIZE, 16)
+      .setOrigin(0.5)
+      .setAlpha(0.96)
+      .setDepth(50)
+      .setInteractive({ cursor: CURSORS.pointer });
+    const icon = this.add.text(x, cy, "🗺", { fontFamily: FONT_EMOJI, fontSize: `${this.ICON_ICON}px` }).setOrigin(0.5).setDepth(51);
+    const tooltip = this.add
+      .text(x, cy + SIZE / 2 + 6, "Map Editor", {
+        fontFamily: FONT, fontSize: "12px", color: COLORS.text, backgroundColor: "#0a0f1ccc", padding: { x: 6, y: 4 },
+      })
+      .setResolution(3)
+      .setOrigin(0.5, 0)
+      .setDepth(62)
+      .setVisible(false);
+    bg.on("pointerover", () => { bg.setTint(0xffe08a).setScale(1.08); icon.setScale(1.08); tooltip.setVisible(true); });
+    bg.on("pointerout", () => { bg.clearTint().setScale(1); icon.setScale(1); tooltip.setVisible(false); });
+    bg.on("pointerdown", () => {
+      playUiSound(this, "sfx-tap", 0.3);
+      this.openMapEditor();
+    });
+    this.socialObjects.push(bg, icon, tooltip);
+    this.mapEditBtn = { bg, icon, tooltip };
+  }
+
+  private openMapEditor() {
+    if (this.adminRole !== "admin") return;
+    if (this.scene.isActive("MapEditorScene")) return;
+    this.scene.launch("MapEditorScene");
+    this.scene.bringToTop("MapEditorScene");
   }
 
   

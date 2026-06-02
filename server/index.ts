@@ -20,9 +20,21 @@ import type {
   HouseObject,
   InventoryEntry,
   Project,
+  MapEdit,
+  NpcEdit,
+  MapRevision,
+  MapRevisionMeta,
 } from "../src/types/network.ts";
 import { generateMap, generateVillage } from "../src/world/MapGen.ts";
 import { makeHouseInterior } from "../src/world/HouseMap.ts";
+import {
+  applyMapOverrides,
+  applyNpcEdits,
+  foldRevisions,
+  concatNpcEdits,
+  isValidEdit,
+  isValidNpcEdit,
+} from "../src/world/mapOverrides.ts";
 import { getShopItem } from "../src/shop/catalog.ts";
 import { setupAuth, type Account } from "./auth.ts";
 import {
@@ -376,6 +388,50 @@ db.run(`
   if (!cols.includes("voice"))
     db.run("ALTER TABLE mutes ADD COLUMN voice INTEGER NOT NULL DEFAULT 1");
 }
+// Admin-authored map edits to shared worlds. Each row is one saved batch
+// (revision); the live world map is the fold of all active revisions for that
+// world. Reverting just flips `active` so nothing is ever destroyed.
+db.run(`
+  CREATE TABLE IF NOT EXISTS map_revisions (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    world_key   TEXT NOT NULL,
+    author_id   TEXT NOT NULL,
+    author_name TEXT NOT NULL,
+    label       TEXT,
+    edits       TEXT NOT NULL,
+    active      INTEGER NOT NULL DEFAULT 1,
+    created_at  INTEGER NOT NULL
+  )
+`);
+db.run(
+  "CREATE INDEX IF NOT EXISTS idx_map_revisions_world ON map_revisions (world_key, id)",
+);
+const insertRevision = db.query<
+  unknown,
+  [string, string, string, string | null, string, number]
+>(
+  "INSERT INTO map_revisions (world_key, author_id, author_name, label, edits, created_at) " +
+    "VALUES (?, ?, ?, ?, ?, ?)",
+);
+const selectRevisions = db.query<
+  {
+    id: number;
+    author_id: string;
+    author_name: string;
+    label: string | null;
+    edits: string;
+    active: number;
+    created_at: number;
+  },
+  [string]
+>(
+  "SELECT id, author_id, author_name, label, edits, active, created_at " +
+    "FROM map_revisions WHERE world_key = ? ORDER BY id ASC",
+);
+const setRevisionActive = db.query<unknown, [number, number, string]>(
+  "UPDATE map_revisions SET active = ? WHERE id = ? AND world_key = ?",
+);
+
 const selectRole = db.query<{ role: string }, [string]>(
   "SELECT role FROM admins WHERE account_id = ?",
 );
@@ -561,6 +617,54 @@ function worldSeed(world: WorldRef): number {
   return getOrCreateSeed(world.ownerPlayerId);
 }
 
+// Every world (open world, shared house, and each private village) is
+// admin-editable; edits are scoped by the world's storage key.
+function editableWorldKey(world: WorldRef): WorldKey {
+  return worldKey(world);
+}
+
+function loadRevisions(key: WorldKey): MapRevision[] {
+  return selectRevisions.all(key).map((r) => {
+    // Back-compat: early revisions stored a bare MapEdit[]; newer ones store
+    // { tiles, npcs }.
+    const parsed = JSON.parse(r.edits) as
+      | MapEdit[]
+      | { tiles?: MapEdit[]; npcs?: NpcEdit[] };
+    const tiles = Array.isArray(parsed) ? parsed : (parsed.tiles ?? []);
+    const npcs = Array.isArray(parsed) ? [] : (parsed.npcs ?? []);
+    return {
+      id: r.id,
+      authorId: r.author_id,
+      authorName: r.author_name,
+      label: r.label ?? undefined,
+      tiles,
+      npcs,
+      active: r.active === 1,
+      createdAt: r.created_at,
+    };
+  });
+}
+
+// Effective edits per world, cached until an edit lands.
+const overrideCache = new Map<WorldKey, MapEdit[]>();
+const npcEditCache = new Map<WorldKey, NpcEdit[]>();
+function overridesFor(key: WorldKey): MapEdit[] {
+  let o = overrideCache.get(key);
+  if (!o) {
+    o = foldRevisions(loadRevisions(key));
+    overrideCache.set(key, o);
+  }
+  return o;
+}
+function npcEditsFor(key: WorldKey): NpcEdit[] {
+  let o = npcEditCache.get(key);
+  if (!o) {
+    o = concatNpcEdits(loadRevisions(key));
+    npcEditCache.set(key, o);
+  }
+  return o;
+}
+
 const mapCache = new Map<WorldKey, ReturnType<typeof generateMap>>();
 function mapFor(world: WorldRef) {
   const key = worldKey(world);
@@ -572,9 +676,19 @@ function mapFor(world: WorldRef) {
         : world.kind === "village"
           ? generateVillage()
           : generateMap(worldSeed(world), { houses: false });
+    applyMapOverrides(m, overridesFor(key));
+    m.npcs = applyNpcEdits(m.npcs, npcEditsFor(key));
     mapCache.set(key, m);
   }
   return m;
+}
+
+// Drop the cached (edit-applied) map + folded edits so they rebuild on next
+// access. Call after any revision change.
+function invalidateEditableWorld(key: WorldKey) {
+  overrideCache.delete(key);
+  npcEditCache.delete(key);
+  mapCache.delete(key);
 }
 
 const app = express();
@@ -719,11 +833,14 @@ function peersInWorld(world: WorldRef, exceptSocketId?: string): PlayerState[] {
 
 function worldStateFor(state: ServerPlayerState): WorldState {
   mapFor(state.world);
+  const ek = editableWorldKey(state.world);
   return {
     world: state.world,
     seed: worldSeed(state.world),
     spawn: { cx: state.cx, cy: state.cy },
     players: peersInWorld(state.world, state.id),
+    overrides: overridesFor(ek),
+    npcEdits: npcEditsFor(ek),
   };
 }
 
@@ -1269,6 +1386,111 @@ io.on("connection", (socket) => {
       noticeTo(accountId, "Your moderator role was removed.");
     }
     sendAdminData();
+  });
+
+  // ── Admin map editor (full admins only) ──────────────────────────────────
+  function sendMapHistory(toSocketId: string, world: WorldRef) {
+    const ek = editableWorldKey(world);
+    const revisions: MapRevisionMeta[] = loadRevisions(ek).map((r) => ({
+      id: r.id,
+      authorName: r.authorName,
+      label: r.label,
+      tileCount: r.tiles.length,
+      npcCount: r.npcs.length,
+      active: r.active,
+      createdAt: r.createdAt,
+    }));
+    io.to(toSocketId).emit("map:history", {
+      world,
+      editable: true,
+      revisions,
+    });
+  }
+
+  function broadcastOverrides(world: WorldRef, key: WorldKey) {
+    io.to(worldKey(world)).emit("map:overrides", {
+      world,
+      overrides: overridesFor(key),
+      npcEdits: npcEditsFor(key),
+    });
+  }
+
+  socket.on("map:history", () => {
+    const me = players.get(socket.id);
+    if (!me || roleOf(me.playerId) !== "admin") return;
+    sendMapHistory(socket.id, me.world);
+  });
+
+  socket.on("map:edit", ({ tiles, npcs, label }) => {
+    const me = players.get(socket.id);
+    if (!me || roleOf(me.playerId) !== "admin") return;
+    const ek = editableWorldKey(me.world);
+    const base = mapFor(me.world);
+
+    const cleanTiles: MapEdit[] = [];
+    const seen = new Set<string>();
+    if (Array.isArray(tiles)) {
+      for (const e of tiles.slice(0, 5000)) {
+        if (!e || !isValidEdit(e, base.cols, base.rows)) continue;
+        const k = `${e.layer}:${e.cx},${e.cy}`;
+        if (seen.has(k)) continue;
+        seen.add(k);
+        cleanTiles.push({ layer: e.layer, cx: e.cx, cy: e.cy, tile: e.tile });
+      }
+    }
+
+    const cleanNpcs: NpcEdit[] = [];
+    if (Array.isArray(npcs)) {
+      for (const e of npcs.slice(0, 500)) {
+        if (!e || !isValidNpcEdit(e, base.cols, base.rows)) continue;
+        const out: NpcEdit = { op: e.op, id: e.id, cx: e.cx, cy: e.cy };
+        if (e.op === "add") {
+          if (e.name) out.name = e.name.trim().slice(0, 24);
+          if (Array.isArray(e.dialogue))
+            out.dialogue = e.dialogue
+              .slice(0, 8)
+              .map((d) => String(d).slice(0, 200));
+        }
+        cleanNpcs.push(out);
+      }
+    }
+
+    if (cleanTiles.length === 0 && cleanNpcs.length === 0) return;
+
+    const safeLabel =
+      typeof label === "string" && label.trim()
+        ? label.trim().slice(0, 80)
+        : null;
+    insertRevision.run(
+      ek,
+      me.playerId,
+      me.name,
+      safeLabel,
+      JSON.stringify({ tiles: cleanTiles, npcs: cleanNpcs }),
+      Date.now(),
+    );
+    invalidateEditableWorld(ek);
+    broadcastOverrides(me.world, ek);
+    sendMapHistory(socket.id, me.world);
+    console.log(
+      `[map] ${me.name} edited ${ek}: ${cleanTiles.length} tile(s), ` +
+        `${cleanNpcs.length} npc op(s)` +
+        (safeLabel ? ` (“${safeLabel}”)` : ""),
+    );
+  });
+
+  socket.on("map:setActive", ({ id, active }) => {
+    const me = players.get(socket.id);
+    if (!me || roleOf(me.playerId) !== "admin") return;
+    const ek = editableWorldKey(me.world);
+    if (!Number.isInteger(id)) return;
+    setRevisionActive.run(active ? 1 : 0, id, ek);
+    invalidateEditableWorld(ek);
+    broadcastOverrides(me.world, ek);
+    sendMapHistory(socket.id, me.world);
+    console.log(
+      `[map] ${me.name} ${active ? "restored" : "reverted"} revision #${id} in ${ek}`,
+    );
   });
 
   socket.on("emote:send", ({ emote }) => {
