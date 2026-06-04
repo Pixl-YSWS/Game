@@ -7,11 +7,13 @@
     "dev": "concurrently -n CLIENT,SERVER \"vite\" \"bun --watch server/index.ts\"",
     "start:server": "bun --watch server/index.ts",
     "start:client": "vite",
+    "tauri": "tauri",
     "build": "tsc && vite build",
     "preview": "vite preview",
     "sync-map": "bun scripts/sync-map.ts"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^2.11.2",
     "@types/bun": "^1.3.14",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",

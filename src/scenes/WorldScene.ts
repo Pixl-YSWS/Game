@@ -219,7 +219,8 @@ export class WorldScene extends Phaser.Scene {
 
     // Drag-painting in map-editor mode.
     this.input.on("pointermove", (pointer: Phaser.Input.Pointer) => {
-      if (this.editMode && this.editBrush && pointer.isDown) this.paintAt(pointer);
+      if (this.editMode && this.editBrush && pointer.isDown)
+        this.paintAt(pointer);
     });
     this.input.on("pointerup", () => {
       this.lastPaintKey = undefined;
@@ -680,7 +681,10 @@ export class WorldScene extends Phaser.Scene {
     for (const obj of objs) {
       const animal = new Animal(this, obj, this.mapDef, occupancy);
       animal.makeClickable(CURSORS.pointer, () => {
-        if (this.localPlayer && animal.isNear(this.localPlayer.cx, this.localPlayer.cy))
+        if (
+          this.localPlayer &&
+          animal.isNear(this.localPlayer.cx, this.localPlayer.cy)
+        )
           animal.pet();
         else this.flashStatus("Walk closer to pet");
       });
@@ -717,7 +721,10 @@ export class WorldScene extends Phaser.Scene {
         return p ? { cx: p.cx, cy: p.cy } : null;
       });
       shark.makeClickable(CURSORS.pointer, () => {
-        if (this.localPlayer && shark.isNear(this.localPlayer.cx, this.localPlayer.cy))
+        if (
+          this.localPlayer &&
+          shark.isNear(this.localPlayer.cx, this.localPlayer.cy)
+        )
           shark.pet();
         else this.flashStatus("Walk closer to pet Blåhaj");
       });

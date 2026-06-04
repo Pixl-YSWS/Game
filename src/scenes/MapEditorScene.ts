@@ -58,8 +58,7 @@ export class MapEditorScene extends Phaser.Scene {
 
   create() {
     this.world = this.scene.get("WorldScene") as WorldScene;
-    // WorldScene is paused inside private building interiors; only edit when
-    // it's the live world.
+
     this.editable =
       this.scene.isActive("WorldScene") && this.world.isEditableWorld();
 
@@ -75,8 +74,6 @@ export class MapEditorScene extends Phaser.Scene {
     });
 
     this.events.once("shutdown", () => {
-      // Closing without saving cancels the local-only preview so the map
-      // doesn't look changed when it isn't.
       this.world.discardMapEdits();
       this.world.setEditMode(false);
       this.world.setEditorBlockRect(undefined);
@@ -87,15 +84,12 @@ export class MapEditorScene extends Phaser.Scene {
     this.scale.on("resize", this.render, this);
     this.render();
 
-    // Apply the default brush so the first click already paints something.
     if (this.editable) this.world.setEditBrush("ground", GRASS);
   }
 
   private setMode(mode: Mode) {
     this.mode = mode;
-    // Edit mode stays on the whole time the editor is open (it freezes the
-    // player); painting is suppressed in history view via a full-screen block
-    // rect set in renderHistory().
+
     if (mode === "history") gameSocket.requestMapHistory();
     this.render();
   }
@@ -120,7 +114,6 @@ export class MapEditorScene extends Phaser.Scene {
     return obj;
   }
 
-  // ── Not in an editable world ────────────────────────────────────────────
   private renderNotice() {
     const W = this.scale.width;
     const H = this.scale.height;
@@ -169,7 +162,6 @@ export class MapEditorScene extends Phaser.Scene {
     );
   }
 
-  // ── Paint toolbar (left, world stays visible & clickable) ────────────────
   private renderPaint() {
     const px = 10;
     const py = 10;
@@ -177,7 +169,7 @@ export class MapEditorScene extends Phaser.Scene {
     const ph = Math.min(this.scale.height - 20, 540);
 
     this.track(panel(this, px + pw / 2, py + ph / 2, pw, ph, "ui-panel-dark"));
-    // Block clicks on the toolbar from painting the world behind it.
+
     this.world.setEditorBlockRect(new Phaser.Geom.Rectangle(px, py, pw, ph));
 
     this.track(
@@ -348,7 +340,6 @@ export class MapEditorScene extends Phaser.Scene {
         this.add.image(cx, cy, src.key, frameKey).setDisplaySize(size, size),
       );
     } else {
-      // No tile texture: SOLID (invisible wall) or erase.
       const isErase = entry.tile === -1;
       this.track(
         this.add.rectangle(
@@ -427,12 +418,11 @@ export class MapEditorScene extends Phaser.Scene {
     this.updatePendingText(count);
   };
 
-  // ── History (centered modal; editing suspended) ──────────────────────────
   private onHistory = (data: {
     editable: boolean;
     revisions: MapRevisionMeta[];
   }) => {
-    this.revisions = [...data.revisions].reverse(); // newest first
+    this.revisions = [...data.revisions].reverse();
     if (this.mode === "history") this.render();
   };
 
@@ -441,7 +431,6 @@ export class MapEditorScene extends Phaser.Scene {
     const H = this.scale.height;
     this.cameras.main.setBackgroundColor("rgba(0,0,0,0.7)");
 
-    // Cover the whole screen so clicks neither paint nor reach the world.
     this.world.setEditorBlockRect(new Phaser.Geom.Rectangle(0, 0, W, H));
     this.track(this.add.zone(0, 0, W, H).setOrigin(0).setInteractive());
 
