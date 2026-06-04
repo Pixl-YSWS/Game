@@ -5,11 +5,7 @@ import { TS } from "../world/tileset";
 import { EMOTE_ATLAS } from "../ui/theme";
 import { emoteFrame } from "../ui/emotes";
 
-export function popHeart(
-  scene: Phaser.Scene,
-  x: number,
-  y: number,
-): void {
+export function popHeart(scene: Phaser.Scene, x: number, y: number): void {
   const heart = scene.add
     .image(x, y, EMOTE_ATLAS, emoteFrame("heart"))
     .setDisplaySize(12, 12)
@@ -148,8 +144,14 @@ export class Animal extends Phaser.GameObjects.Container {
     if (this.isMoving) return;
 
     const dirs: [number, number][] = [
-      [0, -1], [0, 1], [-1, 0], [1, 0],
-      [-1, -1], [1, -1], [-1, 1], [1, 1],
+      [0, -1],
+      [0, 1],
+      [-1, 0],
+      [1, 0],
+      [-1, -1],
+      [1, -1],
+      [-1, 1],
+      [1, 1],
     ];
     for (let i = dirs.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
@@ -191,7 +193,12 @@ export class Animal extends Phaser.GameObjects.Container {
       for (let c = 0; c < tw; c++) {
         const gc = cx + c;
         const gr = cy + r;
-        if (gc < 0 || gr < 0 || gc >= this.mapDef.cols || gr >= this.mapDef.rows)
+        if (
+          gc < 0 ||
+          gr < 0 ||
+          gc >= this.mapDef.cols ||
+          gr >= this.mapDef.rows
+        )
           return false;
         const g = this.mapDef.groundLayer[gr]?.[gc];
         if (g === undefined || !this.mapDef.walkableGround.has(g)) return false;
@@ -313,17 +320,17 @@ export class Animal extends Phaser.GameObjects.Container {
     popHeart(this.scene, this.x + w / 2, this.y - 4);
     this.scene.tweens.killTweensOf(this.sprite);
     this.sprite.angle = 0;
-    this.scene.tweens.add({
-      targets: this.sprite,
-      angle: { from: -7, to: 7 },
-      duration: 90,
-      yoyo: true,
-      repeat: 3,
-      ease: "Sine.easeInOut",
-      onComplete: () => {
-        this.sprite.angle = 0;
-      },
-    });
+    // this.scene.tweens.add({
+    //   targets: this.sprite,
+    //   angle: { from: -7, to: 7 },
+    //   duration: 90,
+    //   yoyo: true,
+    //   repeat: 3,
+    //   ease: "Sine.easeInOut",
+    //   onComplete: () => {
+    //     this.sprite.angle = 0;
+    //   },
+    // });
   }
 
   destroy(fromScene?: boolean) {
