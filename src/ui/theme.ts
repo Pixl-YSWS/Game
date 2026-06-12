@@ -1,6 +1,6 @@
-export const FONT = "Kenney Future";
+export const FONT = '"Monocraft", "Pixelify Sans", monospace';
 
-export const FONT_NARROW = "Kenney Future Narrow";
+export const FONT_NARROW = '"Monocraft", "Pixelify Sans", sans-serif';
 
 export const FONT_TITLE = "Pixelify Sans";
 
@@ -11,15 +11,15 @@ export const FONT_EMOJI =
   '"Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji", sans-serif';
 
 export const COLORS = {
-  text: "#ffffff",
-  textDim: "#c9d4e3",
+  text: "#f4e3c2",
+  textDim: "#c9b18c",
 
-  textDark: "#4a2f17",
+  textDark: "#2b1d12",
   accent: "#ffd166",
   good: "#7bdc8b",
   bad: "#ff6b6b",
-  panel: 0x1b2233,
-  stroke: "#0a0f1c",
+  panel: 0x2b1d12,
+  stroke: "#17100a",
 } as const;
 
 export const UI_ATLAS = "ui-adv";

@@ -1,7 +1,5 @@
 import Phaser from "phaser";
-import { makeMenuButton, attachMenuNav } from "../utils/MenuButton";
-import { FONT, FONT_TITLE } from "../ui/theme";
-import { panel, closeButton, fitModal } from "../ui/UIKit";
+import { openDomModal, domBtn, el, type DomModal } from "../ui/dom";
 import { gameSocket } from "../network/socket";
 
 interface PauseInit {
@@ -10,6 +8,7 @@ interface PauseInit {
 
 export class PauseScene extends Phaser.Scene {
   private pausedSceneKey = "WorldScene";
+  private modal?: DomModal;
 
   constructor() {
     super({ key: "PauseScene" });
@@ -20,55 +19,56 @@ export class PauseScene extends Phaser.Scene {
   }
 
   create() {
-    const W = this.scale.width;
-    const H = this.scale.height;
+    this.events.once("shutdown", () => {
+      this.modal = undefined;
+    });
 
-    this.add.zone(0, 0, W, H).setOrigin(0).setInteractive();
+    this.modal = openDomModal(this, {
+      title: "Paused",
+      width: 400,
+      onClose: () => this.resume(),
+    });
 
-    panel(this, W / 2, H / 2 - 6, 380, 380, "ui-panel-dark");
-    closeButton(this, W / 2 + 190 - 26, H / 2 - 6 - 190 + 24, () =>
-      this.resume(),
-    );
-    fitModal(this, 400, 400, 24, 0.7);
+    const actions = el("div", "pixl-actions");
+    actions.style.flexDirection = "column";
+    actions.style.alignItems = "stretch";
+    actions.style.gap = "8px";
+    actions.style.marginTop = "20px";
+    actions.style.width = "100%";
 
-    this.add
-      .text(W / 2, H / 2 - 130, "PAUSED", {
-        fontFamily: FONT_TITLE,
-        fontSize: "30px",
-        color: "#f0a500",
-      })
-      .setOrigin(0.5)
-      .setShadow(3, 3, "#000000", 0, true, true);
-
-    const cx = W / 2;
-    const by = H / 2 - 50;
-    const STEP = 66;
-
-    const buttons = [
-      makeMenuButton(this, cx, by, "RESUME", {
-        onClick: () => this.resume(),
-      }),
-      makeMenuButton(this, cx, by + STEP, "SETTINGS", {
-        onClick: () =>
-          this.scene.launch("SettingsScene", { from: "PauseScene" }),
-      }),
-      makeMenuButton(this, cx, by + STEP * 2, "CHARACTER", {
-        onClick: () =>
-          this.scene.launch("CharacterScene", { from: "PauseScene" }),
-      }),
-      makeMenuButton(this, cx, by + STEP * 3, "QUIT TO MAIN MENU", {
-        onClick: () => this.quitToMenu(),
-      }),
+    const btns = [
+      domBtn(this, "Resume", () => this.resume(), { big: true }),
+      domBtn(this, "Settings", () => {
+        this.scene.launch("SettingsScene", { from: "PauseScene" });
+      }, { big: true }),
+      domBtn(this, "Character", () => {
+        this.scene.launch("CharacterScene", { from: "PauseScene" });
+      }, { big: true }),
+      domBtn(this, "Quit to Main Menu", () => this.quitToMenu(), { variant: "grey", big: true }),
     ];
-    attachMenuNav(this, buttons);
 
-    this.add
-      .text(W / 2, H - 16, "press ESC to resume", {
-        fontFamily: FONT,
-        fontSize: "10px",
-        color: "#888899",
-      })
-      .setOrigin(0.5, 1);
+    btns.forEach(b => b.style.width = "100%");
+
+    btns[0].focus();
+
+    const onKey = (e: KeyboardEvent) => {
+      e.stopPropagation();
+      const idx = btns.indexOf(document.activeElement as HTMLButtonElement);
+      if (e.key === "ArrowDown" || e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        btns[(idx + 1) % btns.length].focus();
+      } else if (e.key === "ArrowUp" || e.key.toLowerCase() === "w") {
+        e.preventDefault();
+        btns[(idx - 1 + btns.length) % btns.length].focus();
+      } else if (e.key === "Enter" || e.key === " ") {
+        if (idx >= 0) btns[idx].click();
+      }
+    };
+    window.addEventListener("keydown", onKey, true);
+    this.events.once("shutdown", () => window.removeEventListener("keydown", onKey, true));
+
+    actions.append(...btns);
+    this.modal.body.append(actions);
 
     this.input.keyboard?.on("keydown-ESC", () => this.resume());
   }

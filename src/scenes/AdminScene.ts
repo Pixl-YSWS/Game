@@ -1,7 +1,5 @@
 import Phaser from "phaser";
-import { makeMenuButton, type MenuButton } from "../utils/MenuButton";
-import { FONT_TITLE, FONT_CHAT, COLORS } from "../ui/theme";
-import { panel, closeButton, fitModal } from "../ui/UIKit";
+import { openDomModal, domBtn, el, type DomModal } from "../ui/dom";
 import { gameSocket } from "../network/socket";
 import type { ModRole, AdminEntry, MuteEntry, AdminPlayerEntry } from "../types/network";
 
@@ -9,7 +7,6 @@ interface AdminInit {
   from?: string;
   role?: ModRole;
 }
-
 
 interface Person {
   accountId: string;
@@ -20,22 +17,13 @@ interface Person {
   online: boolean;
 }
 
-const VISIBLE = 7;
-
-
-
 export class AdminScene extends Phaser.Scene {
   private fromKey = "WorldScene";
   private myRole: ModRole = null;
+  private modal?: DomModal;
   private people: Person[] = [];
-  private scroll = 0;
-  private rowObjects: Phaser.GameObjects.GameObject[] = [];
-  private rowButtons: MenuButton[] = [];
-  private listX = 0;
-  private listY = 0;
-  private listW = 0;
-  private emptyText?: Phaser.GameObjects.Text;
-  private toast?: Phaser.GameObjects.Text;
+  private listEl?: HTMLDivElement;
+  private toastEl?: HTMLDivElement;
 
   constructor() {
     super({ key: "AdminScene" });
@@ -44,63 +32,39 @@ export class AdminScene extends Phaser.Scene {
   init(data: AdminInit) {
     this.fromKey = data?.from ?? "WorldScene";
     this.myRole = data?.role ?? null;
-    this.scroll = 0;
   }
 
   create() {
-    const W = this.scale.width;
-    const H = this.scale.height;
-
     this.scene.pause(this.fromKey);
     this.events.once("shutdown", () => {
       this.scene.resume(this.fromKey);
       gameSocket.off("admin:data", this.onData);
+      this.modal = undefined;
     });
 
-    this.add.zone(0, 0, W, H).setOrigin(0).setInteractive();
-
-    const panelW = 540;
-    const panelH = 470;
-    const px = (W - panelW) / 2;
-    const py = (H - panelH) / 2;
-    panel(this, W / 2, H / 2, panelW, panelH, "ui-panel-dark");
-    closeButton(this, px + panelW - 26, py + 24, () => this.scene.stop());
-    fitModal(this, panelW, panelH);
-
-    this.add
-      .text(W / 2, py + 28, "ADMIN PANEL", { fontFamily: FONT_TITLE, fontSize: "18px", color: "#f0a500" })
-      .setOrigin(0.5);
-    this.add
-      .text(W / 2, py + 50, this.myRole === "admin" ? "Admin" : "Moderator", {
-        fontFamily: FONT_CHAT, fontSize: "12px", color: COLORS.textDim,
-      })
-      .setOrigin(0.5)
-      .setResolution(3);
-
-    this.listX = px + 26;
-    this.listY = py + 74;
-    this.listW = panelW - 52;
-
-    this.emptyText = this.add
-      .text(W / 2, this.listY + 60, "Loading…", { fontFamily: FONT_CHAT, fontSize: "14px", color: COLORS.textDim })
-      .setOrigin(0.5)
-      .setResolution(3);
-
-    this.toast = this.add
-      .text(W / 2, py + panelH - 70, "", { fontFamily: FONT_CHAT, fontSize: "12px", color: COLORS.good })
-      .setOrigin(0.5)
-      .setResolution(3);
-
-    makeMenuButton(this, W / 2, py + panelH - 36, "CLOSE", {
-      variant: "grey",
-      onClick: () => this.scene.stop(),
+    this.modal = openDomModal(this, {
+      title: "Admin Panel",
+      width: 600,
+      onClose: () => this.scene.stop(),
     });
 
-    this.input.on("wheel", (_p: unknown, _o: unknown, _dx: number, dy: number) => {
-      const max = Math.max(0, this.people.length - VISIBLE);
-      this.scroll = Phaser.Math.Clamp(this.scroll + (dy > 0 ? 1 : -1), 0, max);
-      this.render();
-    });
+    const body = this.modal.body;
+
+    const roleLabel = el("div", "pixl-sub", this.myRole === "admin" ? "Admin" : "Moderator");
+    body.append(roleLabel);
+
+    this.listEl = el("div", "pixl-list");
+    this.listEl.textContent = "Loading…";
+    body.append(this.listEl);
+
+    this.toastEl = el("div", "pixl-toast");
+
+    const actions = el("div", "pixl-actions");
+    actions.append(
+      domBtn(this, "Close", () => this.scene.stop(), { variant: "grey", big: true }),
+    );
+    body.append(this.toastEl, actions);
+
     this.input.keyboard?.on("keydown-ESC", () => this.scene.stop());
 
     gameSocket.on("admin:data", this.onData);
@@ -115,98 +79,102 @@ export class AdminScene extends Phaser.Scene {
       people.push({ accountId: p.accountId, name: p.name, role: p.role, chatMuted: p.chatMuted, voiceMuted: p.voiceMuted, online: true });
       seen.add(p.accountId);
     }
-    
     for (const m of data.mutes) {
       if (seen.has(m.accountId)) continue;
       people.push({ accountId: m.accountId, name: m.name, role: roleMap.get(m.accountId) ?? null, chatMuted: m.chat, voiceMuted: m.voice, online: false });
     }
-    
     people.sort((a, b) => (rank(b.role) - rank(a.role)) || a.name.localeCompare(b.name));
     this.people = people;
-    const max = Math.max(0, this.people.length - VISIBLE);
-    this.scroll = Phaser.Math.Clamp(this.scroll, 0, max);
     this.render();
   };
 
   private render() {
-    for (const o of this.rowObjects) o.destroy();
-    for (const b of this.rowButtons) b.destroy();
-    this.rowObjects.length = 0;
-    this.rowButtons.length = 0;
+    if (!this.listEl) return;
 
-    this.emptyText?.setVisible(this.people.length === 0).setText("No players online");
+    if (this.people.length === 0) {
+      this.listEl.innerHTML = "";
+      const empty = el("div", "pixl-empty", "No players online");
+      this.listEl.append(empty);
+      return;
+    }
 
-    const slice = this.people.slice(this.scroll, this.scroll + VISIBLE);
-    const rowH = 48;
-    slice.forEach((p, i) => {
-      const y = this.listY + i * rowH + rowH / 2;
-      const bg = this.add
-        .rectangle(this.listX + this.listW / 2, y, this.listW, rowH - 6, 0xffffff, 0.05)
-        .setStrokeStyle(1, 0xffffff, 0.12);
-      this.rowObjects.push(bg);
+    this.listEl.innerHTML = "";
+    for (const p of this.people) {
+      const row = el("div", "pixl-row");
+      row.style.flexDirection = "column";
+      row.style.alignItems = "stretch";
+      row.style.gap = "4px";
+
+      const top = el("div");
+      top.style.display = "flex";
+      top.style.alignItems = "center";
+      top.style.gap = "8px";
 
       const tag = p.role === "admin" ? "  [ADMIN]" : p.role === "subadmin" ? "  [MOD]" : "";
-      const nameColor = p.role ? COLORS.accent : p.online ? COLORS.text : COLORS.textDim;
-      const label = this.add
-        .text(this.listX + 14, y - 7, p.name + tag, { fontFamily: FONT_CHAT, fontSize: "15px", color: nameColor })
-        .setOrigin(0, 0.5)
-        .setResolution(3);
+      const nameColor = p.role ? "#ffd166" : p.online ? "#f4e3c2" : "#c9b18c";
+      const nameEl = el("div", undefined, p.name + tag);
+      Object.assign(nameEl.style, { fontSize: "15px", color: nameColor, fontWeight: "700" });
+      top.append(nameEl);
+
       const status = p.chatMuted && p.voiceMuted
         ? "chat + mic muted"
-        : p.chatMuted
-          ? "chat muted"
-          : p.voiceMuted
-            ? "mic muted"
-            : p.online ? "online" : "offline";
+        : p.chatMuted ? "chat muted"
+        : p.voiceMuted ? "mic muted"
+        : p.online ? "online" : "offline";
       const muted = p.chatMuted || p.voiceMuted;
-      const sub = this.add
-        .text(this.listX + 14, y + 10, status, {
-          fontFamily: FONT_CHAT, fontSize: "11px", color: muted ? COLORS.bad : COLORS.textDim,
-        })
-        .setOrigin(0, 0.5)
-        .setResolution(3);
-      this.rowObjects.push(label, sub);
+      const statusEl = el("div", undefined, status);
+      Object.assign(statusEl.style, { fontSize: "12px", color: muted ? "#ff6b6b" : "#c9b18c", flex: "1" });
+      top.append(statusEl);
 
-      
-      
-      
-      let bx = this.listX + this.listW - 52;
-      const step = 100;
+      row.append(top);
+
+      const btns = el("div", "pixl-actions");
+      btns.style.justifyContent = "flex-end";
+      btns.style.marginTop = "0";
+
       const canMute = p.role === null;
       if (canMute) {
-        this.actionButton(bx, y, p.chatMuted ? "Unmute Chat" : "Mute Chat", p.chatMuted ? "grey" : "blue", () =>
-          p.chatMuted ? gameSocket.adminUnmute(p.accountId, "chat") : gameSocket.adminMute(p.accountId, "chat"));
-        bx -= step;
-        this.actionButton(bx, y, p.voiceMuted ? "Unmute Mic" : "Mute Mic", p.voiceMuted ? "grey" : "blue", () =>
-          p.voiceMuted ? gameSocket.adminUnmute(p.accountId, "voice") : gameSocket.adminMute(p.accountId, "voice"));
-        bx -= step;
+        btns.append(
+          domBtn(this, p.chatMuted ? "Unmute Chat" : "Mute Chat", () => {
+            p.chatMuted ? gameSocket.adminUnmute(p.accountId, "chat") : gameSocket.adminMute(p.accountId, "chat");
+            this.flash("Done");
+          }),
+          domBtn(this, p.voiceMuted ? "Unmute Mic" : "Mute Mic", () => {
+            p.voiceMuted ? gameSocket.adminUnmute(p.accountId, "voice") : gameSocket.adminMute(p.accountId, "voice");
+            this.flash("Done");
+          }),
+        );
       }
       if (this.myRole === "admin" && p.role !== "admin") {
         if (p.role === "subadmin") {
-          this.actionButton(bx, y, "Demote", "grey", () => gameSocket.adminSetRole(p.accountId, "none"));
+          btns.append(
+            domBtn(this, "Demote", () => {
+              gameSocket.adminSetRole(p.accountId, "none");
+              this.flash("Done");
+            }, { variant: "grey" }),
+          );
         } else {
-          this.actionButton(bx, y, "Make Mod", "blue", () => gameSocket.adminSetRole(p.accountId, "subadmin"));
+          btns.append(
+            domBtn(this, "Make Mod", () => {
+              gameSocket.adminSetRole(p.accountId, "subadmin");
+              this.flash("Done");
+            }),
+          );
         }
       }
-    });
-  }
 
-  private actionButton(x: number, y: number, text: string, variant: "blue" | "grey", onClick: () => void) {
-    const btn = makeMenuButton(this, x, y, text, {
-      width: 94,
-      height: 32,
-      variant,
-      onClick: () => {
-        onClick();
-        this.flash("Done");
-      },
-    });
-    this.rowButtons.push(btn);
+      row.append(btns);
+      this.listEl.append(row);
+    }
   }
 
   private flash(msg: string) {
-    this.toast?.setText(msg);
-    this.time.delayedCall(1200, () => this.toast?.setText(""));
+    if (!this.toastEl) return;
+    this.toastEl.textContent = msg;
+    clearTimeout((this as any)._flashTimer);
+    (this as any)._flashTimer = setTimeout(() => {
+      if (this.toastEl) this.toastEl.textContent = "";
+    }, 1200);
   }
 }
 

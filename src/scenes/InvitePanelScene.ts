@@ -80,9 +80,9 @@ export class InvitePanelScene extends Phaser.Scene {
     Object.assign(input.style, {
       width: `${panelW - 64}px`,
       padding: "7px 10px",
-      font: '13px "Kenney Future Narrow", monospace',
+      font: '13px ' + FONT_NARROW + '',
       color: "#ffffff",
-      background: "rgba(10,15,28,0.9)",
+      background: "rgba(23,16,10,0.9)",
       border: "2px solid #ffd166",
       borderRadius: "6px",
       outline: "none",

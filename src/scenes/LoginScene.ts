@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import { Button, panel } from "../ui/UIKit";
-import { FONT, FONT_TITLE, COLORS } from "../ui/theme";
+import { FONT, FONT_NARROW, FONT_TITLE, COLORS } from "../ui/theme";
 import { SERVER_URL } from "../network/socket";
 import {
   setSessionToken,
@@ -86,11 +86,11 @@ export class LoginScene extends Phaser.Scene {
     Object.assign(this.guestInput.style, {
       width: "360px",
       padding: "9px 12px",
-      font: '15px "Kenney Future Narrow", monospace',
+      font: '15px ' + FONT_NARROW + '',
       color: "#ffffff",
       textAlign: "center",
-      background: "rgba(10,15,28,0.9)",
-      border: "2px solid #5a6b8c",
+      background: "rgba(23,16,10,0.9)",
+      border: "2px solid #5a4632",
       borderRadius: "6px",
       outline: "none",
     } as Partial<CSSStyleDeclaration>);

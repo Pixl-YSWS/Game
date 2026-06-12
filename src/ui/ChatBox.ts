@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import { gameSocket } from "../network/socket";
-import { COLORS } from "./theme";
+import { FONT, COLORS } from "./theme";
 import { playUiSound } from "./UIKit";
 import type { ChatMessage } from "../types/network";
 
@@ -12,7 +12,7 @@ const MAX_LINES = 9;
 const LINE_TTL = 11000;
 const LINE_GAP = 4;
 
-const CHAT_FONT = '"Monocraft", "Pixelify Sans", "Trebuchet MS", sans-serif';
+const CHAT_FONT = FONT;
 
 export class ChatBox {
   private scene: Phaser.Scene;
@@ -60,9 +60,9 @@ export class ChatBox {
       width: `${this.inputWidth()}px`,
       padding: "7px 10px",
       font: `15px ${CHAT_FONT}`,
-      color: "#ffffff",
-      background: "rgba(0,0,0,0.55)",
-      border: "1px solid rgba(255,255,255,0.25)",
+      color: "#f4e3c2",
+      background: "rgba(26,17,10,0.55)",
+      border: "2px solid #5a4632",
       borderRadius: "0",
       outline: "none",
     } as Partial<CSSStyleDeclaration>);

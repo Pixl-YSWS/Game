@@ -74,7 +74,7 @@ export class CharacterScene extends Phaser.Scene {
       .text(W / 2, py + 30, "CUSTOMISE YOUR LOOK", {
         fontFamily: FONT_TITLE,
         fontSize: "18px",
-        color: "#f0a500",
+        color: COLORS.accent,
       })
       .setOrigin(0.5);
 
@@ -162,7 +162,7 @@ export class CharacterScene extends Phaser.Scene {
     for (let n = 1; n <= NPC_CHARS; n++) {
       this.presetHighlights[n]?.setStrokeStyle(
         2,
-        0xf0a500,
+        0xffd166,
         this.selectedPreset === n ? 1 : 0,
       );
     }

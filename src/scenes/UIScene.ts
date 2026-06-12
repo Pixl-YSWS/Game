@@ -224,7 +224,7 @@ export class UIScene extends Phaser.Scene {
       .text(X + W - 62, rowY, "☀", { fontFamily: FONT_EMOJI, fontSize: "13px" })
       .setOrigin(0, 0.5);
     this.timeText = this.add
-      .text(X + W - 14, rowY, "--:--", { fontFamily: FONT, fontSize: "11px", color: "#aabbff" })
+      .text(X + W - 14, rowY, "--:--", { fontFamily: FONT, fontSize: "11px", color: COLORS.textDim })
       .setOrigin(1, 0.5)
       .setResolution(3);
 
@@ -273,7 +273,7 @@ export class UIScene extends Phaser.Scene {
   private buildStatusBar() {
     const y = 16;
     this.statusBg = this.add
-      .rectangle(this.scale.width / 2, y, 10, 22, 0x0a0f1c, 0.62)
+      .rectangle(this.scale.width / 2, y, 10, 22, 0x17100a, 0.62)
       .setStrokeStyle(1, 0xffffff, 0.14)
       .setOrigin(0.5)
       .setVisible(false);
@@ -302,7 +302,7 @@ export class UIScene extends Phaser.Scene {
     
     const bx = inboxBtn.x + SIZE / 2 - 4;
     const by = inboxBtn.y - SIZE / 2 + 4;
-    this.badgeBg = this.add.circle(bx, by, 8, 0xe5484d).setStrokeStyle(1.5, 0x0a0f1c).setDepth(60).setVisible(false);
+    this.badgeBg = this.add.circle(bx, by, 8, 0xe5484d).setStrokeStyle(1.5, 0x17100a).setDepth(60).setVisible(false);
     this.badgeText = this.add
       .text(bx, by, "", { fontFamily: FONT, fontSize: "9px", color: "#ffffff" })
       .setOrigin(0.5)
@@ -331,7 +331,7 @@ export class UIScene extends Phaser.Scene {
         fontFamily: FONT,
         fontSize: "12px",
         color: COLORS.text,
-        backgroundColor: "#0a0f1ccc",
+        backgroundColor: "#17100acc",
         padding: { x: 6, y: 4 },
       })
       .setResolution(3)
@@ -390,7 +390,7 @@ export class UIScene extends Phaser.Scene {
     const icon = this.add.text(x, cy, "🛡", { fontFamily: FONT_EMOJI, fontSize: `${this.ICON_ICON}px` }).setOrigin(0.5).setDepth(51);
     const tooltip = this.add
       .text(x, cy + SIZE / 2 + 6, "Admin", {
-        fontFamily: FONT, fontSize: "12px", color: COLORS.text, backgroundColor: "#0a0f1ccc", padding: { x: 6, y: 4 },
+        fontFamily: FONT, fontSize: "12px", color: COLORS.text, backgroundColor: "#17100acc", padding: { x: 6, y: 4 },
       })
       .setResolution(3)
       .setOrigin(0.5, 0)
@@ -425,7 +425,7 @@ export class UIScene extends Phaser.Scene {
     const icon = this.add.text(x, cy, "🗺", { fontFamily: FONT_EMOJI, fontSize: `${this.ICON_ICON}px` }).setOrigin(0.5).setDepth(51);
     const tooltip = this.add
       .text(x, cy + SIZE / 2 + 6, "Map Editor", {
-        fontFamily: FONT, fontSize: "12px", color: COLORS.text, backgroundColor: "#0a0f1ccc", padding: { x: 6, y: 4 },
+        fontFamily: FONT, fontSize: "12px", color: COLORS.text, backgroundColor: "#17100acc", padding: { x: 6, y: 4 },
       })
       .setResolution(3)
       .setOrigin(0.5, 0)
@@ -628,7 +628,7 @@ export class UIScene extends Phaser.Scene {
         fontFamily: FONT,
         fontSize: "12px",
         color: COLORS.text,
-        backgroundColor: "#0a0f1ccc",
+        backgroundColor: "#17100acc",
         padding: { x: 6, y: 4 },
       })
       .setResolution(3)

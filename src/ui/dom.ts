@@ -4,7 +4,7 @@ import { playUiSound } from "./UIKit";
 
 const STYLE_ID = "pixl-dom-ui";
 
-function injectStyles(): void {
+export function injectStyles(): void {
   if (document.getElementById(STYLE_ID)) return;
   const style = document.createElement("style");
   style.id = STYLE_ID;
@@ -103,6 +103,8 @@ function injectStyles(): void {
   transform: translateY(4px);
   box-shadow: 0 0 0 #17100a, inset -3px -3px 0 #d9a440, inset 3px 3px 0 #ffe7a3;
 }
+.pixl-btn:focus { outline: 2px solid #ffd166; outline-offset: 2px; }
+.pixl-btn.grey:focus { outline-color: #ffd166; }
 .pixl-btn:disabled { opacity: 0.5; }
 .pixl-btn.grey {
   background: #6e5a41; color: #f4e3c2;
@@ -214,7 +216,6 @@ export function openDomModal(
     },
   };
 
-  
   
   
   
