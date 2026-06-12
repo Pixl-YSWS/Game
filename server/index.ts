@@ -248,6 +248,26 @@ const deleteProject = db.query<unknown, [number]>(
 
 const MAX_PROJECTS = 50;
 
+// The hackatime_project column holds a JSON array of project names. Legacy
+// rows stored a single bare name, so fall back to treating the raw value as a
+// one-element list when it isn't valid JSON.
+function parseHackatimeProjects(raw: string | null): string[] {
+  const s = raw?.trim();
+  if (!s) return [];
+  if (s.startsWith("[")) {
+    try {
+      const arr = JSON.parse(s);
+      if (Array.isArray(arr))
+        return arr.filter(
+          (x): x is string => typeof x === "string" && x.length > 0,
+        );
+    } catch {
+      /* fall through to legacy single-value handling */
+    }
+  }
+  return [s];
+}
+
 function projectFromRow(r: ProjectRow): Project {
   return {
     id: r.id,
@@ -255,7 +275,7 @@ function projectFromRow(r: ProjectRow): Project {
     description: r.description ?? undefined,
     repoUrl: r.repo_url ?? undefined,
     demoUrl: r.demo_url ?? undefined,
-    hackatimeProject: r.hackatime_project ?? undefined,
+    hackatimeProjects: parseHackatimeProjects(r.hackatime_project),
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
@@ -744,6 +764,10 @@ interface ServerPlayerState extends Omit<PlayerState, "skin"> {
 
   skin: string | null;
   verified: boolean;
+
+  /** Inside a private house interior (client-side scene) — invisible to the
+   *  rest of their world until they walk back out. Not persisted. */
+  hidden?: boolean;
 }
 const players = new Map<string, ServerPlayerState>();
 
@@ -819,7 +843,9 @@ function socketIdForAccount(accountId: string): string | undefined {
 function peersInWorld(world: WorldRef, exceptSocketId?: string): PlayerState[] {
   const target = worldKey(world);
   return [...players.values()]
-    .filter((p) => worldKey(p.world) === target && p.id !== exceptSocketId)
+    .filter(
+      (p) => worldKey(p.world) === target && p.id !== exceptSocketId && !p.hidden,
+    )
     .map(({ id, cx, cy, name, char, skin, verified }) => ({
       id,
       cx,
@@ -863,6 +889,7 @@ function switchWorld(
   socket.to(oldRoom).emit("player:leave", socket.id);
 
   state.world = next;
+  state.hidden = false;
 
   const remembered =
     next.kind === "house" ? null : getRememberedPosition(state.playerId, next);
@@ -988,7 +1015,7 @@ io.on("connection", (socket) => {
 
   socket.on("player:move", ({ cx, cy }) => {
     const player = players.get(socket.id);
-    if (!player) return;
+    if (!player || player.hidden) return;
     const m = mapFor(player.world);
     if (cx < 0 || cy < 0 || cx >= m.cols || cy >= m.rows) return;
     player.cx = cx;
@@ -997,6 +1024,26 @@ io.on("connection", (socket) => {
     socket
       .to(worldKey(player.world))
       .emit("player:move", { id: socket.id, cx, cy });
+  });
+
+  socket.on("interior:set", ({ inside }) => {
+    const player = players.get(socket.id);
+    if (!player || !!player.hidden === !!inside) return;
+    player.hidden = !!inside;
+    const room = worldKey(player.world);
+    if (player.hidden) {
+      socket.to(room).emit("player:leave", socket.id);
+    } else {
+      socket.to(room).emit("player:join", {
+        id: player.id,
+        cx: player.cx,
+        cy: player.cy,
+        name: player.name,
+        char: player.char,
+        skin: player.skin ?? undefined,
+        verified: player.verified,
+      });
+    }
   });
 
   socket.on("world:enter", (target) => {
@@ -1575,6 +1622,16 @@ io.on("connection", (socket) => {
     }
   };
 
+  // Stores the selected Hackatime project names as a deduped JSON array (or
+  // NULL when empty), matching parseHackatimeProjects on the read side.
+  const cleanHackatimeProjects = (v: unknown): string | null => {
+    if (!Array.isArray(v)) return null;
+    const names = Array.from(
+      new Set(v.map((x) => cleanText(x, 100)).filter((x) => x.length > 0)),
+    ).slice(0, 30);
+    return names.length ? JSON.stringify(names) : null;
+  };
+
   const sendProjectList = async (player: ServerPlayerState) => {
     const rows = selectProjects.all(player.playerId);
     const items: Project[] = rows.map(projectFromRow);
@@ -1586,8 +1643,11 @@ io.on("connection", (socket) => {
       if (stats.connected) {
         const byName = secondsByProject(stats);
         for (const it of items) {
-          if (it.hackatimeProject)
-            it.seconds = byName.get(it.hackatimeProject) ?? 0;
+          if (it.hackatimeProjects?.length)
+            it.seconds = it.hackatimeProjects.reduce(
+              (sum, n) => sum + (byName.get(n) ?? 0),
+              0,
+            );
         }
       }
     }
@@ -1619,7 +1679,7 @@ io.on("connection", (socket) => {
       cleanText(payload?.description, 500) || null,
       cleanUrl(payload?.repoUrl),
       cleanUrl(payload?.demoUrl),
-      cleanText(payload?.hackatimeProject, 100) || null,
+      cleanHackatimeProjects(payload?.hackatimeProjects),
       now,
       now,
     );
@@ -1647,7 +1707,7 @@ io.on("connection", (socket) => {
       cleanText(payload?.description, 500) || null,
       cleanUrl(payload?.repoUrl),
       cleanUrl(payload?.demoUrl),
-      cleanText(payload?.hackatimeProject, 100) || null,
+      cleanHackatimeProjects(payload?.hackatimeProjects),
       Date.now(),
       id,
     );

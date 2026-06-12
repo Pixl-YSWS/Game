@@ -24,7 +24,7 @@ import {
 import { gameSocket } from "../network/socket";
 import { TILE_H, TILE_W, cartToIso, isoToCart } from "../utils/IsoUtils";
 import { getShopItem } from "../shop/catalog";
-import { FONT_EMOJI } from "../ui/theme";
+import { FONT_DIALOUG, FONT_EMOJI } from "../ui/theme";
 import type { HouseObject } from "../types/network";
 import {
   getAccountId,
@@ -85,9 +85,6 @@ export class WorldScene extends Phaser.Scene {
   private placeHint?: Phaser.GameObjects.Text;
 
   // ── Admin map editor state ──
-  // Committed server overrides for the current world, the pristine
-  // seed-generated layers (so edits can be recomputed/undone), and the
-  // admin's uncommitted brush strokes.
   private overrides: MapEdit[] = [];
   private baseGround?: number[][];
   private baseDeco?: number[][];
@@ -187,7 +184,6 @@ export class WorldScene extends Phaser.Scene {
     this.connectMultiplayer();
 
     this.input.keyboard!.on("keydown-ESC", () => {
-      // While the map editor is open it owns ESC (to close itself).
       if (this.editMode) return;
       if (this.placingItem) {
         this.cancelPlacement();
@@ -217,7 +213,6 @@ export class WorldScene extends Phaser.Scene {
       this.cancelPlacement();
     });
 
-    // Drag-painting in map-editor mode.
     this.input.on("pointermove", (pointer: Phaser.Input.Pointer) => {
       if (this.editMode && this.editBrush && pointer.isDown)
         this.paintAt(pointer);
@@ -329,6 +324,7 @@ export class WorldScene extends Phaser.Scene {
     gameSocket.disconnect();
     this.scene.stop("UIScene");
     this.scene.stop("ShopScene");
+    this.scene.stop("ProjectsScene");
     this.scene.stop("PauseScene");
     this.scene.start("LoginScene", { message });
   }
@@ -362,7 +358,6 @@ export class WorldScene extends Phaser.Scene {
   update(_time: number, delta: number) {
     if (!this.localPlayer) return;
 
-    // Flush at most one queued map-editor repaint per frame (see paintAt).
     if (this.repaintQueued) {
       this.repaintQueued = false;
       this.repaintMap();
@@ -417,7 +412,7 @@ export class WorldScene extends Phaser.Scene {
       const t = isoToCart(p.worldX, p.worldY);
       const w = cartToIso(t.cx, t.cy);
       this.placeGhost
-        .setPosition(w.x + TILE_W / 2, w.y + TILE_H / 2)
+        .setPosition(Math.round(w.x + TILE_W / 2), Math.round(w.y + TILE_H / 2))
         .setDepth(t.cy + 1);
     }
   }
@@ -463,7 +458,6 @@ export class WorldScene extends Phaser.Scene {
     this.petAdjacentCritter(cx, cy);
   }
 
-  /** Pet the nearest adjacent cow/chicken/Blåhaj, if any. */
   private petAdjacentCritter(cx: number, cy: number): boolean {
     for (const animal of this.animals) {
       if (animal.isNear(cx, cy)) {
@@ -542,7 +536,12 @@ export class WorldScene extends Phaser.Scene {
     for (const d of this.mapDef.doors) {
       const { x, y } = cartToIso(d.cx, d.cy);
       const zone = this.add
-        .zone(x + TILE_W / 2, y + TILE_H / 2, TILE_W, TILE_H)
+        .zone(
+          Math.round(x + TILE_W / 2),
+          Math.round(y + TILE_H / 2),
+          TILE_W,
+          TILE_H,
+        )
         .setInteractive({ cursor: CURSORS.pointer });
       zone.on("pointerdown", () => this.onDoorClick(d.cx, d.cy));
       this.doorZones.push(zone);
@@ -551,8 +550,11 @@ export class WorldScene extends Phaser.Scene {
     if (this.world.kind === "house") return;
     for (const d of this.mapDef.doors) {
       const { x, y } = cartToIso(d.cx, d.cy);
+      // FIX: snap to integer pixels to avoid sub-pixel blur
+      const labelX = Math.round(x + TILE_W / 2);
+      const labelY = Math.round(y - 4);
       const label = this.add
-        .text(x + TILE_W / 2, y - 4, this.interactKeyLabel(), {
+        .text(labelX, labelY, this.interactKeyLabel(), {
           fontFamily: FONT,
           fontSize: "8px",
           color: "#ffff66",
@@ -564,7 +566,7 @@ export class WorldScene extends Phaser.Scene {
         .setVisible(false);
       const bobTween = this.tweens.add({
         targets: label,
-        y: y - 8,
+        y: labelY - 4,
         duration: 450,
         ease: "Sine.easeInOut",
         yoyo: true,
@@ -609,8 +611,11 @@ export class WorldScene extends Phaser.Scene {
       npc.on("pointerdown", () => this.onNpcClick(npc));
       this.npcs.push(npc);
       const { x, y } = cartToIso(def.cx, def.cy);
+      // FIX: snap to integer pixels to avoid sub-pixel blur
+      const labelX = Math.round(x + TILE_W / 2);
+      const labelY = Math.round(y - TILE_H);
       const label = this.add
-        .text(x + TILE_W / 2, y - TILE_H, this.interactKeyLabel(), {
+        .text(labelX, labelY, this.interactKeyLabel(), {
           fontFamily: FONT,
           fontSize: "8px",
           color: "#ffff66",
@@ -622,7 +627,7 @@ export class WorldScene extends Phaser.Scene {
         .setVisible(false);
       const bobTween = this.tweens.add({
         targets: label,
-        y: y - TILE_H - 4,
+        y: labelY - 4,
         duration: 450,
         ease: "Sine.easeInOut",
         yoyo: true,
@@ -676,7 +681,6 @@ export class WorldScene extends Phaser.Scene {
   private rebuildAnimals(objs: MapObject[]) {
     this.clearAnimals();
     if (!this.mapDef) return;
-    // Shared tile-occupancy set so animals don't walk onto each other.
     const occupancy = new Set<string>();
     for (const obj of objs) {
       const animal = new Animal(this, obj, this.mapDef, occupancy);
@@ -739,7 +743,6 @@ export class WorldScene extends Phaser.Scene {
 
   private petPrompt?: Phaser.GameObjects.Text;
 
-  /** Nearest cow/chicken/Blåhaj the player is standing next to, if any. */
   private nearestPettable(cx: number, cy: number): Animal | Shark | undefined {
     for (const a of this.animals) if (a.isNear(cx, cy)) return a;
     for (const s of this.sharks) if (s.isNear(cx, cy)) return s;
@@ -759,17 +762,20 @@ export class WorldScene extends Phaser.Scene {
     if (!this.petPrompt) {
       this.petPrompt = this.add
         .text(0, 0, "[P] pet", {
-          fontFamily: FONT,
+          fontFamily: FONT_DIALOUG,
           fontSize: "8px",
           color: "#ffd24a",
           stroke: "#000000",
-          strokeThickness: 3,
+          strokeThickness: 2,
         })
         .setOrigin(0.5, 1)
         .setDepth(99999);
     }
     const a = target.getPetAnchor();
-    this.petPrompt.setPosition(a.x, a.y).setVisible(true);
+    // FIX: snap to integer pixels to avoid sub-pixel blur from lerp camera
+    this.petPrompt
+      .setPosition(Math.round(a.x), Math.round(a.y))
+      .setVisible(true);
   }
 
   private refreshNpcPrompt() {
@@ -801,8 +807,9 @@ export class WorldScene extends Phaser.Scene {
     if (!this.portalTile) return;
 
     const { x, y } = cartToIso(this.portalTile.cx, this.portalTile.cy);
-    const cx = x + TILE_W / 2;
-    const cy = y + TILE_H / 2;
+    // FIX: snap portal centre to integer pixels
+    const cx = Math.round(x + TILE_W / 2);
+    const cy = Math.round(y + TILE_H / 2);
     const depth = this.portalTile.cy + 1;
 
     const glow = this.add
@@ -826,8 +833,11 @@ export class WorldScene extends Phaser.Scene {
       repeat: -1,
     });
 
+    // FIX: snap label to integer pixels
+    const labelX = Math.round(x + TILE_W / 2);
+    const labelY = Math.round(y - 4);
     this.portalLabel = this.add
-      .text(cx, y - 4, this.interactKeyLabel(), {
+      .text(labelX, labelY, this.interactKeyLabel(), {
         fontFamily: FONT,
         fontSize: "8px",
         color: "#ffff66",
@@ -929,11 +939,9 @@ export class WorldScene extends Phaser.Scene {
     });
   }
 
-  // ── Admin map editor API (driven by MapEditorScene) ──────────────────────
+  // ── Admin map editor API ──────────────────────────────────────────────────
 
   isEditableWorld(): boolean {
-    // Every world WorldScene renders (open world, shared house, villages) is
-    // editable. Private building interiors live in InteriorScene and aren't.
     return (
       this.world.kind === "openworld" ||
       this.world.kind === "house" ||
@@ -967,8 +975,6 @@ export class WorldScene extends Phaser.Scene {
     this.pickedNpcId = undefined;
   }
 
-  // Screen-space rectangle of the editor panel, so clicks on the panel don't
-  // also paint the world behind it.
   setEditorBlockRect(rect?: Phaser.Geom.Rectangle) {
     this.editorBlockRect = rect;
   }
@@ -1016,7 +1022,7 @@ export class WorldScene extends Phaser.Scene {
   private findNpcNear(cx: number, cy: number): NpcDef | undefined {
     if (!this.mapDef) return undefined;
     let best: NpcDef | undefined;
-    let bestD = 2; // accept exact tile or an adjacent one
+    let bestD = 2;
     for (const n of this.mapDef.npcs) {
       const d = Math.abs(n.cx - cx) + Math.abs(n.cy - cy);
       if (d < bestD) {
@@ -1040,7 +1046,7 @@ export class WorldScene extends Phaser.Scene {
 
     if (this.editNpcTool === "add") {
       const name = window.prompt("NPC name:", "Villager");
-      if (name === null) return; // cancelled
+      if (name === null) return;
       const id = `npc_${Date.now()}_${Math.floor(Math.random() * 1e4)}`;
       this.pendingNpcEdits.push({
         op: "add",
@@ -1059,7 +1065,6 @@ export class WorldScene extends Phaser.Scene {
       this.pendingNpcEdits.push({ op: "remove", id: npc.id, cx, cy });
       this.flashStatus(`Removed ${npc.name}`);
     } else {
-      // move
       if (!this.pickedNpcId) {
         const npc = this.findNpcNear(cx, cy);
         if (!npc) {
@@ -1078,8 +1083,6 @@ export class WorldScene extends Phaser.Scene {
     this.events.emit("map:pendingChanged", this.getPendingEditCount());
   }
 
-  // Re-stamp only the tile map + ocean, leaving players, camera, NPCs, doors
-  // and objects untouched (tile edits never move them).
   private repaintMap() {
     if (!this.mapDef) return;
     this.isoMap?.destroy();
@@ -1094,7 +1097,6 @@ export class WorldScene extends Phaser.Scene {
 
   private paintAt(pointer: Phaser.Input.Pointer) {
     if (!this.editMode || !this.editBrush || !this.mapDef) return;
-    // Ignore clicks that land on the editor panel itself.
     if (
       this.editorBlockRect &&
       this.editorBlockRect.contains(pointer.x, pointer.y)
@@ -1111,14 +1113,10 @@ export class WorldScene extends Phaser.Scene {
     this.pendingEdits.set(key, { layer, cx, cy, tile });
     if (layer === "ground") this.mapDef.groundLayer[cy][cx] = tile;
     else this.mapDef.decoLayer[cy][cx] = tile;
-    // Coalesce repaints: a fast drag can fire many pointermove events per
-    // frame, and a full map re-stamp each time would thrash the GPU and can
-    // crash the WebGL context. Queue one repaint and flush it in update().
     this.repaintQueued = true;
     this.events.emit("map:pendingChanged", this.getPendingEditCount());
   }
 
-  // Live update: server pushed new committed edits for this world.
   private onMapOverrides = (data: {
     world: WorldRef;
     overrides: MapEdit[];
@@ -1172,14 +1170,10 @@ export class WorldScene extends Phaser.Scene {
           ? generateVillage()
           : generateMap(state.seed, {
               houses: false,
-
               sharedHouse: true,
-
               portal: "spawn",
             });
-    // Snapshot the pristine seed-generated layers, then layer the persisted
-    // admin overrides on top. Keeping the base lets us recompute the map after
-    // a revert without regenerating from the seed.
+
     this.overrides = state.overrides ?? [];
     this.npcEdits = state.npcEdits ?? [];
     this.pendingEdits.clear();
@@ -1253,6 +1247,7 @@ export class WorldScene extends Phaser.Scene {
     this.loadingText = undefined;
     this.scheduleHideLoadingOverlay();
     this.refreshStatus();
+    this.refreshOnlineCount();
   }
 
   private showLoadingOverlay(message: string) {
@@ -1426,6 +1421,7 @@ export class WorldScene extends Phaser.Scene {
       if (remote) {
         remote.destroy();
         this.remotePlayers.delete(id);
+        this.refreshOnlineCount();
       }
     });
 
@@ -1521,6 +1517,11 @@ export class WorldScene extends Phaser.Scene {
       gameSocket.sendEmote("wave");
     });
     this.remotePlayers.set(state.id, player);
+    this.refreshOnlineCount();
+  }
+
+  private refreshOnlineCount() {
+    this.ui?.setOnlineCount(this.remotePlayers.size + 1);
   }
 
   openInvitePanel() {
@@ -1584,11 +1585,17 @@ export class WorldScene extends Phaser.Scene {
     if (!item) return;
     this.houseObjects.get(obj.id)?.destroy();
     const { x, y } = cartToIso(obj.cx, obj.cy);
+    // FIX: snap to integer pixels
     const glyph = this.add
-      .text(x + TILE_W / 2, y + TILE_H / 2, item.glyph, {
-        fontFamily: FONT_EMOJI,
-        fontSize: "16px",
-      })
+      .text(
+        Math.round(x + TILE_W / 2),
+        Math.round(y + TILE_H / 2),
+        item.glyph,
+        {
+          fontFamily: FONT_EMOJI,
+          fontSize: "16px",
+        },
+      )
       .setOrigin(0.5, 0.6)
       .setDepth(obj.cy + 1);
 

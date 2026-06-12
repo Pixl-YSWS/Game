@@ -115,6 +115,10 @@ class GameSocket {
     this.socket?.emit("world:enter", world);
   }
 
+  setInterior(inside: boolean) {
+    this.socket?.emit("interior:set", { inside });
+  }
+
   npcInteract(npcId: string) {
     this.socket?.emit("npc:interact", { npcId });
   }
@@ -164,7 +168,7 @@ class GameSocket {
     description?: string;
     repoUrl?: string;
     demoUrl?: string;
-    hackatimeProject?: string;
+    hackatimeProjects?: string[];
   }) {
     this.socket?.emit("project:create", payload);
   }
@@ -174,7 +178,7 @@ class GameSocket {
     description?: string;
     repoUrl?: string;
     demoUrl?: string;
-    hackatimeProject?: string;
+    hackatimeProjects?: string[];
   }) {
     this.socket?.emit("project:update", payload);
   }

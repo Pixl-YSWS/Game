@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import { IsoMap } from "../world/IsoMap";
 import { Player } from "../entities/Player";
-import { TILE_H } from "../utils/IsoUtils";
+import { cartToIso, TILE_H, TILE_W } from "../utils/IsoUtils";
 import type { MapDef, MapObject } from "../types/map";
 import { getKeybinds } from "../data/Settings";
 import { gameSocket } from "../network/socket";
@@ -16,8 +16,8 @@ import {
 
 const COLS = 32;
 const ROWS = 18;
-const ROOM_COLS = 14;
-const ROOM_ROWS = 10;
+const ROOM_COLS = 18;
+const ROOM_ROWS = 12;
 const ROOM_X = Math.floor((COLS - ROOM_COLS) / 2);
 const ROOM_Y = Math.floor((ROWS - ROOM_ROWS) / 2);
 const ROOM_X1 = ROOM_X + ROOM_COLS - 1;
@@ -68,16 +68,17 @@ function makeInteriorMap(): MapDef {
 
   // Wall decorations (sit on the back wall, no collision needed).
   place(IPROPS.window, ROOM_X + 3, ROOM_Y);
-  place(IPROPS.picture, ROOM_X + 9, ROOM_Y);
+  place(IPROPS.picture, ROOM_X + 8, ROOM_Y);
+  place(IPROPS.window, ROOM_X + 13, ROOM_Y);
 
   // Furniture.
   place(IPROPS.bookshelf, ROOM_X + 1, ROOM_Y + 2, { solid: true });
-  place(IPROPS.wardrobe, ROOM_X + 3, ROOM_Y + 2, { solid: true });
-  place(IPROPS.bedDouble, ROOM_X + 9, ROOM_Y + 2, { solid: true });
-  place(IPROPS.rug, ROOM_X + 4, ROOM_Y + 6, { flat: true });
-  place(IPROPS.table, ROOM_X + 5, ROOM_Y + 5, { solid: true });
-  place(IPROPS.sofa, ROOM_X + 9, ROOM_Y + 6, { solid: true });
-  place(IPROPS.lamp, ROOM_X + 1, ROOM_Y + 7, { solid: true });
+  place(IPROPS.wardrobe, ROOM_X + 4, ROOM_Y + 2, { solid: true });
+  place(IPROPS.bedDouble, ROOM_X + 13, ROOM_Y + 2, { solid: true });
+  place(IPROPS.rug, ROOM_X + 6, ROOM_Y + 7, { flat: true });
+  place(IPROPS.table, ROOM_X + 7, ROOM_Y + 6, { solid: true });
+  place(IPROPS.sofa, ROOM_X + 12, ROOM_Y + 8, { solid: true });
+  place(IPROPS.lamp, ROOM_X + 1, ROOM_Y + 9, { solid: true });
 
   return {
     key: "interior_default",
@@ -142,22 +143,37 @@ export class InteriorScene extends Phaser.Scene {
     this.applyKeybinds();
 
     this.events.on("resume", this.applyKeybinds, this);
-    this.events.once("shutdown", () =>
-      this.events.off("resume", this.applyKeybinds, this),
-    );
+    this.events.once("shutdown", () => {
+      this.events.off("resume", this.applyKeybinds, this);
+      gameSocket.setInterior(false);
+    });
+
+    // Tell the server we've gone indoors so our avatar disappears for
+    // everyone else in the village/open world; undone on any exit path.
+    gameSocket.setInterior(true);
 
     this.mapDef = makeInteriorMap();
     const isoMap = new IsoMap(this, this.mapDef);
     isoMap.build();
 
+    // Fit the camera to the room (not the mostly-empty 32×18 map) so the
+    // interior fills the screen, and hide the world scene rendering behind
+    // the transparent tiles with an opaque backdrop.
+    const roomCentre = cartToIso(
+      ROOM_X + ROOM_COLS / 2 - 0.5,
+      ROOM_Y + ROOM_ROWS / 2 - 0.5,
+    );
+    this.add
+      .rectangle(roomCentre.x, roomCentre.y, 4096, 4096, 0x0d0d0d)
+      .setDepth(-500);
     const cam = this.cameras.main;
     cam.setZoom(
       Math.min(
-        this.scale.width / isoMap.boundsW,
-        this.scale.height / isoMap.boundsH,
+        this.scale.width / ((ROOM_COLS + 2) * TILE_W),
+        this.scale.height / ((ROOM_ROWS + 2) * TILE_H),
       ),
     );
-    cam.centerOn(isoMap.centre.x, isoMap.centre.y);
+    cam.centerOn(roomCentre.x, roomCentre.y);
 
     const { cx, cy } = this.mapDef.spawnPoint;
     this.localPlayer = new Player(
@@ -213,10 +229,10 @@ export class InteriorScene extends Phaser.Scene {
     this.localPlayer?.setSpeedMultiplier(mul);
   }
 
+  // Interior coordinates are local to this client-side scene — never sent to
+  // the server, which still has us parked at the door tile of the outer world.
   teleport(cx: number, cy: number): boolean {
-    if (!this.localPlayer?.teleport(cx, cy)) return false;
-    gameSocket.sendMove(this.localPlayer.cx, this.localPlayer.cy);
-    return true;
+    return this.localPlayer?.teleport(cx, cy) ?? false;
   }
 
   update(_time: number, delta: number) {

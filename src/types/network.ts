@@ -106,7 +106,7 @@ export interface Project {
   description?: string;
   repoUrl?: string;
   demoUrl?: string;
-  hackatimeProject?: string;
+  hackatimeProjects?: string[];
   createdAt: number;
   updatedAt: number;
 
@@ -273,6 +273,10 @@ export interface ClientToServerEvents {
   "player:move": (payload: { cx: number; cy: number }) => void;
   "world:enter": (payload: WorldRef) => void;
 
+  /** Entering/leaving a private house interior — hides the player from
+   *  everyone else in their current world while inside. */
+  "interior:set": (payload: { inside: boolean }) => void;
+
   "invite:send": (payload: { toAccountId: string }) => void;
 
   "players:list": () => void;
@@ -302,7 +306,7 @@ export interface ClientToServerEvents {
     description?: string;
     repoUrl?: string;
     demoUrl?: string;
-    hackatimeProject?: string;
+    hackatimeProjects?: string[];
   }) => void;
 
   "project:update": (payload: {
@@ -311,7 +315,7 @@ export interface ClientToServerEvents {
     description?: string;
     repoUrl?: string;
     demoUrl?: string;
-    hackatimeProject?: string;
+    hackatimeProjects?: string[];
   }) => void;
 
   "project:delete": (payload: { id: number }) => void;

@@ -1,57 +1,33 @@
 import Phaser from "phaser";
-import { makeMenuButton, type MenuButton } from "../utils/MenuButton";
-import { FONT, FONT_TITLE, FONT_NARROW, COLORS } from "../ui/theme";
-import { panel, closeButton, fitModal } from "../ui/UIKit";
 import { gameSocket, SERVER_URL } from "../network/socket";
 import { getSessionToken } from "../network/playerIdentity";
 import type { Project, HackatimeStats } from "../types/network";
-
-interface ProjectsInit {
-  from: string;
-}
+import { openDomModal, domBtn, el, type DomModal } from "../ui/dom";
 
 type Mode = "list" | "form" | "hackatime";
 
 export class ProjectsScene extends Phaser.Scene {
-  private fromKey = "WorldScene";
   private mode: Mode = "list";
 
   private projects: Project[] = [];
   private hackatimeConnected = false;
+  private lastStats?: HackatimeStats;
   private editingId: number | null = null;
 
-  private px = 0;
-  private py = 0;
-  private panelW = 580;
-  private panelH = 500;
+  private modal?: DomModal;
+  private toastEl?: HTMLDivElement;
+  private toastTimer?: ReturnType<typeof setTimeout>;
+  private statusEl?: HTMLSpanElement;
 
-  private body: Phaser.GameObjects.GameObject[] = [];
-  private bodyButtons: MenuButton[] = [];
-  private domEls: Phaser.GameObjects.DOMElement[] = [];
-  private listMask?: Phaser.Display.Masks.GeometryMask;
-
-  private content?: Phaser.GameObjects.Container;
-  private scroll = 0;
-  private maxScroll = 0;
-  private listTop = 0;
-  private listBottom = 0;
-  private rowH = 76;
-
-  private rowRefs: {
-    top: number;
-    objs: (Phaser.GameObjects.GameObject &
-      Phaser.GameObjects.Components.Visible)[];
-    btns: MenuButton[];
-  }[] = [];
-
-  private statusText?: Phaser.GameObjects.Text;
-  private toast?: Phaser.GameObjects.Text;
+  // Hackatime project picker state while the create/edit form is open.
+  private formSelectedHt = new Set<string>();
+  private htPickerEl?: HTMLDivElement;
 
   private oauthPopup: Window | null = null;
   private onPopupMessage = (e: MessageEvent) => {
     if (e?.data?.source !== "hackatime" || e.data.status !== "connected")
       return;
-    this.flash("Hackatime connected!", "#7dda1c");
+    this.flash("Hackatime connected!", "#8be98b");
     gameSocket.requestHackatimeStats();
     gameSocket.requestProjects();
     if (this.mode === "hackatime") this.showList();
@@ -61,70 +37,38 @@ export class ProjectsScene extends Phaser.Scene {
     super({ key: "ProjectsScene" });
   }
 
-  init(data: ProjectsInit) {
-    this.fromKey = data?.from ?? "WorldScene";
+  init() {
     this.mode = "list";
     this.projects = [];
     this.editingId = null;
-    this.scroll = 0;
   }
 
   create() {
-    const W = this.scale.width;
-    const H = this.scale.height;
-
-    this.scene.pause(this.fromKey);
+    // The world scene keeps running behind the modal (so other players,
+    // animals and the day cycle don't freeze); the DOM overlay blocks all
+    // keyboard/pointer input from reaching it.
     window.addEventListener("message", this.onPopupMessage);
     this.events.once("shutdown", () => {
-      this.scene.resume(this.fromKey);
       gameSocket.off("project:list", this.onProjectList);
       gameSocket.off("project:result", this.onProjectResult);
       gameSocket.off("hackatime:stats", this.onHackatimeStats);
       window.removeEventListener("message", this.onPopupMessage);
+      clearTimeout(this.toastTimer);
       try {
         this.oauthPopup?.close();
       } catch {}
-      this.clearBody();
+      this.modal = undefined;
     });
 
-    this.add.zone(0, 0, W, H).setOrigin(0).setInteractive();
-
-    this.panelH = Math.min(500, H - 40);
-    this.px = (W - this.panelW) / 2;
-    this.py = (H - this.panelH) / 2;
-    panel(this, W / 2, H / 2, this.panelW, this.panelH, "ui-panel-dark");
-    closeButton(this, this.px + this.panelW - 26, this.py + 24, () =>
-      this.scene.stop(),
-    );
-    fitModal(this, this.panelW, this.panelH);
-
-    this.add
-      .text(W / 2, this.py + 28, "PROJECT BOARD", {
-        fontFamily: FONT_TITLE,
-        fontSize: "20px",
-        color: "#f0a500",
-      })
-      .setOrigin(0.5);
-
-    this.toast = this.add
-      .text(W / 2, this.py + this.panelH - 64, "", {
-        fontFamily: FONT,
-        fontSize: "11px",
-        color: "#7dda1c",
-      })
-      .setOrigin(0.5);
-
-    this.input.on(
-      "wheel",
-      (_p: unknown, _o: unknown, _dx: number, dy: number) => {
-        if (this.mode !== "list") return;
-        this.setScroll(this.scroll + dy * 0.5);
-      },
-    );
-    this.input.keyboard?.on("keydown-ESC", () => {
+    this.modal = openDomModal(this, {
+      title: "Project Board",
+      width: 900,
+      onClose: () => this.scene.stop(),
+    });
+    this.modal.onEscape = () => {
       if (this.mode === "list") this.scene.stop();
       else this.showList();
-    });
+    };
 
     gameSocket.on("project:list", this.onProjectList);
     gameSocket.on("project:result", this.onProjectResult);
@@ -155,7 +99,7 @@ export class ProjectsScene extends Phaser.Scene {
     reason?: string;
   }) => {
     if (ok) {
-      this.flash("Saved!", "#7dda1c");
+      this.flash("Saved!", "#8be98b");
       if (this.mode === "form") this.showList();
     } else {
       const human: Record<string, string> = {
@@ -163,418 +107,308 @@ export class ProjectsScene extends Phaser.Scene {
         too_many: "You've hit the project limit",
         not_found: "That project no longer exists",
       };
-      this.flash(human[reason ?? ""] ?? `Couldn't save: ${reason}`, "#ff7777");
+      this.flash(human[reason ?? ""] ?? `Couldn't save: ${reason}`, "#ff8d7a");
     }
   };
 
   private onHackatimeStats = (stats: HackatimeStats) => {
     this.hackatimeConnected = stats.connected;
-    this.updateStatusLine(stats);
+    this.lastStats = stats;
+    this.updateStatusLine();
+    if (this.mode === "form") this.renderHtPicker();
     if (stats.error === "invalid_key")
-      this.flash("Hackatime needs reconnecting", "#ff7777");
-    else if (stats.error) this.flash("Couldn't reach Hackatime", "#ff7777");
+      this.flash("Hackatime needs reconnecting", "#ff8d7a");
+    else if (stats.error) this.flash("Couldn't reach Hackatime", "#ff8d7a");
   };
 
-  private clearBody() {
-    for (const b of this.bodyButtons) b.destroy();
-    this.bodyButtons.length = 0;
-    for (const o of this.body) o.destroy();
-    this.body.length = 0;
-    for (const d of this.domEls) d.destroy();
-    this.domEls.length = 0;
-    this.content?.destroy();
-    this.content = undefined;
-    this.statusText = undefined;
-    this.rowRefs.length = 0;
-  }
-
-  private track<T extends Phaser.GameObjects.GameObject>(o: T): T {
-    this.body.push(o);
-    return o;
+  /** Clears the modal body and rebuilds it, keeping a fresh toast element. */
+  private resetBody(): HTMLDivElement {
+    const body = this.modal!.body;
+    body.replaceChildren();
+    this.statusEl = undefined;
+    this.htPickerEl = undefined;
+    this.toastEl = el("div", "pixl-toast");
+    return body;
   }
 
   private showList() {
     this.mode = "list";
-    this.clearBody();
-    const W = this.scale.width;
+    const body = this.resetBody();
 
-    this.statusText = this.track(
-      this.add
-        .text(this.px + 28, this.py + 60, "", {
-          fontFamily: FONT_NARROW,
-          fontSize: "13px",
-          color: COLORS.textDim,
-        })
-        .setOrigin(0, 0.5),
-    );
+    const status = el("div", "pixl-statusline");
+    this.statusEl = el("span", "pixl-grow");
     this.updateStatusLine();
-    this.bodyButtons.push(
-      makeMenuButton(
+    status.append(
+      this.statusEl,
+      domBtn(
         this,
-        this.px + this.panelW - 86,
-        this.py + 60,
-        this.hackatimeConnected ? "MANAGE" : "CONNECT HT",
-        {
-          width: 130,
-          height: 34,
-          variant: "grey",
-          onClick: () => this.showHackatime(),
-        },
+        this.hackatimeConnected ? "Manage" : "Connect Hackatime",
+        () => this.showHackatime(),
       ),
     );
 
-    this.bodyButtons.push(
-      makeMenuButton(this, W / 2, this.py + 96, "+ NEW PROJECT", {
-        width: 220,
-        height: 38,
-        onClick: () => this.showForm(null),
-      }),
-    );
+    const newRow = el("div", "pixl-actions");
+    newRow.append(domBtn(this, "+ New Project", () => this.showForm(null)));
 
-    const listX = this.px + 28;
-    const listW = this.panelW - 56;
-    this.listTop = this.py + 124;
-    this.listBottom = this.py + this.panelH - 78;
-    const viewportH = this.listBottom - this.listTop;
-
+    const list = el("div", "pixl-list");
+    list.style.minHeight = "220px";
+    list.style.maxHeight = "56vh";
     if (this.projects.length === 0) {
-      this.track(
-        this.add
-          .text(
-            W / 2,
-            this.listTop + viewportH / 2,
-            "No projects yet.\nShip something and add it here!",
-            {
-              fontFamily: FONT_NARROW,
-              fontSize: "14px",
-              color: COLORS.textDim,
-              align: "center",
-              lineSpacing: 6,
-            },
-          )
-          .setOrigin(0.5),
+      list.append(
+        el(
+          "div",
+          "pixl-empty",
+          "No projects yet.\nShip something and add it here!",
+        ),
       );
+      list.lastElementChild!.setAttribute("style", "white-space: pre-line");
     } else {
-      this.content = this.add.container(0, 0);
-      this.rowRefs = [];
-      this.projects.forEach((p, i) => {
-        const top = this.listTop + i * this.rowH;
-        this.buildProjectRow(p, listX, top, listW, this.rowH);
-      });
-
-      const g = this.make.graphics({ x: 0, y: 0 });
-      g.fillStyle(0xffffff);
-      g.fillRect(listX, this.listTop, listW, viewportH);
-      this.listMask = g.createGeometryMask();
-      this.content.setMask(this.listMask);
-      this.track(this.content);
-
-      const contentH = this.projects.length * this.rowH;
-      this.maxScroll = Math.max(0, contentH - viewportH);
-      this.setScroll(Phaser.Math.Clamp(this.scroll, 0, this.maxScroll));
+      for (const p of this.projects) list.append(this.buildProjectRow(p));
     }
 
-    this.bodyButtons.push(
-      makeMenuButton(this, W / 2, this.py + this.panelH - 36, "CLOSE", {
-        variant: "grey",
-        width: 200,
-        height: 40,
-        onClick: () => this.scene.stop(),
-      }),
+    const actions = el("div", "pixl-actions");
+    actions.append(
+      domBtn(this, "Close", () => this.scene.stop(), { variant: "grey", big: true }),
     );
+
+    body.append(status, newRow, list, this.toastEl!, actions);
   }
 
-  private buildProjectRow(
-    p: Project,
-    x: number,
-    top: number,
-    w: number,
-    rowH: number,
-  ) {
-    const content = this.content!;
-    const bg = this.add
-      .rectangle(x + w / 2, top + rowH / 2 - 4, w, rowH - 8, 0xffffff, 0.05)
-      .setStrokeStyle(1, 0xffffff, 0.12);
-    const name = this.add.text(x + 12, top + 12, p.name, {
-      fontFamily: FONT_NARROW,
-      fontSize: "16px",
-      color: "#ffffff",
-    });
+  private buildProjectRow(p: Project): HTMLDivElement {
+    const row = el("div", "pixl-row");
+    const main = el("div", "pixl-row-main");
     const meta: string[] = [];
-    if (p.hackatimeProject) {
+    const htProjects = p.hackatimeProjects ?? [];
+    if (htProjects.length) {
+      const label =
+        htProjects.length === 1 ? htProjects[0] : `${htProjects.length} projects`;
       meta.push(
         this.hackatimeConnected
           ? `⏱ ${formatDuration(p.seconds ?? 0)}`
-          : `⏱ ${p.hackatimeProject}`,
+          : `⏱ ${label}`,
       );
     }
     if (p.repoUrl) meta.push("code");
     if (p.demoUrl) meta.push("demo");
-    const sub = this.add.text(
-      x + 12,
-      top + 36,
-      meta.join("   •   ") ||
-        (p.description ? truncate(p.description, 60) : "—"),
-      {
-        fontFamily: FONT_NARROW,
-        fontSize: "12px",
-        color: COLORS.textDim,
-        wordWrap: { width: w - 180 },
-      },
+    main.append(
+      el("div", "pixl-row-name", p.name),
+      el(
+        "div",
+        "pixl-row-meta",
+        meta.join("   •   ") || (p.description ? p.description : "—"),
+      ),
+    );
+    row.append(
+      main,
+      domBtn(this, "Edit", () => this.showForm(p)),
+      domBtn(
+        this,
+        "Delete",
+        () => {
+          gameSocket.deleteProject(p.id);
+          this.flash("Deleting…", "#ffd166");
+        },
+        { variant: "grey" },
+      ),
     );
 
-    content.add([bg, name, sub]);
-
-    const editBtn = makeMenuButton(
-      this,
-      x + w - 116,
-      top + rowH / 2 - 4,
-      "EDIT",
-      {
-        width: 78,
-        height: 32,
-        onClick: () => this.showForm(p),
-      },
-    );
-    const delBtn = makeMenuButton(this, x + w - 34, top + rowH / 2 - 4, "DEL", {
-      width: 64,
-      height: 32,
-      variant: "grey",
-      onClick: () => {
-        gameSocket.deleteProject(p.id);
-        this.flash("Deleting…", "#ffd166");
-      },
-    });
-    content.add([editBtn.container, delBtn.container]);
-    this.bodyButtons.push(editBtn, delBtn);
-    this.rowRefs.push({ top, objs: [bg, name, sub], btns: [editBtn, delBtn] });
-
-    if (p.repoUrl || p.demoUrl) {
-      bg.setInteractive({ useHandCursor: true }).on("pointerup", () => {
-        const url = p.demoUrl || p.repoUrl;
-        if (url) window.open(url, "_blank", "noopener");
-      });
+    const url = p.demoUrl || p.repoUrl;
+    if (url) {
+      row.classList.add("pixl-row-link");
+      main.addEventListener("click", () =>
+        window.open(url, "_blank", "noopener"),
+      );
     }
+    return row;
   }
 
-  private setScroll(v: number) {
-    this.scroll = Phaser.Math.Clamp(v, 0, this.maxScroll);
-    if (this.content) this.content.y = -this.scroll;
-
-    for (const r of this.rowRefs) {
-      const screenY = r.top - this.scroll;
-      const visible =
-        screenY + this.rowH > this.listTop && screenY < this.listBottom;
-      for (const o of r.objs) o.setVisible(visible);
-      for (const b of r.btns) {
-        b.container.setVisible(visible);
-        b.setEnabled(visible);
-      }
-    }
-  }
-
-  private updateStatusLine(stats?: HackatimeStats) {
-    if (!this.statusText) return;
+  private updateStatusLine() {
+    if (!this.statusEl) return;
     if (this.hackatimeConnected) {
-      const total = stats
+      const stats = this.lastStats;
+      const total = stats?.connected
         ? `  (${stats.humanReadableTotal || formatDuration(stats.totalSeconds)} total)`
         : "";
-      this.statusText
-        .setText(`Hackatime: connected ✓${total}`)
-        .setColor(COLORS.good);
+      this.statusEl.textContent = `Hackatime: connected ✓${total}`;
+      this.statusEl.style.color = "#8be98b";
     } else {
-      this.statusText
-        .setText("Hackatime: not connected")
-        .setColor(COLORS.textDim);
+      this.statusEl.textContent = "Hackatime: not connected";
+      this.statusEl.style.color = "#c9b18c";
     }
   }
 
   private showForm(project: Project | null) {
     this.mode = "form";
     this.editingId = project?.id ?? null;
-    this.clearBody();
-    const W = this.scale.width;
+    const body = this.resetBody();
 
-    this.track(
-      this.add
-        .text(W / 2, this.py + 58, project ? "EDIT PROJECT" : "NEW PROJECT", {
-          fontFamily: FONT,
-          fontSize: "13px",
-          color: COLORS.accent,
-        })
-        .setOrigin(0.5),
+    const heading = el(
+      "div",
+      "pixl-sub",
+      project ? "Edit Project" : "New Project",
     );
 
-    const fieldX = this.px + 30;
-    const fieldW = this.panelW - 60;
-    let y = this.py + 92;
+    const fields = el("div", "pixl-list");
+    const nameEl = this.field(fields, "Name", "input", project?.name ?? "", "My awesome project", 60);
+    const descEl = this.field(fields, "Description", "textarea", project?.description ?? "", "What is it?", 500);
+    const repoEl = this.field(fields, "Repo URL", "input", project?.repoUrl ?? "", "https://github.com/…", 300);
+    const demoEl = this.field(fields, "Demo URL", "input", project?.demoUrl ?? "", "https://…", 300);
 
-    const nameEl = this.field(
-      "Name",
-      "input",
-      fieldX,
-      y,
-      fieldW,
-      project?.name ?? "",
-      "My awesome project",
-    );
-    nameEl.maxLength = 60;
-    y += 64;
-    const descEl = this.field(
-      "Description",
-      "textarea",
-      fieldX,
-      y,
-      fieldW,
-      project?.description ?? "",
-      "What is it?",
-      48,
-    );
-    descEl.maxLength = 500;
-    y += 86;
-    const repoEl = this.field(
-      "Repo URL",
-      "input",
-      fieldX,
-      y,
-      fieldW,
-      project?.repoUrl ?? "",
-      "https://github.com/…",
-    );
-    repoEl.maxLength = 300;
-    y += 64;
-    const demoEl = this.field(
-      "Demo URL",
-      "input",
-      fieldX,
-      y,
-      fieldW,
-      project?.demoUrl ?? "",
-      "https://…",
-    );
-    demoEl.maxLength = 300;
-    y += 64;
-    const htEl = this.field(
-      "Hackatime project (for coding time)",
-      "input",
-      fieldX,
-      y,
-      fieldW,
-      project?.hackatimeProject ?? "",
-      "exact project name in Hackatime",
-    );
-    htEl.maxLength = 100;
+    // Multi-select picker of the user's Hackatime projects, in place of the old
+    // free-text field. Selection lives in formSelectedHt so the list can be
+    // re-rendered (when stats arrive) without losing what's checked.
+    this.formSelectedHt = new Set(project?.hackatimeProjects ?? []);
+    const htWrap = el("div", "pixl-field");
+    htWrap.append(el("label", undefined, "Hackatime projects (for coding time)"));
+    this.htPickerEl = el("div", "pixl-check-list");
+    htWrap.append(this.htPickerEl);
+    fields.append(htWrap);
+    this.renderHtPicker();
+    if (this.hackatimeConnected && !this.lastStats)
+      gameSocket.requestHackatimeStats();
 
-    this.bodyButtons.push(
-      makeMenuButton(this, W / 2 - 110, this.py + this.panelH - 36, "SAVE", {
-        width: 190,
-        height: 42,
-        onClick: () => {
+    const actions = el("div", "pixl-actions");
+    actions.append(
+      domBtn(
+        this,
+        "Save",
+        () => {
+          const ht = Array.from(this.formSelectedHt);
           const payload = {
             name: nameEl.value.trim(),
             description: descEl.value.trim() || undefined,
             repoUrl: repoEl.value.trim() || undefined,
             demoUrl: demoEl.value.trim() || undefined,
-            hackatimeProject: htEl.value.trim() || undefined,
+            hackatimeProjects: ht.length ? ht : undefined,
           };
           if (!payload.name) {
-            this.flash("A project needs a name", "#ff7777");
+            this.flash("A project needs a name", "#ff8d7a");
             return;
           }
           if (this.editingId != null)
             gameSocket.updateProject({ id: this.editingId, ...payload });
           else gameSocket.createProject(payload);
         },
-      }),
-    );
-    this.bodyButtons.push(
-      makeMenuButton(this, W / 2 + 110, this.py + this.panelH - 36, "CANCEL", {
-        width: 190,
-        height: 42,
+        { big: true },
+      ),
+      domBtn(this, "Cancel", () => this.showList(), {
         variant: "grey",
-        onClick: () => this.showList(),
+        big: true,
       }),
     );
+
+    body.append(heading, fields, this.toastEl!, actions);
+    nameEl.focus();
+  }
+
+  /** (Re)builds the Hackatime project checkbox list from the latest stats. */
+  private renderHtPicker() {
+    const host = this.htPickerEl;
+    if (!host) return;
+    host.replaceChildren();
+
+    if (!this.hackatimeConnected) {
+      host.append(
+        el(
+          "div",
+          "pixl-check-empty",
+          "Connect Hackatime (MANAGE on the project board) to pick projects.",
+        ),
+      );
+      return;
+    }
+
+    const stats = this.lastStats?.projects ?? [];
+    if (!stats.length && !this.formSelectedHt.size) {
+      host.append(
+        el(
+          "div",
+          "pixl-check-empty",
+          this.lastStats
+            ? "No Hackatime projects found yet. Track some coding time first."
+            : "Loading your Hackatime projects…",
+        ),
+      );
+      return;
+    }
+
+    // Available projects from stats, plus any already-selected names that no
+    // longer show up (e.g. archived) so existing selections aren't lost.
+    const secondsByName = new Map(stats.map((p) => [p.name, p.seconds]));
+    const names = [...stats.map((p) => p.name)];
+    for (const sel of this.formSelectedHt)
+      if (!secondsByName.has(sel)) names.push(sel);
+
+    for (const name of names) {
+      const item = el("label", "pixl-check-item");
+      const box = document.createElement("input");
+      box.type = "checkbox";
+      box.checked = this.formSelectedHt.has(name);
+      box.addEventListener("change", () => {
+        if (box.checked) this.formSelectedHt.add(name);
+        else this.formSelectedHt.delete(name);
+      });
+      const label = el("span", "pixl-grow", name);
+      const secs = secondsByName.get(name);
+      item.append(box, label);
+      if (secs != null)
+        item.append(el("span", "pixl-check-time", formatDuration(secs)));
+      host.append(item);
+    }
   }
 
   private showHackatime() {
     this.mode = "hackatime";
-    this.clearBody();
-    const W = this.scale.width;
+    const body = this.resetBody();
 
-    this.track(
-      this.add
-        .text(W / 2, this.py + 58, "HACKATIME", {
-          fontFamily: FONT,
-          fontSize: "13px",
-          color: COLORS.accent,
-        })
-        .setOrigin(0.5),
-    );
-    this.track(
-      this.add
-        .text(
-          W / 2,
-          this.py + 110,
-          this.hackatimeConnected
-            ? "Your Hackatime account is connected. Coding time\nflows into any project you map to a Hackatime\nproject name."
-            : "Connect your Hackatime account to pull your\ncoding time into your projects. A Hackatime window\nwill open for you to approve access.",
-          {
-            fontFamily: FONT_NARROW,
-            fontSize: "13px",
-            color: COLORS.textDim,
-            align: "center",
-            lineSpacing: 7,
-          },
-        )
-        .setOrigin(0.5),
+    const heading = el("div", "pixl-sub", "Hackatime");
+    const hint = el(
+      "div",
+      "pixl-hint",
+      this.hackatimeConnected
+        ? "Your Hackatime account is connected. Coding time flows into any project you map to a Hackatime project name."
+        : "Connect your Hackatime account to pull your coding time into your projects. A Hackatime window will open for you to approve access.",
     );
 
+    const actions = el("div", "pixl-actions");
+    actions.style.flexDirection = "column";
+    actions.style.alignItems = "center";
     if (this.hackatimeConnected) {
-      this.bodyButtons.push(
-        makeMenuButton(this, W / 2, this.py + 190, "RECONNECT", {
-          width: 240,
-          height: 42,
-          onClick: () => this.openOAuthPopup(),
-        }),
-      );
-      this.bodyButtons.push(
-        makeMenuButton(this, W / 2, this.py + 244, "DISCONNECT", {
-          width: 240,
-          height: 38,
-          variant: "grey",
-          onClick: () => {
+      actions.append(
+        domBtn(this, "Reconnect", () => this.openOAuthPopup(), { big: true }),
+        domBtn(
+          this,
+          "Disconnect",
+          () => {
             gameSocket.setHackatimeKey("");
             this.hackatimeConnected = false;
+            this.lastStats = undefined;
             this.flash("Disconnected", "#ffd166");
             this.showList();
           },
-        }),
+          { variant: "grey" },
+        ),
       );
     } else {
-      this.bodyButtons.push(
-        makeMenuButton(this, W / 2, this.py + 196, "CONNECT WITH HACKATIME", {
-          width: 320,
-          height: 46,
-          onClick: () => this.openOAuthPopup(),
+      actions.append(
+        domBtn(this, "Connect with Hackatime", () => this.openOAuthPopup(), {
+          big: true,
         }),
       );
     }
 
-    this.bodyButtons.push(
-      makeMenuButton(this, W / 2, this.py + this.panelH - 36, "BACK", {
-        width: 200,
-        height: 40,
-        variant: "grey",
-        onClick: () => this.showList(),
-      }),
+    const back = el("div", "pixl-actions");
+    back.append(
+      domBtn(this, "Back", () => this.showList(), { variant: "grey", big: true }),
     );
+
+    body.append(heading, hint, actions, this.toastEl!, back);
   }
 
   private openOAuthPopup() {
     const token = getSessionToken();
     if (!token) {
-      this.flash("Log in again to connect", "#ff7777");
+      this.flash("Log in again to connect", "#ff8d7a");
       return;
     }
     const url = `${SERVER_URL}/hackatime/connect?token=${encodeURIComponent(token)}`;
@@ -591,56 +425,33 @@ export class ProjectsScene extends Phaser.Scene {
   }
 
   private field(
+    parent: HTMLElement,
     label: string,
     kind: "input" | "textarea",
-    x: number,
-    y: number,
-    w: number,
     value: string,
     placeholder: string,
-    height = 30,
-  ): HTMLInputElement & HTMLTextAreaElement {
-    this.track(
-      this.add
-        .text(x, y, label, {
-          fontFamily: FONT_NARROW,
-          fontSize: "12px",
-          color: COLORS.textDim,
-        })
-        .setOrigin(0, 0),
-    );
-    const dom = this.add
-      .dom(x + w / 2, y + 18 + height / 2, kind)
-      .setOrigin(0.5);
-    const el = dom.node as HTMLInputElement & HTMLTextAreaElement;
-    el.value = value;
-    el.placeholder = placeholder;
-    Object.assign(el.style, {
-      width: `${w - 4}px`,
-      height: kind === "textarea" ? `${height}px` : "auto",
-      padding: "6px 9px",
-      font: '13px "Kenney Future Narrow", monospace',
-      color: "#ffffff",
-      background: "rgba(10,15,28,0.9)",
-      border: "2px solid #ffd166",
-      borderRadius: "6px",
-      outline: "none",
-      resize: "none",
-      boxSizing: "border-box",
-    } as Partial<CSSStyleDeclaration>);
-
-    el.addEventListener("keydown", (e) => {
-      e.stopPropagation();
-      if (e.key === "Escape") this.showList();
-    });
-    this.domEls.push(dom);
-    return el;
+    maxLength: number,
+  ): HTMLInputElement | HTMLTextAreaElement {
+    const wrap = el("div", "pixl-field");
+    wrap.append(el("label", undefined, label));
+    const input = document.createElement(kind);
+    input.value = value;
+    input.placeholder = placeholder;
+    input.maxLength = maxLength;
+    if (input instanceof HTMLTextAreaElement) input.rows = 3;
+    wrap.append(input);
+    parent.append(wrap);
+    return input;
   }
 
   private flash(msg: string, color: string) {
-    if (!this.toast) return;
-    this.toast.setColor(color).setText(msg);
-    this.time.delayedCall(1500, () => this.toast?.setText(""));
+    if (!this.toastEl) return;
+    this.toastEl.textContent = msg;
+    this.toastEl.style.color = color;
+    clearTimeout(this.toastTimer);
+    this.toastTimer = setTimeout(() => {
+      if (this.toastEl) this.toastEl.textContent = "";
+    }, 1500);
   }
 }
 
@@ -650,8 +461,4 @@ function formatDuration(seconds: number): string {
   if (h > 0) return m > 0 ? `${h}h ${m}m` : `${h}h`;
   if (m > 0) return `${m}m`;
   return seconds > 0 ? "<1m" : "0m";
-}
-
-function truncate(s: string, n: number): string {
-  return s.length > n ? s.slice(0, n - 1) + "…" : s;
 }

@@ -5,7 +5,7 @@ import { FONT, FONT_EMOJI, FONT_CHAT, FONT_TITLE, COLORS, CURSORS, EMOTE_ATLAS }
 import { panel, playUiSound, uiNineslice, uiImage } from "../ui/UIKit";
 import { EMOTES, QUICK_EMOTES } from "../ui/emotes";
 import { gameSocket } from "../network/socket";
-import { getAccountId } from "../network/playerIdentity";
+import { getAccountId, getAccountName } from "../network/playerIdentity";
 import { loadSettings, getKeybinds } from "../data/Settings";
 import { musicEngine } from "../audio/MusicEngine";
 import { voiceChat } from "../audio/VoiceChat";
@@ -38,10 +38,21 @@ export class UIScene extends Phaser.Scene {
   private timeText?: Phaser.GameObjects.Text;
   private timeIcon?: Phaser.GameObjects.Text;
   private lastTimeLabel = "";
+  private lastClock = "";
   private heartIcons: Phaser.GameObjects.Graphics[] = [];
+  private heartBaseX = 27;
+  private heartsY = 50;
   private hp = 10;
   private hpMax = 10;
   private pixels = 0;
+
+
+  private onlineCount = 1;
+  private onlineChip?: {
+    bg: Phaser.GameObjects.NineSlice;
+    dot: Phaser.GameObjects.Arc;
+    text: Phaser.GameObjects.Text;
+  };
   private flashTween?: Phaser.Tweens.Tween;
   
   private unread = 0;
@@ -103,6 +114,7 @@ export class UIScene extends Phaser.Scene {
       .setDepth(-10);
 
     this.buildPlayerCard();
+    this.buildOnlineChip();
     this.buildStatusBar();
 
     this.box = new DialogueBox(this);
@@ -174,40 +186,87 @@ export class UIScene extends Phaser.Scene {
 
   
   private buildPlayerCard() {
-    const X = 12, Y = 12, W = 188, H = 62;
+    const X = 12, Y = 12, W = 204, H = 84;
     panel(this, X, Y, W, H, "ui-panel-dark").setOrigin(0, 0).setAlpha(0.96);
     const baseX = X + 15;
 
-    
-    const heartsY = Y + 13;
+
+    this.add
+      .text(baseX, Y + 16, truncate(getAccountName() || "Player", 14), {
+        fontFamily: FONT_TITLE,
+        fontSize: "15px",
+        color: COLORS.accent,
+      })
+      .setOrigin(0, 0.5)
+      .setResolution(3);
+
+
+    this.heartBaseX = baseX;
+    this.heartsY = Y + 38;
     for (let i = 0; i < this.hpMax; i++) {
       const g = this.add.graphics();
-      g.x = baseX + i * 13;
-      g.y = heartsY;
+      g.x = this.heartBaseX + i * 13;
+      g.y = this.heartsY;
       this.heartIcons.push(g);
     }
     this.refreshHearts();
 
-    
-    const rowY = Y + 44;
+
+    const rowY = Y + 66;
     this.add.text(baseX, rowY, "🪙", { fontFamily: FONT_EMOJI, fontSize: "14px" }).setOrigin(0, 0.5);
     this.pixelText = this.add
       .text(baseX + 20, rowY, "0", { fontFamily: FONT, fontSize: "14px", color: COLORS.accent })
       .setOrigin(0, 0.5)
       .setResolution(3);
 
+
     this.timeIcon = this.add
-      .text(X + W - 70, rowY, "☀", { fontFamily: FONT_EMOJI, fontSize: "13px" })
+      .text(X + W - 62, rowY, "☀", { fontFamily: FONT_EMOJI, fontSize: "13px" })
       .setOrigin(0, 0.5);
     this.timeText = this.add
-      .text(X + W - 52, rowY, "", { fontFamily: FONT, fontSize: "9px", color: "#aabbff" })
-      .setOrigin(0, 0.5)
+      .text(X + W - 14, rowY, "--:--", { fontFamily: FONT, fontSize: "11px", color: "#aabbff" })
+      .setOrigin(1, 0.5)
       .setResolution(3);
 
-    
+
     this.coordText = this.add
-      .text(X + 2, Y + H + 4, "", { fontFamily: FONT, fontSize: "8px", color: COLORS.textDim })
+      .text(X + 2, Y + H + 32, "", { fontFamily: FONT, fontSize: "8px", color: COLORS.textDim })
       .setAlpha(0.5);
+  }
+
+
+  private buildOnlineChip() {
+    const X = 12, Y = 12 + 84 + 6, W = 100, H = 24;
+    const bg = uiNineslice(this, X, Y, "ui-panel-dark", W, H, 12)
+      .setOrigin(0, 0)
+      .setAlpha(0.92)
+      .setDepth(50)
+      .setInteractive({ cursor: CURSORS.pointer });
+    const dot = this.add.circle(X + 15, Y + H / 2, 4, 0x4ade80).setDepth(51);
+    const text = this.add
+      .text(X + 27, Y + H / 2, "1 online", { fontFamily: FONT, fontSize: "10px", color: COLORS.text })
+      .setOrigin(0, 0.5)
+      .setResolution(3)
+      .setDepth(51);
+    bg.on("pointerover", () => bg.setTint(0xffe08a));
+    bg.on("pointerout", () => bg.clearTint());
+    bg.on("pointerdown", () => {
+      playUiSound(this, "sfx-tap", 0.3);
+      if (this.playerListOpen) this.hidePlayerList();
+      else this.showPlayerList();
+    });
+    this.onlineChip = { bg, dot, text };
+    this.refreshOnlineChip();
+  }
+
+  setOnlineCount(n: number) {
+    this.onlineCount = Math.max(1, n | 0);
+    this.refreshOnlineChip();
+  }
+
+  private refreshOnlineChip() {
+    const n = this.onlineCount;
+    this.onlineChip?.text.setText(`${n} online`);
   }
 
   
@@ -791,13 +850,20 @@ export class UIScene extends Phaser.Scene {
     this.nightOverlay.setAlpha(darkness);
 
     if (this.timeText) {
-      const label = phase < 0.25 ? "Night" : phase < 0.5 ? "Morning" : phase < 0.75 ? "Day" : "Evening";
-      
-      if (label !== this.lastTimeLabel) {
-        this.lastTimeLabel = label;
-        this.timeText.setText(label);
-        
-        this.timeIcon?.setText(phase >= 0.25 && phase < 0.75 ? "☀" : "🌙");
+
+      const mins = Math.floor(phase * 1440);
+      const hh = String(Math.floor(mins / 60)).padStart(2, "0");
+      const mm = String(mins % 60).padStart(2, "0");
+      const clock = `${hh}:${mm}`;
+      if (clock !== this.lastClock) {
+        this.lastClock = clock;
+        this.timeText.setText(clock);
+      }
+
+      const dayLabel = phase >= 0.25 && phase < 0.75 ? "day" : "night";
+      if (dayLabel !== this.lastTimeLabel) {
+        this.lastTimeLabel = dayLabel;
+        this.timeIcon?.setText(dayLabel === "day" ? "☀" : "🌙");
       }
     }
   }
@@ -832,8 +898,8 @@ export class UIScene extends Phaser.Scene {
       this.hpMax = hpMax;
       for (let i = 0; i < this.hpMax; i++) {
         const g = this.add.graphics();
-        g.x = 8 + i * 14;
-        g.y = 24;
+        g.x = this.heartBaseX + i * 13;
+        g.y = this.heartsY;
         this.heartIcons.push(g);
       }
     }
@@ -1001,6 +1067,10 @@ export class UIScene extends Phaser.Scene {
       drawHeart(g, i < this.hp);
     }
   }
+}
+
+function truncate(s: string, max: number): string {
+  return s.length > max ? s.slice(0, max - 1) + "…" : s;
 }
 
 const HEART_PIXELS: { x: number; y: number }[] = (() => {

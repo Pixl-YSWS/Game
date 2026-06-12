@@ -1,5 +1,5 @@
 import express from "express";
-import { randomBytes } from "crypto";
+import { createHmac, timingSafeEqual } from "crypto";
 import type { AuthModule } from "./auth.ts";
 
 const BASE = "https://hackatime.hackclub.com".replace(/\/$/, "");
@@ -10,22 +10,72 @@ const REDIRECT_URI =
   "http://localhost:3001/hackatime/callback";
 const CLIENT_URL = process.env.CLIENT_URL ?? "http://localhost:5173";
 
-const SCOPES = process.env.HACKATIME_SCOPES ?? "profile read";
+// Hackatime's /api/v1/authenticated endpoints require the Doorkeeper default
+// scope "profile"; a token minted without it gets 401s on every API call.
+const SCOPES = (() => {
+  const scopes = (process.env.HACKATIME_SCOPES ?? "profile read")
+    .split(/\s+/)
+    .filter(Boolean);
+  if (!scopes.includes("profile")) scopes.unshift("profile");
+  return scopes.join(" ");
+})();
+
+const STATE_TTL_MS = 10 * 60 * 1000;
+const STATE_COOKIE = "ht_oauth_state";
 
 export function hackatimeConfigured(): boolean {
   return CLIENT_ID.length > 0 && CLIENT_SECRET.length > 0;
 }
 
+// The state is self-contained (HMAC-signed accountId + expiry) instead of a
+// server-side map, so it survives the `bun --watch` restarts that happen
+// mid-OAuth-dance during development.
+function signState(accountId: string): string {
+  const payload = Buffer.from(
+    JSON.stringify({ a: accountId, e: Date.now() + STATE_TTL_MS }),
+  ).toString("base64url");
+  const mac = createHmac("sha256", CLIENT_SECRET)
+    .update(payload)
+    .digest("base64url");
+  return `${payload}.${mac}`;
+}
+
+function verifyState(state: string): { accountId: string } | "expired" | null {
+  const dot = state.lastIndexOf(".");
+  if (dot < 0) return null;
+  const payload = state.slice(0, dot);
+  const expected = createHmac("sha256", CLIENT_SECRET).update(payload).digest();
+  let given: Buffer;
+  try {
+    given = Buffer.from(state.slice(dot + 1), "base64url");
+  } catch {
+    return null;
+  }
+  if (given.length !== expected.length || !timingSafeEqual(given, expected))
+    return null;
+  try {
+    const obj = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
+    if (typeof obj.a !== "string" || typeof obj.e !== "number") return null;
+    if (obj.e < Date.now()) return "expired";
+    return { accountId: obj.a };
+  } catch {
+    return null;
+  }
+}
+
+function readCookie(header: string | undefined, name: string): string | null {
+  if (!header) return null;
+  for (const part of header.split(";")) {
+    const eq = part.indexOf("=");
+    if (eq < 0) continue;
+    if (part.slice(0, eq).trim() === name)
+      return decodeURIComponent(part.slice(eq + 1).trim());
+  }
+  return null;
+}
+
 export function setupHackatimeAuth(auth: AuthModule): express.Router {
   const router = express.Router();
-
-  const pendingStates = new Map<string, { accountId: string; exp: number }>();
-  const STATE_TTL_MS = 10 * 60 * 1000;
-  const sweep = () => {
-    const now = Date.now();
-    for (const [s, v] of pendingStates)
-      if (v.exp < now) pendingStates.delete(s);
-  };
 
   router.get("/connect", (req, res) => {
     if (!hackatimeConfigured()) {
@@ -42,30 +92,57 @@ export function setupHackatimeAuth(auth: AuthModule): express.Router {
       res.status(401).send("Log into the game first, then connect Hackatime.");
       return;
     }
-    sweep();
-    const state = randomBytes(16).toString("hex");
-    pendingStates.set(state, {
-      accountId: account.accountId,
-      exp: Date.now() + STATE_TTL_MS,
-    });
+    const state = signState(account.accountId);
+    // Cookie fallback in case the provider drops the state parameter on the
+    // way through its own login redirect.
+    res.setHeader(
+      "Set-Cookie",
+      `${STATE_COOKIE}=${state}; Max-Age=600; HttpOnly; SameSite=Lax; Path=/hackatime`,
+    );
     const url =
       `${BASE}/oauth/authorize?response_type=code` +
       `&client_id=${encodeURIComponent(CLIENT_ID)}` +
       `&redirect_uri=${encodeURIComponent(REDIRECT_URI)}` +
       `&scope=${encodeURIComponent(SCOPES)}` +
-      `&state=${state}`;
+      `&state=${encodeURIComponent(state)}`;
     res.redirect(url);
   });
 
   router.get("/callback", async (req, res) => {
-    const code = typeof req.query.code === "string" ? req.query.code : "";
-    const state = typeof req.query.state === "string" ? req.query.state : "";
-    const pending = state ? pendingStates.get(state) : undefined;
-    if (pending) pendingStates.delete(state);
-    if (!pending || pending.exp < Date.now()) {
+    res.setHeader(
+      "Set-Cookie",
+      `${STATE_COOKIE}=; Max-Age=0; HttpOnly; SameSite=Lax; Path=/hackatime`,
+    );
+
+    if (typeof req.query.error === "string") {
       res
         .status(400)
-        .send("Invalid or expired Hackatime auth state. Try connecting again.");
+        .send(
+          `Hackatime authorization was cancelled or denied (${req.query.error}). Close this window and try again.`,
+        );
+      return;
+    }
+
+    const code = typeof req.query.code === "string" ? req.query.code : "";
+    const state = typeof req.query.state === "string" ? req.query.state : "";
+    let verified = state ? verifyState(state) : null;
+    if (verified === null || verified === "expired") {
+      const cookieState = readCookie(req.headers.cookie, STATE_COOKIE);
+      const fromCookie = cookieState ? verifyState(cookieState) : null;
+      if (fromCookie && fromCookie !== "expired") verified = fromCookie;
+    }
+    if (verified === "expired") {
+      res
+        .status(400)
+        .send(
+          "This Hackatime connect link expired (they last 10 minutes). Go back to the game and try connecting again.",
+        );
+      return;
+    }
+    if (!verified) {
+      res
+        .status(400)
+        .send("Invalid Hackatime auth state. Try connecting again.");
       return;
     }
     if (!code) {
@@ -98,8 +175,8 @@ export function setupHackatimeAuth(auth: AuthModule): express.Router {
         res.status(502).send("Hackatime returned no access token.");
         return;
       }
-      auth.setHackatimeKey(pending.accountId, tok.access_token);
-      console.log(`[hackatime] connected ${pending.accountId.slice(0, 8)}…`);
+      auth.setHackatimeKey(verified.accountId, tok.access_token);
+      console.log(`[hackatime] connected ${verified.accountId.slice(0, 8)}…`);
       res.type("html").send(connectedHtml());
     } catch (e) {
       console.error("[hackatime] callback error:", e);
