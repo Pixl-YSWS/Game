@@ -750,20 +750,60 @@ app.get("/api/villages", (req, res) => {
   res.json({ ok: true, villages });
 });
 
-// All joinable lobbies (public and private) for the browser. Passwords are
-// never included — private lobbies are flagged so the client can prompt.
-app.get("/api/lobbies", (req, res) => {
+// Resolve the Hack Club account behind a request's ?token= / Bearer header.
+function accountFromReq(req: express.Request): Account | null {
   const token =
     (typeof req.query.token === "string" && req.query.token) ||
     (req.headers.authorization?.startsWith("Bearer ")
       ? req.headers.authorization.slice(7)
       : "");
-  const account = token ? auth.verifySession(token) : null;
+  return token ? auth.verifySession(token) : null;
+}
+
+// All joinable lobbies (public and private) for the browser. Owners also get
+// `mine` + (for private) the password; everyone else sees neither.
+app.get("/api/lobbies", (req, res) => {
+  const account = accountFromReq(req);
   if (!account) {
     res.status(401).json({ ok: false });
     return;
   }
-  res.json({ ok: true, lobbies: [...lobbies.values()].map(lobbyInfo) });
+  res.json({
+    ok: true,
+    lobbies: [...lobbies.values()].map((l) =>
+      lobbyInfoFor(l, account.accountId),
+    ),
+  });
+});
+
+// Owner-only lobby management (rename / visibility / delete). Params come via
+// the query string so no JSON body parser is needed. Mutations are POST.
+app.post("/api/lobby/manage", (req, res) => {
+  const account = accountFromReq(req);
+  if (!account) {
+    res.status(401).json({ ok: false, reason: "unauthorized" });
+    return;
+  }
+  const id = typeof req.query.id === "string" ? req.query.id : "";
+  const lobby = lobbies.get(id);
+  if (!lobby || lobby.ownerId !== account.accountId) {
+    res.status(404).json({ ok: false, reason: "not_found" });
+    return;
+  }
+  const action = req.query.action;
+  if (action === "rename" && typeof req.query.name === "string") {
+    renameLobby(lobby, req.query.name);
+  } else if (action === "visibility") {
+    setLobbyVisibility(lobby, req.query.public === "1");
+  } else if (action === "delete") {
+    closeLobby(id);
+    res.json({ ok: true, deleted: true });
+    return;
+  } else {
+    res.status(400).json({ ok: false, reason: "bad_action" });
+    return;
+  }
+  res.json({ ok: true, lobby: lobbyInfoFor(lobby, account.accountId) });
 });
 
 const httpServer = createServer(app);
@@ -803,22 +843,89 @@ const liveByAccount = new Map<string, string>();
 // ── Lobbies ──────────────────────────────────────────────────────────
 // Capped, instanceable shared overworlds. Each lobby is its own Socket.IO
 // room (worldKey "lobby:<id>"), so capping membership bounds the per-room
-// movement/voice fan-out. Lobbies are ephemeral and in-memory: they vanish
-// once empty. Member counts are derived from `players` so they can't drift.
+// movement/voice fan-out. Member counts are derived from `players` so they
+// can't drift. Player-created lobbies are persistent: they survive an empty
+// room and a server restart, and are removed only when their owner deletes
+// them. Auto-created public lobbies (from quick-join) are ownerless and live
+// in memory only — quick-join reuses them, so they don't accumulate.
 interface Lobby {
   id: string;
   name: string;
   isPublic: boolean;
   // Auto-generated 4-digit code required to join a private lobby. Empty for
-  // public lobbies. Sent only to members (via world:state), never in listings.
+  // public lobbies. Sent only to members/owners, never in public listings.
   password: string;
   capacity: number;
   seed: number;
+  // Account id of the creator. Empty for auto-created (ownerless) lobbies.
+  ownerId: string;
   createdAt: number;
 }
 const lobbies = new Map<string, Lobby>();
 const PUBLIC_LOBBY_CAPACITY = 16;
 const MAX_LOBBIES = 200;
+
+db.run(`
+  CREATE TABLE IF NOT EXISTS lobbies (
+    id         TEXT PRIMARY KEY,
+    name       TEXT NOT NULL,
+    is_public  INTEGER NOT NULL,
+    password   TEXT NOT NULL,
+    seed       INTEGER NOT NULL,
+    owner_id   TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+  )
+`);
+const insertLobbyRow = db.query<
+  unknown,
+  [string, string, number, string, number, string, number]
+>(
+  "INSERT OR REPLACE INTO lobbies (id, name, is_public, password, seed, owner_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+);
+const deleteLobbyRow = db.query<unknown, [string]>(
+  "DELETE FROM lobbies WHERE id = ?",
+);
+const selectLobbyRows = db.query<
+  {
+    id: string;
+    name: string;
+    is_public: number;
+    password: string;
+    seed: number;
+    owner_id: string;
+    created_at: number;
+  },
+  []
+>("SELECT id, name, is_public, password, seed, owner_id, created_at FROM lobbies");
+
+function loadLobbies() {
+  for (const r of selectLobbyRows.all()) {
+    lobbies.set(r.id, {
+      id: r.id,
+      name: r.name,
+      isPublic: r.is_public === 1,
+      password: r.password,
+      capacity: PUBLIC_LOBBY_CAPACITY,
+      seed: r.seed,
+      ownerId: r.owner_id,
+      createdAt: r.created_at,
+    });
+  }
+}
+
+// Persist an owned lobby (write-through). Ownerless auto-lobbies stay in memory.
+function persistLobby(l: Lobby) {
+  if (!l.ownerId) return;
+  insertLobbyRow.run(
+    l.id,
+    l.name,
+    l.isPublic ? 1 : 0,
+    l.password,
+    l.seed,
+    l.ownerId,
+    l.createdAt,
+  );
+}
 
 function randomLobbySeed(): number {
   return (Math.random() * 0xffffffff) >>> 0;
@@ -858,11 +965,26 @@ function lobbyInfo(l: Lobby): LobbyInfo {
   };
 }
 
+// Listing entry for a specific requester — owners additionally see `mine` and,
+// for private lobbies, the password (so they can share/manage it).
+function lobbyInfoFor(l: Lobby, accountId: string): LobbyInfo {
+  const info = lobbyInfo(l);
+  if (l.ownerId && l.ownerId === accountId) {
+    info.mine = true;
+    if (!l.isPublic) info.password = l.password;
+  }
+  return info;
+}
+
 function publicLobbyList(): LobbyInfo[] {
   return [...lobbies.values()].filter((l) => l.isPublic).map(lobbyInfo);
 }
 
-function createLobby(opts: { isPublic: boolean; name?: string }): Lobby | null {
+function createLobby(opts: {
+  isPublic: boolean;
+  name?: string;
+  ownerId: string;
+}): Lobby | null {
   if (lobbies.size >= MAX_LOBBIES) return null;
   const id = genLobbyCode();
   const name =
@@ -875,10 +997,43 @@ function createLobby(opts: { isPublic: boolean; name?: string }): Lobby | null {
     password: opts.isPublic ? "" : gen4DigitPassword(),
     capacity: PUBLIC_LOBBY_CAPACITY,
     seed: randomLobbySeed(),
+    ownerId: opts.ownerId,
     createdAt: Date.now(),
   };
   lobbies.set(id, lobby);
+  persistLobby(lobby);
   return lobby;
+}
+
+function renameLobby(l: Lobby, name: string) {
+  const clean = name.trim().slice(0, 30);
+  if (clean) l.name = clean;
+  persistLobby(l);
+}
+
+function setLobbyVisibility(l: Lobby, isPublic: boolean) {
+  l.isPublic = isPublic;
+  l.password = isPublic ? "" : l.password || gen4DigitPassword();
+  persistLobby(l);
+}
+
+// Remove a lobby and evict anyone still inside back to their own village.
+function closeLobby(id: string): boolean {
+  const l = lobbies.get(id);
+  if (!l) return false;
+  lobbies.delete(id);
+  deleteLobbyRow.run(id);
+  for (const [sid, p] of players) {
+    if (p.world.kind === "lobby" && p.world.id === id) {
+      const sock = io.sockets.sockets.get(sid);
+      if (!sock) continue;
+      sock.emit("world:denied", {
+        reason: "This lobby was closed by its owner.",
+      });
+      switchWorld(sock, { kind: "village", ownerPlayerId: p.playerId });
+    }
+  }
+  return true;
 }
 
 // Pick the fullest public lobby that still has room — keeps lobbies lively and
@@ -894,13 +1049,10 @@ function pickPublicLobby(): Lobby | null {
       bestCount = c;
     }
   }
-  return best ?? createLobby({ isPublic: true });
+  return best ?? createLobby({ isPublic: true, ownerId: "" });
 }
 
-// Drop a lobby once the last player leaves so instances don't accumulate.
-function reapLobbyIfEmpty(id: string) {
-  if (lobbyMemberCount(id) === 0) lobbies.delete(id);
-}
+loadLobbies();
 
 const OPENWORLD_REQUIRES_VERIFIED =
   process.env.OPENWORLD_VERIFIED_ONLY === "true";
@@ -1028,7 +1180,6 @@ function switchWorld(
 ) {
   const state = players.get(socket.id);
   if (!state) return;
-  const prevWorld = state.world;
   const oldRoom = worldKey(state.world);
   const newRoom = worldKey(next);
   if (oldRoom === newRoom) return;
@@ -1040,8 +1191,6 @@ function switchWorld(
 
   state.world = next;
   state.hidden = false;
-  // The player has left their previous world; drop it if it was an empty lobby.
-  if (prevWorld.kind === "lobby") reapLobbyIfEmpty(prevWorld.id);
 
   const remembered =
     next.kind === "house" ? null : getRememberedPosition(state.playerId, next);
@@ -1276,7 +1425,11 @@ io.on("connection", (socket) => {
   socket.on("lobby:create", ({ isPublic, name }) => {
     const player = players.get(socket.id);
     if (!player) return;
-    const lobby = createLobby({ isPublic: !!isPublic, name });
+    const lobby = createLobby({
+      isPublic: !!isPublic,
+      name,
+      ownerId: player.playerId,
+    });
     if (!lobby) {
       socket.emit("world:denied", {
         reason: "Too many lobbies open right now — try again later.",
@@ -2011,8 +2164,8 @@ io.on("connection", (socket) => {
     }
     if (player) {
       io.to(worldKey(player.world)).emit("player:leave", socket.id);
-      // players.delete above already ran, so the count reflects this leave.
-      if (player.world.kind === "lobby") reapLobbyIfEmpty(player.world.id);
+      // Lobbies persist when empty (owners delete them explicitly), so there's
+      // nothing to reap here.
     }
     console.log(`[-] ${socket.id}`);
   });

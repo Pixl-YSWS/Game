@@ -290,11 +290,16 @@ export class MainMenuScene extends Phaser.Scene {
         );
         return;
       }
-      for (const lobby of lobbies) list.append(this.lobbyRow(lobby, go));
+      for (const lobby of lobbies)
+        list.append(this.lobbyRow(lobby, modal, go));
     });
   }
 
-  private lobbyRow(lobby: LobbyInfo, go: (a: LobbyAction) => void): HTMLElement {
+  private lobbyRow(
+    lobby: LobbyInfo,
+    modal: { body: HTMLDivElement },
+    go: (a: LobbyAction) => void,
+  ): HTMLElement {
     const row = el("div", "pixl-row");
     row.append(el("div", "pixl-glyph", lobby.isPublic ? "🌐" : "🔒"));
     const main = el("div", "pixl-row-main");
@@ -308,11 +313,19 @@ export class MainMenuScene extends Phaser.Scene {
     );
     row.append(main);
 
+    if (lobby.mine) {
+      row.append(
+        domBtn(this, "Manage", () => this.renderLobbyManage(modal, lobby, go), {
+          variant: "grey",
+        }),
+      );
+    }
+
     const full = lobby.count >= lobby.capacity;
     const joinBtn = domBtn(this, full ? "Full" : "Join", () => {
       if (full) return;
-      if (lobby.isPublic) {
-        go({ type: "join", id: lobby.id });
+      if (lobby.isPublic || lobby.mine) {
+        go({ type: "join", id: lobby.id, password: lobby.password });
       } else {
         this.promptLobbyPassword(main, lobby, go);
       }
@@ -401,6 +414,104 @@ export class MainMenuScene extends Phaser.Scene {
     actions.append(back, createBtn);
     modal.body.append(actions);
     nameInput.focus();
+  }
+
+  private async manageLobby(
+    params: Record<string, string>,
+  ): Promise<{ ok: boolean; lobby?: LobbyInfo; deleted?: boolean }> {
+    const token = getSessionToken();
+    if (!token) return { ok: false };
+    const qs = new URLSearchParams({ token, ...params }).toString();
+    try {
+      const r = await fetch(`${SERVER_URL}/api/lobby/manage?${qs}`, {
+        method: "POST",
+      });
+      return await r.json();
+    } catch {
+      return { ok: false };
+    }
+  }
+
+  // Owner controls for one lobby: live count, rename, visibility, password, delete.
+  private renderLobbyManage(
+    modal: { body: HTMLDivElement },
+    lobby: LobbyInfo,
+    go: (a: LobbyAction) => void,
+  ) {
+    modal.body.replaceChildren();
+    modal.body.append(el("div", "pixl-sub", lobby.name));
+
+    const meta = el(
+      "div",
+      "pixl-row-meta",
+      `${lobby.count}/${lobby.capacity} players · ${lobby.isPublic ? "public 🌐" : "private 🔒"}`,
+    );
+    meta.style.textAlign = "center";
+    modal.body.append(meta);
+
+    if (!lobby.isPublic && lobby.password) {
+      const pw = el("div", "pixl-sub", `Password: ${lobby.password}`);
+      modal.body.append(pw);
+    }
+
+    const nameRow = el("div");
+    nameRow.style.cssText = "display:flex; gap:8px; margin-top:10px;";
+    const nameInput = el("input", "pixl-input");
+    nameInput.value = lobby.name;
+    nameInput.maxLength = 30;
+    nameInput.style.flex = "1";
+    nameRow.append(
+      nameInput,
+      domBtn(this, "Rename", async () => {
+        const res = await this.manageLobby({
+          id: lobby.id,
+          action: "rename",
+          name: nameInput.value.trim(),
+        });
+        if (res.ok && res.lobby) this.renderLobbyManage(modal, res.lobby, go);
+      }),
+    );
+    modal.body.append(nameRow);
+
+    const visRow = el("div", "pixl-actions");
+    visRow.append(
+      domBtn(
+        this,
+        lobby.isPublic ? "Make Private" : "Make Public",
+        async () => {
+          const res = await this.manageLobby({
+            id: lobby.id,
+            action: "visibility",
+            public: lobby.isPublic ? "0" : "1",
+          });
+          if (res.ok && res.lobby) this.renderLobbyManage(modal, res.lobby, go);
+        },
+        { variant: "grey" },
+      ),
+    );
+    modal.body.append(visRow);
+
+    const actions = el("div", "pixl-actions");
+    actions.style.marginTop = "12px";
+    const back = domBtn(this, "Back", () => this.renderLobbyList(modal, go), {
+      variant: "grey",
+    });
+    const enter = domBtn(this, "Enter", () =>
+      go({ type: "join", id: lobby.id, password: lobby.password }),
+    );
+    // Two-press delete so a stray click can't nuke the lobby.
+    let armed = false;
+    const del = domBtn(this, "Delete", async () => {
+      if (!armed) {
+        armed = true;
+        del.textContent = "Confirm delete?";
+        return;
+      }
+      const res = await this.manageLobby({ id: lobby.id, action: "delete" });
+      if (res.ok) this.renderLobbyList(modal, go);
+    });
+    actions.append(back, enter, del);
+    modal.body.append(actions);
   }
 
   private logout() {

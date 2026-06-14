@@ -26,6 +26,10 @@ export interface LobbyInfo {
   isPublic: boolean;
   count: number;
   capacity: number;
+  // Set for the requesting owner: lets the client show a Manage button and,
+  // for private lobbies, reveal the password so the owner can share it.
+  mine?: boolean;
+  password?: string;
 }
 
 // A lobby join requested from the menu before a concrete lobby id is known.
