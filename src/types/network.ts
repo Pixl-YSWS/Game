@@ -14,7 +14,25 @@ export interface PlayerState {
 export type WorldRef =
   | { kind: "openworld" }
   | { kind: "house" }
-  | { kind: "village"; ownerPlayerId: string };
+  | { kind: "village"; ownerPlayerId: string }
+  // A capped, instanceable shared overworld. Public lobbies are auto-filled by
+  // matchmaking; private ones are joined by their short code (which is the id).
+  | { kind: "lobby"; id: string };
+
+// Summary of a lobby for the browser/quick-join UI.
+export interface LobbyInfo {
+  id: string;
+  name: string;
+  isPublic: boolean;
+  count: number;
+  capacity: number;
+}
+
+// A lobby join requested from the menu before a concrete lobby id is known.
+export type LobbyAction =
+  | { type: "quick" }
+  | { type: "create"; isPublic: boolean; name?: string }
+  | { type: "join"; id: string; password?: string };
 
 export interface MapEdit {
   layer: "ground" | "deco";
@@ -72,6 +90,9 @@ export interface WorldState {
   // Last-seen wandering positions of this village's NPCs/animals, restored so
   // the world looks the same as the owner left it. Only sent for villages.
   entities?: VillageEntities;
+  // Lobby metadata, only present in lobby worlds. `password` is included for
+  // private lobbies (you already have access, so members can share the code).
+  lobby?: { name: string; isPublic: boolean; password?: string };
 }
 
 // Live positions of a village's wandering NPCs and animals, persisted so the
@@ -272,6 +293,9 @@ export interface ServerToClientEvents {
   }) => void;
 
   "hackatime:stats": (data: HackatimeStats) => void;
+
+  // The current list of joinable public lobbies (response to lobby:list).
+  "lobby:list": (data: { lobbies: LobbyInfo[] }) => void;
 }
 
 export interface ChatMessage {
@@ -283,6 +307,18 @@ export interface ChatMessage {
 export interface ClientToServerEvents {
   "player:move": (payload: { cx: number; cy: number }) => void;
   "world:enter": (payload: WorldRef) => void;
+
+  /** Drop into the least-full public lobby, spinning up a new one if all are
+   *  full. The server replies by switching the player in (world:state). */
+  "lobby:quickJoin": () => void;
+  /** Create a lobby and enter it. Private lobbies are reachable only via their
+   *  code (the lobby id, echoed back in world:state). */
+  "lobby:create": (payload: { isPublic: boolean; name?: string }) => void;
+  /** Join a specific lobby by id. Private lobbies require their 4-digit
+   *  password; public lobbies ignore it. */
+  "lobby:join": (payload: { id: string; password?: string }) => void;
+  /** Request the current list of joinable public lobbies. */
+  "lobby:list": () => void;
 
   /** Entering/leaving a private house interior — hides the player from
    *  everyone else in their current world while inside. */

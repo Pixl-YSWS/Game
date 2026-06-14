@@ -10,6 +10,7 @@ import type {
   WorldState,
   MapEdit,
   NpcEdit,
+  LobbyAction,
 } from "../types/network";
 import type { MapDef, MapObject, NpcDef } from "../types/map";
 import { generateMap, generateVillage } from "../world/MapGen";
@@ -138,6 +139,8 @@ export class WorldScene extends Phaser.Scene {
   private ui?: UIScene;
 
   private world: WorldRef = { kind: "village", ownerPlayerId: getAccountId() };
+  // Lobby name/visibility/password for the world we're in (lobby worlds only).
+  private lobbyMeta?: { name: string; isPublic: boolean; password?: string };
 
   private myChar = 0;
 
@@ -145,13 +148,23 @@ export class WorldScene extends Phaser.Scene {
   private myVerified = false;
 
   private initialWorld?: WorldRef;
+  // A lobby join requested from the menu. Lobbies need server-assigned ids, so
+  // they go through the lobby:* events rather than a concrete WorldRef.
+  private lobbyAction?: LobbyAction;
 
   constructor() {
     super({ key: "WorldScene" });
   }
 
-  init(data?: { initialWorld?: WorldRef }) {
+  init(data?: { initialWorld?: WorldRef; lobbyAction?: LobbyAction }) {
     this.initialWorld = data?.initialWorld;
+    this.lobbyAction = data?.lobbyAction;
+  }
+
+  private runLobbyAction(a: LobbyAction) {
+    if (a.type === "quick") gameSocket.quickJoinLobby();
+    else if (a.type === "create") gameSocket.createLobby(a.isPublic, a.name);
+    else gameSocket.joinLobby(a.id, a.password);
   }
 
   create() {
@@ -453,7 +466,7 @@ export class WorldScene extends Phaser.Scene {
       this.lastTileCy = cy;
 
       if (this.world.kind === "house" && this.doorTiles.has(`${cx},${cy}`)) {
-        gameSocket.enterWorld({ kind: "openworld" });
+        gameSocket.quickJoinLobby();
       }
     }
 
@@ -539,12 +552,12 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private usePortal() {
-    if (this.world.kind === "openworld") {
+    if (this.world.kind === "openworld" || this.world.kind === "lobby") {
       this.showLoadingOverlay("Entering your village…");
       gameSocket.enterWorld({ kind: "village", ownerPlayerId: getAccountId() });
     } else {
-      this.showLoadingOverlay("Returning to the open world…");
-      gameSocket.enterWorld({ kind: "openworld" });
+      this.showLoadingOverlay("Finding a lobby…");
+      gameSocket.quickJoinLobby();
     }
   }
 
@@ -938,12 +951,12 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private enterHouse(doorCx: number, doorCy: number) {
-    if (this.world.kind === "openworld") {
+    if (this.world.kind === "openworld" || this.world.kind === "lobby") {
       gameSocket.enterWorld({ kind: "house" });
       return;
     }
     if (this.world.kind === "house") {
-      gameSocket.enterWorld({ kind: "openworld" });
+      gameSocket.quickJoinLobby();
       return;
     }
 
@@ -999,6 +1012,7 @@ export class WorldScene extends Phaser.Scene {
   isEditableWorld(): boolean {
     return (
       this.world.kind === "openworld" ||
+      this.world.kind === "lobby" ||
       this.world.kind === "house" ||
       this.world.kind === "village"
     );
@@ -1207,6 +1221,7 @@ export class WorldScene extends Phaser.Scene {
     this.npcSocialTimer?.remove(false);
     this.npcSocialTimer = undefined;
     this.world = state.world;
+    this.lobbyMeta = state.lobby;
 
     this.isoMap?.destroy();
     this.oceanTimer?.remove(false);
@@ -1453,6 +1468,12 @@ export class WorldScene extends Phaser.Scene {
       label = "Open World  [E] house/portal  [N] inbox  [Tab] players";
     } else if (this.world.kind === "house") {
       label = "Shared House  walk through the doorway to exit  [Tab] players";
+    } else if (this.world.kind === "lobby") {
+      const name = this.lobbyMeta?.name ?? this.world.id;
+      const pass = this.lobbyMeta?.password
+        ? `  🔒 ${this.lobbyMeta.password}`
+        : "";
+      label = `${name}${pass}  [E] portal  [Tab] players`;
     } else if (this.world.ownerPlayerId === getAccountId()) {
       label = "Your Village  [E] portal  [Tab] players";
     } else {
@@ -1539,8 +1560,14 @@ export class WorldScene extends Phaser.Scene {
         );
         this.rebuildWorld(world);
 
+        const action = this.lobbyAction;
+        this.lobbyAction = undefined;
         const wanted = this.initialWorld;
         this.initialWorld = undefined;
+        if (action) {
+          this.runLobbyAction(action);
+          return;
+        }
         if (!wanted) return;
         const sameVillage =
           wanted.kind === "village" &&
@@ -1616,6 +1643,7 @@ export class WorldScene extends Phaser.Scene {
     });
 
     gameSocket.on("world:denied", ({ reason }) => {
+      this.hideLoadingOverlay();
       this.flashStatus(reason);
     });
 
@@ -1641,9 +1669,16 @@ export class WorldScene extends Phaser.Scene {
     });
 
     if (gameSocket.connected) {
-      const wanted = this.initialWorld ?? this.world;
-      this.initialWorld = undefined;
-      gameSocket.enterWorld(wanted);
+      if (this.lobbyAction) {
+        const action = this.lobbyAction;
+        this.lobbyAction = undefined;
+        this.initialWorld = undefined;
+        this.runLobbyAction(action);
+      } else {
+        const wanted = this.initialWorld ?? this.world;
+        this.initialWorld = undefined;
+        gameSocket.enterWorld(wanted);
+      }
     }
   }
 

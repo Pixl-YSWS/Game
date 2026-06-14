@@ -1,10 +1,7 @@
 import Phaser from "phaser";
-import { makeMenuButton, type MenuButton } from "../utils/MenuButton";
-import { FONT, FONT_TITLE, FONT_NARROW, COLORS } from "../ui/theme";
-import { panel, closeButton, fitModal } from "../ui/UIKit";
+import { openDomModal, domBtn, el, type DomModal } from "../ui/dom";
 import { getCustomSkin, setCustomSkin } from "../network/playerIdentity";
 import { gameSocket } from "../network/socket";
-import { CozyAvatar } from "../entities/CozyAvatar";
 import {
   type Outfit,
   PRESET_OUTFITS,
@@ -13,9 +10,11 @@ import {
   clampOutfit,
   encodePresetChar,
   decodePresetChar,
+  outfitLayers,
   texNpcChar,
   NPC_CHARS,
-  ANIM,
+  FRAME_W,
+  FRAME_H,
   NUM_BODY,
   NUM_HAIR,
   NUM_TOP,
@@ -26,17 +25,19 @@ interface CharInit {
   from?: string;
 }
 
+// Idle facing-down, first frame: ANIM.idle.down[0] = row 2 * SHEET_COLS(5).
+const PREVIEW_FRAME = 10;
+
 export class CharacterScene extends Phaser.Scene {
   private fromKey?: string;
   private outfit: Outfit = { ...PRESET_OUTFITS[0] };
-  private preview?: CozyAvatar;
-  private valueLabels: Partial<Record<keyof Outfit, Phaser.GameObjects.Text>> =
-    {};
-  private steppers: MenuButton[] = [];
-  // Which pre-assembled character is selected (1..9), or null when using a
-  // custom outfit from the steppers.
+  // Selected pre-assembled character (1..NPC_CHARS), or null for a custom outfit.
   private selectedPreset: number | null = null;
-  private presetHighlights: Phaser.GameObjects.Rectangle[] = [];
+
+  private modal?: DomModal;
+  private previewBox?: HTMLDivElement;
+  private valueEls: Partial<Record<keyof Outfit, HTMLSpanElement>> = {};
+  private presetCells: HTMLDivElement[] = [];
 
   constructor() {
     super({ key: "CharacterScene" });
@@ -55,164 +56,149 @@ export class CharacterScene extends Phaser.Scene {
     if (this.fromKey) this.scene.pause(this.fromKey);
     this.events.once("shutdown", () => {
       if (this.fromKey) this.scene.resume(this.fromKey);
-      this.preview?.destroy();
+      this.modal?.destroy();
     });
 
-    const W = this.scale.width;
-    const H = this.scale.height;
-    this.add.zone(0, 0, W, H).setOrigin(0).setInteractive();
-
-    const panelW = 540;
-    const panelH = 470;
-    const px = (W - panelW) / 2;
-    const py = (H - panelH) / 2;
-    panel(this, W / 2, H / 2, panelW, panelH, "ui-panel-dark");
-    closeButton(this, px + panelW - 26, py + 24, () => this.scene.stop());
-    fitModal(this, panelW, panelH);
-
-    this.add
-      .text(W / 2, py + 30, "CUSTOMISE YOUR LOOK", {
-        fontFamily: FONT_TITLE,
-        fontSize: "18px",
-        color: COLORS.accent,
-      })
-      .setOrigin(0.5);
-
-    const previewX = px + 120;
-    const previewY = py + 150;
-    this.add
-      .rectangle(previewX, previewY - 4, 150, 190, 0x000000, 0.22)
-      .setStrokeStyle(1, 0xffffff, 0.12);
-    this.add.ellipse(previewX, previewY + 78, 70, 26, 0x000000, 0.25);
-    this.preview = new CozyAvatar(this, this.outfit);
-    this.preview.setPosition(previewX, previewY + 80).setScale(4);
-    this.preview.setAnim("idle", "down", false);
-
-    const rowX = px + 250;
-    const rowW = panelW - (rowX - px) - 30;
-    let y = py + 78;
-    const rowGap = 52;
-    this.buildStepper("Skin", "body", 1, NUM_BODY, rowX, y, rowW);
-    y += rowGap;
-    this.buildStepper("Hair", "hair", 0, NUM_HAIR, rowX, y, rowW);
-    y += rowGap;
-    this.buildStepper("Top", "top", 1, NUM_TOP, rowX, y, rowW);
-    y += rowGap;
-    this.buildStepper("Bottom", "bottom", 1, NUM_BOTTOM, rowX, y, rowW);
-
-    makeMenuButton(this, rowX + rowW / 2, y + rowGap - 4, "RANDOM", {
-      width: rowW,
-      height: 34,
-      variant: "grey",
-      onClick: () => this.randomise(),
+    const modal = openDomModal(this, {
+      title: "Customise your look",
+      width: 460,
+      onClose: () => this.scene.stop(),
     });
+    this.modal = modal;
 
-    this.buildCharacterPicker(px, py + 312, panelW);
+    // Top: preview on the left, outfit steppers on the right.
+    const top = el("div");
+    top.style.cssText = "display:flex; gap:20px; align-items:center;";
 
-    makeMenuButton(this, W / 2, py + panelH - 30, "DONE", {
-      width: 220,
-      height: 42,
-      onClick: () => this.scene.stop(),
-    });
+    this.previewBox = el("div");
+    this.previewBox.style.cssText = [
+      `width:${FRAME_W * 4}px`,
+      `height:${FRAME_H * 4}px`,
+      "position:relative",
+      "flex-shrink:0",
+      "background:rgba(0,0,0,0.22)",
+      "box-shadow:inset 0 0 0 2px rgba(255,255,255,0.12)",
+    ].join(";");
+    top.append(this.previewBox);
+
+    const steppers = el("div");
+    steppers.style.cssText = "flex:1; display:flex; flex-direction:column; gap:10px;";
+    steppers.append(
+      this.stepper("Skin", "body", 1, NUM_BODY),
+      this.stepper("Hair", "hair", 0, NUM_HAIR),
+      this.stepper("Top", "top", 1, NUM_TOP),
+      this.stepper("Bottom", "bottom", 1, NUM_BOTTOM),
+    );
+    top.append(steppers);
+    modal.body.append(top);
+
+    const randomRow = el("div", "pixl-actions");
+    randomRow.append(
+      domBtn(this, "Random", () => this.randomise(), { variant: "grey" }),
+    );
+    modal.body.append(randomRow);
+
+    modal.body.append(el("div", "pixl-sub", "— or pick a character —"));
+    modal.body.append(this.presetPicker());
+
+    const done = el("div", "pixl-actions");
+    done.append(domBtn(this, "Done", () => this.scene.stop(), { big: true }));
+    modal.body.append(done);
 
     this.refresh();
-    this.input.keyboard?.on("keydown-ESC", () => this.scene.stop());
   }
 
-  private buildCharacterPicker(px: number, y: number, panelW: number) {
-    this.add
-      .text(px + panelW / 2, y, "— OR PICK A CHARACTER —", {
-        fontFamily: FONT_NARROW,
-        fontSize: "12px",
-        color: COLORS.textDim,
-      })
-      .setOrigin(0.5);
-
-    const idleFrame = ANIM.idle.down[0];
-    const margin = 34;
-    const usable = panelW - margin * 2;
-    const gap = usable / NPC_CHARS;
-    const cellY = y + 42;
-    for (let n = 1; n <= NPC_CHARS; n++) {
-      const cx = px + margin + gap * (n - 0.5);
-      const bg = this.add
-        .rectangle(cx, cellY, gap - 6, 56, 0x000000, 0.25)
-        .setStrokeStyle(2, 0xf0a500, 0)
-        .setInteractive({ useHandCursor: true });
-      this.presetHighlights[n] = bg;
-      this.add
-        .sprite(cx, cellY + 22, texNpcChar(n), idleFrame)
-        .setOrigin(0.5, 1)
-        .setScale(1.5);
-      bg.on("pointerdown", () => this.selectPreset(n));
-    }
-  }
-
-  private selectPreset(n: number) {
-    this.selectedPreset = n;
-    this.preview?.setPresetChar(n);
-    this.preview?.setAnim("idle", "down", false);
-    this.updatePresetHighlights();
-    const encoded = encodePresetChar(n);
-    setCustomSkin(encoded);
-    if (gameSocket.connected) gameSocket.setSkin(encoded);
-  }
-
-  private updatePresetHighlights() {
-    for (let n = 1; n <= NPC_CHARS; n++) {
-      this.presetHighlights[n]?.setStrokeStyle(
-        2,
-        0xffd166,
-        this.selectedPreset === n ? 1 : 0,
-      );
-    }
-  }
-
-  private buildStepper(
+  private stepper(
     label: string,
     key: keyof Outfit,
     min: number,
     max: number,
-    x: number,
-    y: number,
-    w: number,
-  ) {
-    this.add
-      .text(x, y - 16, label, {
-        fontFamily: FONT_NARROW,
-        fontSize: "13px",
-        color: COLORS.textDim,
-      })
-      .setOrigin(0, 0.5);
+  ): HTMLElement {
+    const row = el("div");
+    row.style.cssText = "display:flex; align-items:center; gap:10px;";
+    const name = el("div", "pixl-row-meta", label);
+    name.style.cssText = "width:64px; font-size:14px;";
+
     const cycle = (delta: number) => {
       const span = max - min + 1;
       this.outfit[key] =
         min + ((((this.outfit[key] - min + delta) % span) + span) % span);
-      this.apply();
+      this.applyOutfit();
     };
-    this.steppers.push(
-      makeMenuButton(this, x + 16, y + 12, "<", {
-        width: 34,
-        height: 32,
-        variant: "grey",
-        onClick: () => cycle(-1),
-      }),
+    const value = el("span");
+    value.style.cssText = "flex:1; text-align:center; font-size:14px;";
+    this.valueEls[key] = value;
+
+    row.append(
+      name,
+      domBtn(this, "<", () => cycle(-1), { variant: "grey" }),
+      value,
+      domBtn(this, ">", () => cycle(1), { variant: "grey" }),
     );
-    this.valueLabels[key] = this.add
-      .text(x + w / 2, y + 12, "", {
-        fontFamily: FONT,
-        fontSize: "13px",
-        color: "#ffffff",
-      })
-      .setOrigin(0.5);
-    this.steppers.push(
-      makeMenuButton(this, x + w - 16, y + 12, ">", {
-        width: 34,
-        height: 32,
-        variant: "grey",
-        onClick: () => cycle(1),
-      }),
-    );
+    return row;
+  }
+
+  private presetPicker(): HTMLElement {
+    const row = el("div");
+    row.style.cssText =
+      "display:flex; gap:8px; justify-content:center; flex-wrap:wrap;";
+    this.presetCells = [];
+    for (let n = 1; n <= NPC_CHARS; n++) {
+      const cell = el("div");
+      cell.style.cssText = [
+        "padding:4px",
+        "background:rgba(0,0,0,0.25)",
+        "border:2px solid transparent",
+        "cursor:pointer",
+        "line-height:0",
+      ].join(";");
+      cell.append(this.avatarImg([texNpcChar(n)], 2));
+      cell.addEventListener("click", () => this.selectPreset(n));
+      this.presetCells[n] = cell;
+      row.append(cell);
+    }
+    return row;
+  }
+
+  // Stacks the avatar's layers as pixelated <img>s filling the container.
+  private avatarImg(keys: (string | null)[], scale: number): HTMLElement {
+    const box = el("div");
+    box.style.cssText = [
+      `width:${FRAME_W * scale}px`,
+      `height:${FRAME_H * scale}px`,
+      "position:relative",
+      "image-rendering:pixelated",
+    ].join(";");
+    for (const key of keys) {
+      if (!key) continue;
+      const img = el("img");
+      img.src = this.textures.getBase64(key, PREVIEW_FRAME);
+      img.style.cssText =
+        "position:absolute; inset:0; width:100%; height:100%; image-rendering:pixelated;";
+      box.append(img);
+    }
+    return box;
+  }
+
+  private renderPreview() {
+    if (!this.previewBox) return;
+    const keys =
+      this.selectedPreset != null
+        ? [texNpcChar(this.selectedPreset)]
+        : outfitLayers(this.outfit);
+    this.previewBox.replaceChildren();
+    const inner = this.avatarImg(keys, 4);
+    inner.style.position = "absolute";
+    inner.style.inset = "0";
+    this.previewBox.append(inner);
+  }
+
+  private selectPreset(n: number) {
+    this.selectedPreset = n;
+    const encoded = encodePresetChar(n);
+    setCustomSkin(encoded);
+    if (gameSocket.connected) gameSocket.setSkin(encoded);
+    this.refresh();
   }
 
   private randomise() {
@@ -224,32 +210,35 @@ export class CharacterScene extends Phaser.Scene {
       top: r(NUM_TOP),
       bottom: r(NUM_BOTTOM),
     };
-    this.apply();
+    this.applyOutfit();
+  }
+
+  // Tweaking the steppers/random means going back to a custom outfit.
+  private applyOutfit() {
+    this.selectedPreset = null;
+    const encoded = encodeOutfit(this.outfit);
+    setCustomSkin(encoded);
+    if (gameSocket.connected) gameSocket.setSkin(encoded);
+    this.refresh();
   }
 
   private refresh() {
     this.outfit = clampOutfit(this.outfit);
-    this.valueLabels.body?.setText(`${this.outfit.body} / ${NUM_BODY}`);
-    this.valueLabels.hair?.setText(
-      this.outfit.hair === 0 ? "none" : `${this.outfit.hair} / ${NUM_HAIR}`,
-    );
-    this.valueLabels.top?.setText(`${this.outfit.top} / ${NUM_TOP}`);
-    this.valueLabels.bottom?.setText(`${this.outfit.bottom} / ${NUM_BOTTOM}`);
-    if (this.selectedPreset) {
-      this.preview?.setPresetChar(this.selectedPreset);
-    } else {
-      this.preview?.setOutfit(this.outfit);
-    }
-    this.preview?.setAnim("idle", "down", false);
-    this.updatePresetHighlights();
-  }
+    const set = (key: keyof Outfit, text: string) => {
+      const node = this.valueEls[key];
+      if (node) node.textContent = text;
+    };
+    set("body", `${this.outfit.body} / ${NUM_BODY}`);
+    set("hair", this.outfit.hair === 0 ? "none" : `${this.outfit.hair} / ${NUM_HAIR}`);
+    set("top", `${this.outfit.top} / ${NUM_TOP}`);
+    set("bottom", `${this.outfit.bottom} / ${NUM_BOTTOM}`);
 
-  private apply() {
-    // Tweaking the steppers means going back to a custom outfit.
-    this.selectedPreset = null;
-    this.refresh();
-    const encoded = encodeOutfit(this.outfit);
-    setCustomSkin(encoded);
-    if (gameSocket.connected) gameSocket.setSkin(encoded);
+    for (let n = 1; n <= NPC_CHARS; n++) {
+      const cell = this.presetCells[n];
+      if (cell)
+        cell.style.borderColor =
+          this.selectedPreset === n ? "#ffd166" : "transparent";
+    }
+    this.renderPreview();
   }
 }

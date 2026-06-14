@@ -16,6 +16,7 @@ import type {
   ClientToServerEvents,
   WorldRef,
   WorldState,
+  LobbyInfo,
   Notification,
   HouseObject,
   InventoryEntry,
@@ -542,12 +543,18 @@ function getOrCreateSeed(playerId: string): number {
 function serializeWorld(w: WorldRef): string {
   if (w.kind === "openworld") return "openworld";
   if (w.kind === "house") return "house";
+  if (w.kind === "lobby") return `lobby:${w.id}`;
   return `village:${w.ownerPlayerId}`;
 }
 
 function deserializeWorld(s: string): WorldRef | null {
   if (s === "openworld") return { kind: "openworld" };
   if (s === "house") return { kind: "house" };
+  if (s.startsWith("lobby:")) {
+    const id = s.slice("lobby:".length);
+    if (!id) return null;
+    return { kind: "lobby", id };
+  }
   if (s.startsWith("village:")) {
     const ownerPlayerId = s.slice("village:".length);
     if (!ownerPlayerId) return null;
@@ -620,17 +627,23 @@ async function migrateLegacyJson() {
   }
 }
 
-type WorldKey = "openworld" | "house" | `village:${string}`;
+type WorldKey =
+  | "openworld"
+  | "house"
+  | `village:${string}`
+  | `lobby:${string}`;
 
 function worldKey(world: WorldRef): WorldKey {
   if (world.kind === "openworld") return "openworld";
   if (world.kind === "house") return "house";
+  if (world.kind === "lobby") return `lobby:${world.id}`;
   return `village:${world.ownerPlayerId}`;
 }
 
 function worldSeed(world: WorldRef): number {
   if (world.kind === "openworld") return OPENWORLD_SEED;
   if (world.kind === "house") return 0;
+  if (world.kind === "lobby") return lobbies.get(world.id)?.seed ?? OPENWORLD_SEED;
   return getOrCreateSeed(world.ownerPlayerId);
 }
 
@@ -692,7 +705,8 @@ function mapFor(world: WorldRef) {
         ? makeHouseInterior()
         : world.kind === "village"
           ? generateVillage()
-          : generateMap(worldSeed(world), { houses: false });
+          : // openworld and lobbies share the same overworld generator
+            generateMap(worldSeed(world), { houses: false });
     applyMapOverrides(m, overridesFor(key));
     m.npcs = applyNpcEdits(m.npcs, npcEditsFor(key));
     mapCache.set(key, m);
@@ -736,6 +750,22 @@ app.get("/api/villages", (req, res) => {
   res.json({ ok: true, villages });
 });
 
+// All joinable lobbies (public and private) for the browser. Passwords are
+// never included — private lobbies are flagged so the client can prompt.
+app.get("/api/lobbies", (req, res) => {
+  const token =
+    (typeof req.query.token === "string" && req.query.token) ||
+    (req.headers.authorization?.startsWith("Bearer ")
+      ? req.headers.authorization.slice(7)
+      : "");
+  const account = token ? auth.verifySession(token) : null;
+  if (!account) {
+    res.status(401).json({ ok: false });
+    return;
+  }
+  res.json({ ok: true, lobbies: [...lobbies.values()].map(lobbyInfo) });
+});
+
 const httpServer = createServer(app);
 const io = new Server<ClientToServerEvents, ServerToClientEvents>(httpServer, {
   cors: { origin: "*" },
@@ -769,6 +799,108 @@ interface ServerPlayerState extends Omit<PlayerState, "skin"> {
 const players = new Map<string, ServerPlayerState>();
 
 const liveByAccount = new Map<string, string>();
+
+// ── Lobbies ──────────────────────────────────────────────────────────
+// Capped, instanceable shared overworlds. Each lobby is its own Socket.IO
+// room (worldKey "lobby:<id>"), so capping membership bounds the per-room
+// movement/voice fan-out. Lobbies are ephemeral and in-memory: they vanish
+// once empty. Member counts are derived from `players` so they can't drift.
+interface Lobby {
+  id: string;
+  name: string;
+  isPublic: boolean;
+  // Auto-generated 4-digit code required to join a private lobby. Empty for
+  // public lobbies. Sent only to members (via world:state), never in listings.
+  password: string;
+  capacity: number;
+  seed: number;
+  createdAt: number;
+}
+const lobbies = new Map<string, Lobby>();
+const PUBLIC_LOBBY_CAPACITY = 16;
+const MAX_LOBBIES = 200;
+
+function randomLobbySeed(): number {
+  return (Math.random() * 0xffffffff) >>> 0;
+}
+
+function gen4DigitPassword(): string {
+  return Math.floor(1000 + Math.random() * 9000).toString();
+}
+
+// Short, human-shareable join code; doubles as the lobby id. Avoids
+// visually-ambiguous characters (0/O, 1/I).
+function genLobbyCode(len = 5): string {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let code: string;
+  do {
+    code = "";
+    for (let i = 0; i < len; i++)
+      code += alphabet[Math.floor(Math.random() * alphabet.length)];
+  } while (lobbies.has(code));
+  return code;
+}
+
+function lobbyMemberCount(id: string): number {
+  let n = 0;
+  for (const p of players.values())
+    if (p.world.kind === "lobby" && p.world.id === id) n++;
+  return n;
+}
+
+function lobbyInfo(l: Lobby): LobbyInfo {
+  return {
+    id: l.id,
+    name: l.name,
+    isPublic: l.isPublic,
+    count: lobbyMemberCount(l.id),
+    capacity: l.capacity,
+  };
+}
+
+function publicLobbyList(): LobbyInfo[] {
+  return [...lobbies.values()].filter((l) => l.isPublic).map(lobbyInfo);
+}
+
+function createLobby(opts: { isPublic: boolean; name?: string }): Lobby | null {
+  if (lobbies.size >= MAX_LOBBIES) return null;
+  const id = genLobbyCode();
+  const name =
+    (typeof opts.name === "string" ? opts.name.trim().slice(0, 30) : "") ||
+    (opts.isPublic ? `Lobby ${id}` : `Private ${id}`);
+  const lobby: Lobby = {
+    id,
+    name,
+    isPublic: opts.isPublic,
+    password: opts.isPublic ? "" : gen4DigitPassword(),
+    capacity: PUBLIC_LOBBY_CAPACITY,
+    seed: randomLobbySeed(),
+    createdAt: Date.now(),
+  };
+  lobbies.set(id, lobby);
+  return lobby;
+}
+
+// Pick the fullest public lobby that still has room — keeps lobbies lively and
+// minimises near-empty instances — spinning up a new one if none have space.
+function pickPublicLobby(): Lobby | null {
+  let best: Lobby | null = null;
+  let bestCount = -1;
+  for (const l of lobbies.values()) {
+    if (!l.isPublic) continue;
+    const c = lobbyMemberCount(l.id);
+    if (c < l.capacity && c > bestCount) {
+      best = l;
+      bestCount = c;
+    }
+  }
+  return best ?? createLobby({ isPublic: true });
+}
+
+// Drop a lobby once the last player leaves so instances don't accumulate.
+function reapLobbyIfEmpty(id: string) {
+  if (lobbyMemberCount(id) === 0) lobbies.delete(id);
+}
 
 const OPENWORLD_REQUIRES_VERIFIED =
   process.env.OPENWORLD_VERIFIED_ONLY === "true";
@@ -868,6 +1000,22 @@ function worldStateFor(state: ServerPlayerState): WorldState {
       state.world.kind === "village"
         ? loadVillageEntities(state.world.ownerPlayerId)
         : undefined,
+    lobby: lobbyMetaFor(state.world),
+  };
+}
+
+// Member-facing lobby metadata for world:state. Private lobbies include the
+// password so members can share it; public lobbies omit it.
+function lobbyMetaFor(
+  world: WorldRef,
+): { name: string; isPublic: boolean; password?: string } | undefined {
+  if (world.kind !== "lobby") return undefined;
+  const l = lobbies.get(world.id);
+  if (!l) return undefined;
+  return {
+    name: l.name,
+    isPublic: l.isPublic,
+    password: l.isPublic ? undefined : l.password,
   };
 }
 
@@ -880,6 +1028,7 @@ function switchWorld(
 ) {
   const state = players.get(socket.id);
   if (!state) return;
+  const prevWorld = state.world;
   const oldRoom = worldKey(state.world);
   const newRoom = worldKey(next);
   if (oldRoom === newRoom) return;
@@ -891,6 +1040,8 @@ function switchWorld(
 
   state.world = next;
   state.hidden = false;
+  // The player has left their previous world; drop it if it was an empty lobby.
+  if (prevWorld.kind === "lobby") reapLobbyIfEmpty(prevWorld.id);
 
   const remembered =
     next.kind === "house" ? null : getRememberedPosition(state.playerId, next);
@@ -948,6 +1099,9 @@ io.on("connection", (socket) => {
       saved.position.world.ownerPlayerId === playerId) &&
     (saved.position.world.kind !== "openworld" ||
       canEnterOpenworld({ verified: account.verified, playerId })) &&
+    // Lobbies are ephemeral — don't restore into one that no longer exists.
+    (saved.position.world.kind !== "lobby" ||
+      lobbies.has(saved.position.world.id)) &&
     isWalkable(saved.position.world, saved.position.cx, saved.position.cy)
   ) {
     world = saved.position.world;
@@ -1073,6 +1227,20 @@ io.on("connection", (socket) => {
       return;
     }
 
+    if (target.kind === "lobby") {
+      const lobby = lobbies.get(target.id);
+      if (!lobby) {
+        socket.emit("world:denied", { reason: "That lobby no longer exists." });
+        return;
+      }
+      if (lobbyMemberCount(lobby.id) >= lobby.capacity) {
+        socket.emit("world:denied", { reason: "That lobby is full." });
+        return;
+      }
+      switchWorld(socket, target);
+      return;
+    }
+
     if (target.ownerPlayerId === player.playerId) {
       switchWorld(socket, target);
       return;
@@ -1086,6 +1254,62 @@ io.on("connection", (socket) => {
       return;
     }
     socket.emit("invite:error", { reason: "no_invite" });
+  });
+
+  socket.on("lobby:list", () => {
+    socket.emit("lobby:list", { lobbies: publicLobbyList() });
+  });
+
+  socket.on("lobby:quickJoin", () => {
+    const player = players.get(socket.id);
+    if (!player) return;
+    const lobby = pickPublicLobby();
+    if (!lobby) {
+      socket.emit("world:denied", {
+        reason: "All lobbies are full right now — try again in a moment.",
+      });
+      return;
+    }
+    switchWorld(socket, { kind: "lobby", id: lobby.id });
+  });
+
+  socket.on("lobby:create", ({ isPublic, name }) => {
+    const player = players.get(socket.id);
+    if (!player) return;
+    const lobby = createLobby({ isPublic: !!isPublic, name });
+    if (!lobby) {
+      socket.emit("world:denied", {
+        reason: "Too many lobbies open right now — try again later.",
+      });
+      return;
+    }
+    switchWorld(socket, { kind: "lobby", id: lobby.id });
+  });
+
+  socket.on("lobby:join", ({ id, password }) => {
+    const player = players.get(socket.id);
+    if (!player) return;
+    const key = typeof id === "string" ? id.trim().toUpperCase() : "";
+    const lobby = key ? lobbies.get(key) : undefined;
+    if (!lobby) {
+      socket.emit("world:denied", { reason: "That lobby no longer exists." });
+      return;
+    }
+    // Already a member? Just resend state (no password needed to stay).
+    const isMember =
+      player.world.kind === "lobby" && player.world.id === lobby.id;
+    if (!isMember && !lobby.isPublic) {
+      const given = typeof password === "string" ? password.trim() : "";
+      if (given !== lobby.password) {
+        socket.emit("world:denied", { reason: "Wrong lobby password." });
+        return;
+      }
+    }
+    if (!isMember && lobbyMemberCount(lobby.id) >= lobby.capacity) {
+      socket.emit("world:denied", { reason: "That lobby is full." });
+      return;
+    }
+    switchWorld(socket, { kind: "lobby", id: lobby.id });
   });
 
   socket.on("players:list", () => {
@@ -1787,6 +2011,8 @@ io.on("connection", (socket) => {
     }
     if (player) {
       io.to(worldKey(player.world)).emit("player:leave", socket.id);
+      // players.delete above already ran, so the count reflects this leave.
+      if (player.world.kind === "lobby") reapLobbyIfEmpty(player.world.id);
     }
     console.log(`[-] ${socket.id}`);
   });

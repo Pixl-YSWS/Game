@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { domBtn, el, injectStyles } from "../ui/dom";
+import { domBtn, el, injectStyles, openDomModal } from "../ui/dom";
 import { CURSORS } from "../ui/theme";
 import {
   getAccountId,
@@ -8,7 +8,7 @@ import {
   clearSession,
 } from "../network/playerIdentity";
 import { gameSocket, SERVER_URL } from "../network/socket";
-import type { WorldRef } from "../types/network";
+import type { WorldRef, LobbyAction, LobbyInfo } from "../types/network";
 
 interface JoinableVillage {
   ownerId: string;
@@ -112,9 +112,7 @@ export class MainMenuScene extends Phaser.Scene {
       addBtn("Join Village", () =>
         this.startWorld({ kind: "village", ownerPlayerId: getAccountId() }),
       );
-      addBtn("Join Open World", () =>
-        this.startWorld({ kind: "openworld" }),
-      );
+      addBtn("Lobbies", () => this.openLobbyPanel());
 
       for (const v of villages) {
         addBtn(`Visit ${v.name}`, () =>
@@ -181,10 +179,22 @@ export class MainMenuScene extends Phaser.Scene {
 
     document.body.append(this.root);
 
+    // The menu root is an opaque full-screen overlay (z-50), so it covers any
+    // modal (z-40) launched on top. Hide it while a sub-scene (Character,
+    // Settings, …) is paused over us, and restore it when we resume.
+    this.events.on("pause", () => this.showRoot(false));
+    this.events.on("resume", () => this.showRoot(true));
+    this.events.on("sleep", () => this.showRoot(false));
+    this.events.on("wake", () => this.showRoot(true));
+
     this.events.once("shutdown", () => {
       this.root?.remove();
       this.root = undefined;
     });
+  }
+
+  private showRoot(show: boolean) {
+    if (this.root) this.root.style.display = show ? "flex" : "none";
   }
 
   private async fetchVillages(): Promise<JoinableVillage[]> {
@@ -207,6 +217,190 @@ export class MainMenuScene extends Phaser.Scene {
 
   private startWorld(world: WorldRef | undefined) {
     this.scene.start("WorldScene", { initialWorld: world });
+  }
+
+  private startLobby(action: LobbyAction) {
+    this.scene.start("WorldScene", { lobbyAction: action });
+  }
+
+  private async fetchLobbies(): Promise<LobbyInfo[]> {
+    const token = getSessionToken();
+    if (!token) return [];
+    try {
+      const r = await fetch(
+        `${SERVER_URL}/api/lobbies?token=${encodeURIComponent(token)}`,
+      );
+      if (!r.ok) return [];
+      const d = (await r.json()) as { ok: boolean; lobbies?: LobbyInfo[] };
+      return d.ok ? (d.lobbies ?? []) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  // Lobby browser: list every joinable lobby, quick-join, or create your own.
+  // Private lobbies need their 4-digit password to join.
+  private openLobbyPanel() {
+    // This modal is opened in-scene (the menu isn't paused), so hide the opaque
+    // menu root ourselves while it's up, then restore it on close.
+    this.showRoot(false);
+    const modal = openDomModal(this, {
+      title: "Lobbies",
+      width: 420,
+      onClose: () => {
+        this.showRoot(true);
+        modal.destroy();
+      },
+    });
+    const go = (a: LobbyAction) => {
+      modal.destroy();
+      this.startLobby(a);
+    };
+    this.renderLobbyList(modal, go);
+  }
+
+  private renderLobbyList(
+    modal: { body: HTMLDivElement },
+    go: (a: LobbyAction) => void,
+  ) {
+    modal.body.replaceChildren();
+
+    const top = el("div", "pixl-actions");
+    const quick = domBtn(this, "Quick Join", () => go({ type: "quick" }));
+    const create = domBtn(
+      this,
+      "Create Lobby",
+      () => this.renderLobbyCreate(modal, go),
+      { variant: "grey" },
+    );
+    top.append(quick, create);
+    modal.body.append(top);
+
+    const list = el("div", "pixl-list");
+    const loading = el("div", "pixl-row-meta", "Loading lobbies…");
+    list.append(loading);
+    modal.body.append(list);
+
+    this.fetchLobbies().then((lobbies) => {
+      if (!list.isConnected) return;
+      list.replaceChildren();
+      if (lobbies.length === 0) {
+        list.append(
+          el("div", "pixl-row-meta", "No lobbies yet — create one!"),
+        );
+        return;
+      }
+      for (const lobby of lobbies) list.append(this.lobbyRow(lobby, go));
+    });
+  }
+
+  private lobbyRow(lobby: LobbyInfo, go: (a: LobbyAction) => void): HTMLElement {
+    const row = el("div", "pixl-row");
+    row.append(el("div", "pixl-glyph", lobby.isPublic ? "🌐" : "🔒"));
+    const main = el("div", "pixl-row-main");
+    main.append(
+      el("div", "pixl-row-name", lobby.name),
+      el(
+        "div",
+        "pixl-row-meta",
+        `${lobby.count}/${lobby.capacity}${lobby.isPublic ? "" : " · private"}`,
+      ),
+    );
+    row.append(main);
+
+    const full = lobby.count >= lobby.capacity;
+    const joinBtn = domBtn(this, full ? "Full" : "Join", () => {
+      if (full) return;
+      if (lobby.isPublic) {
+        go({ type: "join", id: lobby.id });
+      } else {
+        this.promptLobbyPassword(main, lobby, go);
+      }
+    });
+    if (full) joinBtn.disabled = true;
+    row.append(joinBtn);
+    return row;
+  }
+
+  // Inline 4-digit password entry for joining a private lobby.
+  private promptLobbyPassword(
+    container: HTMLElement,
+    lobby: LobbyInfo,
+    go: (a: LobbyAction) => void,
+  ) {
+    const existing = container.parentElement?.querySelector(".pixl-pass-row");
+    if (existing) {
+      (existing.querySelector("input") as HTMLInputElement)?.focus();
+      return;
+    }
+    const row = el("div", "pixl-pass-row");
+    row.style.cssText = "display:flex; gap:8px; margin-top:6px;";
+    const input = el("input", "pixl-input");
+    input.placeholder = "4-digit code";
+    input.maxLength = 4;
+    input.inputMode = "numeric";
+    input.style.flex = "1";
+    const enter = domBtn(this, "Go", () => {
+      const password = input.value.trim();
+      if (password.length === 4) go({ type: "join", id: lobby.id, password });
+    });
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") enter.click();
+    });
+    row.append(input, enter);
+    container.append(row);
+    input.focus();
+  }
+
+  private renderLobbyCreate(
+    modal: { body: HTMLDivElement },
+    go: (a: LobbyAction) => void,
+  ) {
+    modal.body.replaceChildren();
+
+    const nameInput = el("input", "pixl-input");
+    nameInput.placeholder = "Lobby name (optional)";
+    nameInput.maxLength = 30;
+    nameInput.style.width = "100%";
+    modal.body.append(nameInput);
+
+    let isPublic = true;
+    const toggleRow = el("div", "pixl-actions");
+    toggleRow.style.marginTop = "10px";
+    const pubBtn = domBtn(this, "Public", () => setPublic(true));
+    const privBtn = domBtn(this, "Private", () => setPublic(false), {
+      variant: "grey",
+    });
+    const setPublic = (v: boolean) => {
+      isPublic = v;
+      pubBtn.classList.toggle("grey", !v);
+      privBtn.classList.toggle("grey", v);
+    };
+    toggleRow.append(pubBtn, privBtn);
+    modal.body.append(toggleRow);
+
+    const hint = el(
+      "div",
+      "pixl-row-meta",
+      "Private lobbies get a 4-digit password to share.",
+    );
+    hint.style.marginTop = "8px";
+    modal.body.append(hint);
+
+    const actions = el("div", "pixl-actions");
+    actions.style.marginTop = "12px";
+    const back = domBtn(
+      this,
+      "Back",
+      () => this.renderLobbyList(modal, go),
+      { variant: "grey" },
+    );
+    const createBtn = domBtn(this, "Create", () =>
+      go({ type: "create", isPublic, name: nameInput.value.trim() || undefined }),
+    );
+    actions.append(back, createBtn);
+    modal.body.append(actions);
+    nameInput.focus();
   }
 
   private logout() {

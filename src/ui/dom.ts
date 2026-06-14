@@ -113,6 +113,14 @@ export function injectStyles(): void {
 .pixl-btn.grey:hover:not(:disabled) { background: #7d6749; }
 .pixl-btn.big { font-size: 17px; padding: 11px 24px 9px; }
 .pixl-actions { display: flex; gap: 14px; justify-content: center; margin-top: 12px; flex-wrap: wrap; }
+.pixl-input {
+  font-family: inherit; font-size: 15px;
+  background: #2a1d10; color: #f4e3c2;
+  border: 3px solid #17100a; padding: 9px 12px 7px;
+  box-shadow: inset 2px 2px 0 #17100a;
+}
+.pixl-input:focus { outline: 2px solid #ffd166; outline-offset: 2px; }
+.pixl-input::placeholder { color: #9a835f; }
 .pixl-statusline { display: flex; align-items: center; gap: 10px; font-size: 14px; }
 .pixl-statusline .pixl-grow { flex: 1; min-width: 0; }
 .pixl-toast { min-height: 20px; text-align: center; font-size: 14px; margin-top: 6px; }

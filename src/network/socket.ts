@@ -116,6 +116,22 @@ class GameSocket {
     this.socket?.emit("world:enter", world);
   }
 
+  quickJoinLobby() {
+    this.socket?.emit("lobby:quickJoin");
+  }
+
+  createLobby(isPublic: boolean, name?: string) {
+    this.socket?.emit("lobby:create", { isPublic, name });
+  }
+
+  joinLobby(id: string, password?: string) {
+    this.socket?.emit("lobby:join", { id, password });
+  }
+
+  listLobbies() {
+    this.socket?.emit("lobby:list");
+  }
+
   setInterior(inside: boolean) {
     this.socket?.emit("interior:set", { inside });
   }
