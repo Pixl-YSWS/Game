@@ -1,8 +1,8 @@
 import Phaser from "phaser";
 import { DialogueBox } from "../ui/DialogueBox";
 import { ChatBox } from "../ui/ChatBox";
-import { FONT, FONT_TITLE, COLORS, CURSORS, EMOTE_ATLAS } from "../ui/theme";
-import { panel, playUiSound, uiImage } from "../ui/UIKit";
+import { COLORS, CURSORS, EMOTE_ATLAS } from "../ui/theme";
+import { playUiSound } from "../ui/UIKit";
 import { el, openDomModal, type DomModal } from "../ui/dom";
 import { EMOTES, QUICK_EMOTES } from "../ui/emotes";
 import { gameSocket } from "../network/socket";
@@ -12,9 +12,6 @@ import { musicEngine } from "../audio/MusicEngine";
 import { voiceChat } from "../audio/VoiceChat";
 import { eventToKeyName, prettyKey } from "./SettingsScene";
 import type { ChatMessage, PlayerDirEntry, ModRole } from "../types/network";
-
-type Movable = Phaser.GameObjects.GameObject &
-  Phaser.GameObjects.Components.Transform;
 
 type GameplayScene = Phaser.Scene & {
   setTouchDir(dx: number, dy: number): void;
@@ -33,7 +30,15 @@ function injectHudStyles() {
 #pixl-hud {
   position: fixed; inset: 0; pointer-events: none; z-index: 25;
   font-family: "Monocraft", "Pixelify Sans", monospace; color: #f4e3c2;
+  --hud-scale: 1;
 }
+/* Each cluster scales from its own anchored corner so it stays put. */
+#pixl-hud .hud-topleft { transform: scale(var(--hud-scale)); transform-origin: top left; }
+#pixl-hud .hud-topright { transform: scale(var(--hud-scale)); transform-origin: top right; }
+#pixl-hud .hud-coords { transform: scale(var(--hud-scale)); transform-origin: bottom left; }
+#pixl-hud .hud-bottomright { transform: scale(var(--hud-scale)); transform-origin: bottom right; }
+#pixl-hud .hud-dpad { transform: scale(var(--hud-scale)); transform-origin: bottom left; }
+#pixl-hud .hud-touchactions { transform: scale(var(--hud-scale)); transform-origin: bottom right; }
 #pixl-hud .hud-panel {
   background: #2b1d12; border: 3px solid #17100a;
   box-shadow: inset 0 0 0 2px #6b4f33;
@@ -64,7 +69,8 @@ function injectHudStyles() {
 #pixl-hud .hud-online:hover { background: #46301c; }
 #pixl-hud .hud-online .dot { width: 8px; height: 8px; border-radius: 50%; background: #4ade80; }
 #pixl-hud .hud-status {
-  position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+  position: absolute; top: 12px; left: 50%;
+  transform: translateX(-50%) scale(var(--hud-scale)); transform-origin: top center;
   padding: 5px 12px 3px; font-size: 11px; white-space: nowrap;
   background: rgba(23, 16, 10, 0.7); border: 1px solid rgba(255, 255, 255, 0.14);
 }
@@ -77,8 +83,8 @@ function injectHudStyles() {
 }
 #pixl-hud .hud-iconbtn:hover { background: #46301c; }
 #pixl-hud .hud-iconbtn.hidden { display: none; }
-#pixl-hud .hud-iconbtn .tip {
-  position: absolute; top: 52px; left: 50%; transform: translateX(-50%);
+#pixl-hud .tip {
+  position: absolute; left: 50%; transform: translateX(-50%);
   background: #17100acc; padding: 4px 7px; font-size: 11px; white-space: nowrap;
   opacity: 0; transition: opacity 0.1s; color: #f4e3c2;
 }
@@ -95,6 +101,66 @@ function injectHudStyles() {
   position: absolute; bottom: 6px; left: 8px; font-size: 9px;
   color: #c9b18c; opacity: 0.5;
 }
+#pixl-hud .hud-iconbtn .tip { top: 52px; }
+/* Emote bar + voice (bottom-right cluster) */
+#pixl-hud .hud-bottomright {
+  position: absolute; right: 12px; bottom: 12px;
+  display: flex; align-items: flex-end; gap: 8px;
+}
+#pixl-hud .hud-emotebar { display: flex; gap: 4px; padding: 7px; }
+#pixl-hud .hud-emote {
+  pointer-events: auto; cursor: ${CURSORS.pointer};
+  width: 34px; height: 34px; padding: 0; border: none; background: none;
+  display: flex; align-items: center; justify-content: center;
+}
+#pixl-hud .hud-emote img { width: 28px; height: 28px; image-rendering: pixelated; transition: transform 0.08s; }
+#pixl-hud .hud-emote:hover img { transform: scale(1.25); }
+#pixl-hud .hud-more {
+  pointer-events: auto; cursor: ${CURSORS.pointer};
+  width: 34px; height: 34px; font-size: 15px; color: #f4e3c2;
+}
+#pixl-hud .hud-more:hover { background: #46301c; }
+#pixl-hud .hud-emotepop {
+  position: absolute; right: 0; bottom: 100%; margin-bottom: 8px;
+  display: grid; grid-template-columns: repeat(5, 40px); gap: 4px; padding: 10px;
+}
+#pixl-hud .hud-emotepop .hud-emote { width: 40px; height: 40px; }
+#pixl-hud .hud-emotepop .hud-emote img { width: 32px; height: 32px; }
+#pixl-hud .hud-voicebtn {
+  pointer-events: auto; cursor: ${CURSORS.pointer}; position: relative;
+  width: 48px; height: 48px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+}
+#pixl-hud .hud-voicebtn img { width: 26px; height: 26px; image-rendering: pixelated; }
+#pixl-hud .hud-voicebtn.on { background: #7a2b2b; }
+#pixl-hud .hud-voicebtn .tip { bottom: 54px; }
+#pixl-hud .hud-voicebtn:hover .tip { opacity: 1; }
+/* Mobile touch controls */
+#pixl-hud .hud-dpad {
+  position: absolute; left: 24px; bottom: 96px;
+  display: grid; grid-template-columns: repeat(3, 56px); grid-template-rows: repeat(3, 56px);
+}
+#pixl-hud .hud-dbtn {
+  pointer-events: auto; cursor: pointer; padding: 0; border: none; background: none;
+  touch-action: none; -webkit-tap-highlight-color: transparent;
+}
+#pixl-hud .hud-dbtn img { width: 56px; height: 56px; image-rendering: pixelated; }
+#pixl-hud .hud-dbtn.press img { filter: brightness(1.4) saturate(1.4); }
+#pixl-hud .hud-dbtn.up { grid-area: 1 / 2; }
+#pixl-hud .hud-dbtn.left { grid-area: 2 / 1; }
+#pixl-hud .hud-dbtn.right { grid-area: 2 / 3; }
+#pixl-hud .hud-dbtn.down { grid-area: 3 / 2; }
+#pixl-hud .hud-touchactions {
+  position: absolute; right: 96px; bottom: 116px;
+  display: flex; flex-direction: column; gap: 14px;
+}
+#pixl-hud .hud-actbtn {
+  pointer-events: auto; cursor: pointer; touch-action: none;
+  width: 64px; height: 64px; border-radius: 50%;
+  background: #2b1d12cc; border: 3px solid #17100a;
+  display: flex; align-items: center; justify-content: center;
+}
+#pixl-hud .hud-actbtn img { width: 34px; height: 34px; image-rendering: pixelated; }
 `;
   document.head.appendChild(style);
 }
@@ -128,14 +194,11 @@ export class UIScene extends Phaser.Scene {
   private playerListModal?: DomModal;
   private latestPlayers: PlayerDirEntry[] = [];
 
-  // ── Emote bar / voice / mobile (still canvas) ─────────────────────
-  private emoteObjects: Movable[] = [];
-  private emoteBaseW = 0;
-  private emoteBaseH = 0;
-  private emotePopup?: Phaser.GameObjects.Container;
+  // ── Emote bar / voice / mobile (DOM) ──────────────────────────────
+  private bottomRight?: HTMLDivElement;
+  private elEmotePop?: HTMLDivElement;
   private emotePopupOpen = false;
-  private mobileReflow: ((w: number, h: number) => void)[] = [];
-  private micBtn?: Phaser.GameObjects.Image;
+  private elVoice?: HTMLButtonElement;
   private micBusy = false;
 
   private adminRole: ModRole = null;
@@ -185,22 +248,10 @@ export class UIScene extends Phaser.Scene {
   }
 
   // Only canvas elements need repositioning now — DOM chrome is anchored by CSS.
+  // Only the night tint (canvas) and chat need repositioning now — the rest of
+  // the HUD is DOM and anchored by CSS.
   private layout = (gameSize: Phaser.Structs.Size) => {
-    const w = gameSize.width;
-    const h = gameSize.height;
-    this.nightOverlay?.setSize(w, h);
-
-    const edx = w - this.emoteBaseW;
-    const edy = h - this.emoteBaseH;
-    if (edx !== 0 || edy !== 0) {
-      for (const o of this.emoteObjects) {
-        o.x += edx;
-        o.y += edy;
-      }
-      this.emoteBaseW = w;
-      this.emoteBaseH = h;
-    }
-
+    this.nightOverlay?.setSize(gameSize.width, gameSize.height);
     this.chat?.relayout();
   };
 
@@ -264,11 +315,11 @@ export class UIScene extends Phaser.Scene {
     this.btnMap.classList.add("hidden");
     this.btnAdmin = this.iconButton("🛡", "Admin", () => this.openAdmin());
     this.btnAdmin.classList.add("hidden");
-    const invite = this.iconButton("✦", "Invite  [I]", () =>
+    const invite = this.iconButton("💌", "Invite  [I]", () =>
       world()?.openInvitePanel(),
     );
     const bag = this.iconButton("🎒", "Bag  [B]", () => world()?.openInventory());
-    const inbox = this.iconButton("✉", "Inbox  [N]", () =>
+    const inbox = this.iconButton("📬", "Inbox  [N]", () =>
       world()?.openInbox(),
     );
     this.elBadge = el("div", "hud-badge hidden");
@@ -284,6 +335,15 @@ export class UIScene extends Phaser.Scene {
     document.body.append(root);
 
     this.refreshHearts();
+    this.applyHudScale();
+  }
+
+  private lastHudScale = -1;
+  private applyHudScale() {
+    const s = loadSettings().hudScale;
+    if (s === this.lastHudScale) return;
+    this.lastHudScale = s;
+    this.hudRoot?.style.setProperty("--hud-scale", String(s));
   }
 
   private iconButton(
@@ -397,74 +457,51 @@ export class UIScene extends Phaser.Scene {
     this.elBadge.textContent = this.unread > 9 ? "9+" : String(this.unread);
   }
 
-  // ── Emote bar (canvas) ────────────────────────────────────────────
+  // ── Emote bar (DOM) ───────────────────────────────────────────────
+  private frameImg(atlas: string, frame: string, px: number): HTMLImageElement {
+    const img = document.createElement("img");
+    img.src = this.textures.getBase64(atlas, frame);
+    img.width = px;
+    img.height = px;
+    img.style.imageRendering = "pixelated";
+    return img;
+  }
+
+  private emoteCell(
+    frame: string,
+    onClick: () => void,
+    px = 28,
+  ): HTMLButtonElement {
+    const cell = el("button", "hud-emote");
+    cell.type = "button";
+    cell.append(this.frameImg(EMOTE_ATLAS, frame, px));
+    cell.addEventListener("click", onClick);
+    return cell;
+  }
+
   private buildEmoteBar() {
-    const cell = 40;
-    const cells = QUICK_EMOTES.length + 1;
-    const w = cells * cell + 16;
-    const h = cell + 16;
-    const x = this.scale.width - w - 12;
-    const y = this.scale.height - h - 12;
-    this.emoteBaseW = this.scale.width;
-    this.emoteBaseH = this.scale.height;
-    const barPanel = panel(this, x, y, w, h, "ui-panel-dark")
-      .setOrigin(0, 0)
-      .setAlpha(0.95);
-    this.emoteObjects.push(barPanel);
+    if (!this.hudRoot) return;
+    const cluster = el("div", "hud-bottomright");
+    this.bottomRight = cluster;
 
-    QUICK_EMOTES.forEach((e, i) => {
-      const cx = x + 8 + i * cell + cell / 2;
-      const cy = y + 8 + cell / 2;
-      this.emoteObjects.push(
-        ...this.emoteIcon(cx, cy, e.frame, () => this.sendEmote(e.key)),
-      );
-    });
-
-    const ex = x + 8 + QUICK_EMOTES.length * cell + cell / 2;
-    const ey = y + 8 + cell / 2;
-    const moreBg = uiImage(this, ex, ey, "ui-round")
-      .setDisplaySize(cell - 6, cell - 6)
-      .setInteractive({ cursor: CURSORS.pointer });
-    const moreIcon = this.add
-      .text(ex, ey - 1, "•••", {
-        fontFamily: FONT,
-        fontSize: "16px",
-        color: COLORS.text,
-      })
-      .setOrigin(0.5);
-    moreBg.on("pointerover", () => moreBg.setTint(0xfff2cc));
-    moreBg.on("pointerout", () => moreBg.clearTint());
-    moreBg.on("pointerdown", () => {
+    const bar = el("div", "hud-emotebar hud-panel");
+    for (const e of QUICK_EMOTES)
+      bar.append(this.emoteCell(e.frame, () => this.sendEmote(e.key)));
+    const more = el("button", "hud-more");
+    more.type = "button";
+    more.textContent = "•••";
+    more.addEventListener("click", () => {
       playUiSound(this, "sfx-tap", 0.3);
       this.toggleEmotePopup();
     });
-    this.emoteObjects.push(moreBg, moreIcon);
+    bar.append(more);
+    cluster.append(bar);
+    this.hudRoot.append(cluster);
 
     this.input.keyboard?.on("keydown-C", () => {
       if (this.isChatOpen || this.isDialogueOpen) return;
       this.toggleEmotePopup();
     });
-  }
-
-  private emoteIcon(
-    cx: number,
-    cy: number,
-    frame: string,
-    onClick: () => void,
-    size = 28,
-  ): Movable[] {
-    const icon = this.add
-      .image(cx, cy, EMOTE_ATLAS, frame)
-      .setOrigin(0.5)
-      .setDisplaySize(size, size);
-    const hit = this.add
-      .zone(cx, cy, size + 12, size + 12)
-      .setOrigin(0.5)
-      .setInteractive({ cursor: CURSORS.pointer });
-    hit.on("pointerover", () => icon.setDisplaySize(size * 1.25, size * 1.25));
-    hit.on("pointerout", () => icon.setDisplaySize(size, size));
-    hit.on("pointerdown", onClick);
-    return [icon, hit];
   }
 
   private sendEmote(key: string) {
@@ -474,117 +511,53 @@ export class UIScene extends Phaser.Scene {
 
   private toggleEmotePopup() {
     if (this.emotePopupOpen) {
-      if (this.emotePopup) {
-        const i = this.emoteObjects.indexOf(this.emotePopup);
-        if (i >= 0) this.emoteObjects.splice(i, 1);
-        this.emotePopup.destroy();
-      }
-      this.emotePopup = undefined;
+      this.elEmotePop?.remove();
+      this.elEmotePop = undefined;
       this.emotePopupOpen = false;
       return;
     }
-    this.buildEmotePopup();
+    if (!this.bottomRight) return;
+    const pop = el("div", "hud-emotepop hud-panel");
+    for (const e of EMOTES)
+      pop.append(
+        this.emoteCell(
+          e.frame,
+          () => {
+            this.sendEmote(e.key);
+            this.toggleEmotePopup();
+          },
+          32,
+        ),
+      );
+    this.bottomRight.append(pop);
+    this.elEmotePop = pop;
     this.emotePopupOpen = true;
   }
 
-  private buildEmotePopup() {
-    const cell = 44;
-    const cols = 5;
-    const rows = Math.ceil(EMOTES.length / cols);
-    const padX = 10;
-    const titleH = 22;
-    const w = cols * cell + padX * 2;
-    const h = rows * cell + padX + titleH;
-    const right = this.scale.width - 12;
-    const bottom = this.scale.height - 12 - (40 + 16) - 8;
-    const x = right - w;
-    const y = bottom - h;
-
-    const container = this.add.container(0, 0).setDepth(60);
-    const bg = panel(this, x, y, w, h, "ui-panel-dark")
-      .setOrigin(0, 0)
-      .setAlpha(0.98);
-    const title = this.add
-      .text(x + w / 2, y + 12, "EMOTES", {
-        fontFamily: FONT_TITLE,
-        fontSize: "12px",
-        color: COLORS.accent,
-      })
-      .setOrigin(0.5);
-    container.add([bg, title]);
-
-    EMOTES.forEach((e, i) => {
-      const cx = x + padX + (i % cols) * cell + cell / 2;
-      const cy = y + titleH + padX + Math.floor(i / cols) * cell + cell / 2 - 4;
-      const [icon, hit] = this.emoteIcon(
-        cx,
-        cy,
-        e.frame,
-        () => {
-          this.sendEmote(e.key);
-          this.toggleEmotePopup();
-        },
-        32,
-      );
-      container.add([icon, hit]);
-    });
-
-    this.emotePopup = container;
-    this.emoteObjects.push(container);
-  }
-
-  // ── Voice button (canvas) ─────────────────────────────────────────
+  // ── Voice button (DOM) ────────────────────────────────────────────
   private buildVoiceButton() {
-    if (!voiceChat.supported) return;
+    if (!voiceChat.supported || !this.bottomRight) return;
     voiceChat.setSender((data, mime) => gameSocket.sendVoiceClip(data, mime));
     voiceChat.onStateChange((on) => this.setMicActive(on));
 
-    const SIZE = 48;
-    const emoteBarW = (QUICK_EMOTES.length + 1) * 40 + 16;
-    const cx = this.scale.width - 12 - emoteBarW - 8 - SIZE / 2;
-    const cy = this.scale.height - 12 - SIZE / 2 - 4;
-
-    const bg = uiImage(this, cx, cy, "ui-round")
-      .setDisplaySize(SIZE, SIZE)
-      .setAlpha(0.95)
-      .setDepth(50)
-      .setInteractive({ cursor: CURSORS.pointer });
-    const icon = this.add
-      .image(cx, cy, "mc-icons", "icon_microphone")
-      .setDisplaySize(26, 26)
-      .setDepth(51);
-    this.micBtn = bg;
-
-    const tip = this.add
-      .text(cx, cy - SIZE / 2 - 6, `Mic  [${prettyKey(getKeybinds().talk)}]`, {
-        fontFamily: FONT,
-        fontSize: "12px",
-        color: COLORS.text,
-        backgroundColor: "#17100acc",
-        padding: { x: 6, y: 4 },
-      })
-      .setResolution(3)
-      .setOrigin(0.5, 1)
-      .setDepth(62)
-      .setVisible(false);
-
-    bg.on("pointerover", () => {
-      tip.setText(`Mic  [${prettyKey(getKeybinds().talk)}]`).setVisible(true);
-      if (!voiceChat.isEnabled) bg.setTint(0xfff2cc);
+    const btn = el("button", "hud-voicebtn hud-panel");
+    btn.type = "button";
+    btn.append(this.frameImg("mc-icons", "icon_microphone", 26));
+    const tip = el("span", "tip", `Mic  [${prettyKey(getKeybinds().talk)}]`);
+    btn.append(tip);
+    btn.addEventListener("pointerenter", () => {
+      tip.textContent = `Mic  [${prettyKey(getKeybinds().talk)}]`;
     });
-    bg.on("pointerout", () => {
-      tip.setVisible(false);
-      this.setMicActive(voiceChat.isEnabled);
-    });
-    bg.on("pointerdown", () => this.toggleMic());
+    btn.addEventListener("click", () => this.toggleMic());
+    this.elVoice = btn;
+    // Sit to the left of the emote bar.
+    this.bottomRight.prepend(btn);
 
     this.input.keyboard?.on("keydown", (e: KeyboardEvent) => {
       if (e.repeat || this.isChatOpen || this.isDialogueOpen) return;
       if (!this.gameScene()) return;
       if (eventToKeyName(e) === getKeybinds().talk) this.toggleMic();
     });
-
-    this.emoteObjects.push(bg, icon, tip);
   }
 
   private async toggleMic() {
@@ -606,8 +579,7 @@ export class UIScene extends Phaser.Scene {
   }
 
   private setMicActive(on: boolean) {
-    if (on) this.micBtn?.setTint(0xff6b6b);
-    else this.micBtn?.clearTint();
+    this.elVoice?.classList.toggle("on", on);
   }
 
   private onVoice = ({
@@ -670,95 +642,65 @@ export class UIScene extends Phaser.Scene {
     }
   }
 
-  // ── Mobile controls (canvas) ──────────────────────────────────────
+  // ── Mobile controls (DOM) ─────────────────────────────────────────
   private buildMobileControls() {
     const coarse =
       (typeof window !== "undefined" &&
         !!window.matchMedia?.("(pointer: coarse)").matches) ||
       (navigator?.maxTouchPoints ?? 0) > 0;
-    if (!coarse) return;
+    if (!coarse || !this.hudRoot) return;
 
-    const GAP = 58;
-    const clusterX = 96;
-    const clusterDY = -156;
-
-    const dpad = (ox: number, oy: number, frame: string, dx: number, dy: number) => {
-      const SIZE = 64;
-      const bg = this.add
-        .image(0, 0, "mc", frame)
-        .setDisplaySize(SIZE, SIZE)
-        .setAlpha(0.92)
-        .setDepth(70)
-        .setInteractive();
-      const press = () => {
-        bg.setTint(0xffd166);
+    const dpad = el("div", "hud-dpad");
+    const dbtn = (
+      cls: string,
+      frame: string,
+      dx: number,
+      dy: number,
+    ): HTMLButtonElement => {
+      const b = el("button", `hud-dbtn ${cls}`);
+      b.type = "button";
+      b.append(this.frameImg("mc", frame, 56));
+      const press = (ev: PointerEvent) => {
+        ev.preventDefault();
+        b.classList.add("press");
         this.gameScene()?.setTouchDir(dx, dy);
       };
       const release = () => {
-        bg.clearTint();
+        b.classList.remove("press");
         this.gameScene()?.setTouchDir(0, 0);
       };
-      bg.on("pointerdown", press);
-      bg.on("pointerup", release);
-      bg.on("pointerout", release);
-      bg.on("pointerupoutside", release);
-      this.mobileReflow.push((_w, h) =>
-        bg.setPosition(clusterX + ox, h + clusterDY + oy),
-      );
+      b.addEventListener("pointerdown", press);
+      b.addEventListener("pointerup", release);
+      b.addEventListener("pointerleave", release);
+      b.addEventListener("pointercancel", release);
+      return b;
     };
-    dpad(0, -GAP, "dpad_element_north", 0, -1);
-    dpad(0, GAP, "dpad_element_south", 0, 1);
-    dpad(-GAP, 0, "dpad_element_west", -1, 0);
-    dpad(GAP, 0, "dpad_element_east", 1, 0);
-
-    this.touchActionButton(-70, -150, "icon_hand", () =>
-      this.gameScene()?.mobileInteract?.(),
+    dpad.append(
+      dbtn("up", "dpad_element_north", 0, -1),
+      dbtn("left", "dpad_element_west", -1, 0),
+      dbtn("right", "dpad_element_east", 1, 0),
+      dbtn("down", "dpad_element_south", 0, 1),
     );
-    this.touchActionButton(-150, -110, "icon_talk", () => {
-      if (!this.isDialogueOpen) this.openChat();
-    });
+    this.hudRoot.append(dpad);
 
-    const run = () =>
-      this.mobileReflow.forEach((f) => f(this.scale.width, this.scale.height));
-    run();
-    this.scale.on("resize", run);
-    this.events.once("shutdown", () => this.scale.off("resize", run));
-  }
-
-  private touchActionButton(
-    rx: number,
-    ry: number,
-    iconFrame: string,
-    onTap: () => void,
-  ) {
-    const bg = this.add
-      .image(0, 0, "mc", "button_circle")
-      .setDisplaySize(64, 64)
-      .setAlpha(0.92)
-      .setDepth(70)
-      .setInteractive();
-    const icon = this.add
-      .image(0, 0, "mc-icons", iconFrame)
-      .setDisplaySize(34, 34)
-      .setDepth(71);
-    bg.on("pointerdown", () => {
-      bg.setTint(0xffd166);
-      icon.setTint(0x333333);
-    });
-    bg.on("pointerup", () => {
-      bg.clearTint();
-      icon.clearTint();
-      onTap();
-      playUiSound(this, "sfx-tap", 0.3);
-    });
-    bg.on("pointerout", () => {
-      bg.clearTint();
-      icon.clearTint();
-    });
-    this.mobileReflow.push((w, h) => {
-      bg.setPosition(w + rx, h + ry);
-      icon.setPosition(w + rx, h + ry);
-    });
+    const actions = el("div", "hud-touchactions");
+    const actBtn = (frame: string, onTap: () => void): HTMLButtonElement => {
+      const b = el("button", "hud-actbtn");
+      b.type = "button";
+      b.append(this.frameImg("mc-icons", frame, 34));
+      b.addEventListener("click", () => {
+        onTap();
+        playUiSound(this, "sfx-tap", 0.3);
+      });
+      return b;
+    };
+    actions.append(
+      actBtn("icon_hand", () => this.gameScene()?.mobileInteract?.()),
+      actBtn("icon_talk", () => {
+        if (!this.isDialogueOpen) this.openChat();
+      }),
+    );
+    this.hudRoot.append(actions);
   }
 
   // ── Day/night ─────────────────────────────────────────────────────
@@ -792,6 +734,7 @@ export class UIScene extends Phaser.Scene {
 
   update() {
     this.syncHudVisibility();
+    this.applyHudScale();
     musicEngine.setEnabled(loadSettings().soundEnabled);
 
     if (this.dayLengthMs <= 0 || !this.nightOverlay) return;

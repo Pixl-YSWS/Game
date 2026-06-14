@@ -337,9 +337,26 @@ export class WorldScene extends Phaser.Scene {
     this.loadingOverlayText?.setPosition(w / 2, h / 2);
   }
 
+  // Scenes that overlay the world and should suspend its input (but not pause
+  // rendering — the multiplayer world keeps simulating underneath).
+  private static readonly OVERLAY_SCENES = [
+    "PauseScene",
+    "SettingsScene",
+    "AdminScene",
+    "InventoryScene",
+    "InvitePanelScene",
+    "InboxScene",
+    "ShopScene",
+    "ProjectsScene",
+    "MapEditorScene",
+  ];
+
+  private isOverlayOpen(): boolean {
+    return WorldScene.OVERLAY_SCENES.some((k) => this.scene.isActive(k));
+  }
+
   private openPause() {
     if (this.scene.isActive("PauseScene")) return;
-    this.scene.pause();
     this.scene.launch("PauseScene", { pausedSceneKey: "WorldScene" });
   }
 
@@ -433,7 +450,14 @@ export class WorldScene extends Phaser.Scene {
       this.repaintMap();
     }
 
+    // Menus overlay the world instead of pausing it (this is multiplayer — the
+    // world must keep rendering so other players still move). While a menu is
+    // open we just disable this scene's keyboard and skip local input.
+    const overlay = this.isOverlayOpen();
+    if (this.input.keyboard) this.input.keyboard.enabled = !overlay;
+
     if (
+      !overlay &&
       !this.ui?.isDialogueOpen &&
       !this.ui?.isChatOpen &&
       !this.loadingOverlay &&

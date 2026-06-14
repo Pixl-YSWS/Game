@@ -35,6 +35,7 @@ export const DEFAULT_KEYBINDS: Record<ControlAction, string> = {
 
 export interface GameSettings {
   defaultZoom: number;
+  hudScale: number;
   soundEnabled: boolean;
 
   voiceEnabled: boolean;
@@ -43,6 +44,7 @@ export interface GameSettings {
 
 const DEFAULTS: GameSettings = {
   defaultZoom: 4,
+  hudScale: 1,
   soundEnabled: true,
   voiceEnabled: true,
   keybinds: { ...DEFAULT_KEYBINDS },
@@ -91,3 +93,4 @@ export function resetKeybinds() {
 }
 
 export const ZOOM_OPTIONS = [3, 4, 5, 6];
+export const HUD_SCALE_OPTIONS = [1, 1.25, 1.5];

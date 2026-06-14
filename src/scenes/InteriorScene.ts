@@ -108,6 +108,16 @@ interface InteriorInitData {
 }
 
 export class InteriorScene extends Phaser.Scene {
+  private static readonly OVERLAY_SCENES = [
+    "PauseScene",
+    "SettingsScene",
+    "AdminScene",
+    "InventoryScene",
+    "InvitePanelScene",
+    "InboxScene",
+    "ShopScene",
+    "ProjectsScene",
+  ];
   private localPlayer?: Player;
   private mapDef?: MapDef;
   private returnTo!: { cx: number; cy: number };
@@ -194,7 +204,6 @@ export class InteriorScene extends Phaser.Scene {
 
     this.input.keyboard!.on("keydown-ESC", () => {
       if (this.scene.isActive("PauseScene")) return;
-      this.scene.pause();
       this.scene.launch("PauseScene", { pausedSceneKey: "InteriorScene" });
     });
   }
@@ -237,7 +246,15 @@ export class InteriorScene extends Phaser.Scene {
 
   update(_time: number, delta: number) {
     if (!this.localPlayer) return;
-    this.localPlayer.handleInput(this.cursors, this.wasd, delta, this.touchDir);
+
+    // Menus overlay (don't pause) the scene; suspend input while one is open.
+    const overlay = InteriorScene.OVERLAY_SCENES.some((k) =>
+      this.scene.isActive(k),
+    );
+    if (this.input.keyboard) this.input.keyboard.enabled = !overlay;
+    if (!overlay) {
+      this.localPlayer.handleInput(this.cursors, this.wasd, delta, this.touchDir);
+    }
 
     const d = Math.floor(this.localPlayer.y / TILE_H) + 1.5;
     if (this.localPlayer.depth !== d) this.localPlayer.setDepth(d);

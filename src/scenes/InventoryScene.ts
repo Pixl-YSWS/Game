@@ -23,7 +23,7 @@ export class InventoryScene extends Phaser.Scene {
   }
 
   create() {
-    this.scene.pause(this.fromKey);
+    // No scene.pause — the world keeps running behind this overlay (multiplayer).
     this.events.once("shutdown", () => {
       this.scene.resume(this.fromKey);
       gameSocket.off("inventory:list", this.onList);

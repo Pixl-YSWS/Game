@@ -5,6 +5,7 @@ import {
   loadSettings,
   saveSettings,
   ZOOM_OPTIONS,
+  HUD_SCALE_OPTIONS,
   getKeybinds,
   setKeybind,
   resetKeybinds,
@@ -100,6 +101,7 @@ export class SettingsScene extends Phaser.Scene {
     const body = this.modal.body;
 
     body.append(this.settingRow("Zoom", this.zoomLabel(), () => this.cycleZoom()));
+    body.append(this.settingRow("HUD Size", this.hudLabel(), () => this.cycleHud()));
     body.append(this.settingRow("Sound", this.soundLabel(), () => this.toggleSound()));
     body.append(this.settingRow("Voice Chat", this.voiceLabel(), () => this.toggleVoice()));
     body.append(this.settingRow("Fullscreen", this.fullscreenLabel(), () => this.scale.toggleFullscreen()));
@@ -245,6 +247,10 @@ export class SettingsScene extends Phaser.Scene {
     return `ZOOM:  ${loadSettings().defaultZoom}x`;
   }
 
+  private hudLabel(): string {
+    return `HUD SIZE:  ${Math.round(loadSettings().hudScale * 100)}%`;
+  }
+
   private soundLabel(): string {
     return `SOUND:  ${loadSettings().soundEnabled ? "ON" : "OFF"}`;
   }
@@ -259,6 +265,14 @@ export class SettingsScene extends Phaser.Scene {
     const next = ZOOM_OPTIONS[(idx + 1) % ZOOM_OPTIONS.length];
     saveSettings({ ...s, defaultZoom: next });
     this.statusLabels.get("Zoom")!.textContent = this.zoomLabel();
+  }
+
+  private cycleHud() {
+    const s = loadSettings();
+    const idx = HUD_SCALE_OPTIONS.indexOf(s.hudScale);
+    const next = HUD_SCALE_OPTIONS[(idx + 1) % HUD_SCALE_OPTIONS.length];
+    saveSettings({ ...s, hudScale: next });
+    this.statusLabels.get("HUD Size")!.textContent = this.hudLabel();
   }
 
   private toggleSound() {
