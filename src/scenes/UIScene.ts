@@ -1,8 +1,9 @@
 import Phaser from "phaser";
 import { DialogueBox } from "../ui/DialogueBox";
 import { ChatBox } from "../ui/ChatBox";
-import { FONT, FONT_EMOJI, FONT_CHAT, FONT_TITLE, COLORS, CURSORS, EMOTE_ATLAS } from "../ui/theme";
-import { panel, playUiSound, uiNineslice, uiImage } from "../ui/UIKit";
+import { FONT, FONT_TITLE, COLORS, CURSORS, EMOTE_ATLAS } from "../ui/theme";
+import { panel, playUiSound, uiImage } from "../ui/UIKit";
+import { el, openDomModal, type DomModal } from "../ui/dom";
 import { EMOTES, QUICK_EMOTES } from "../ui/emotes";
 import { gameSocket } from "../network/socket";
 import { getAccountId, getAccountName } from "../network/playerIdentity";
@@ -12,10 +13,8 @@ import { voiceChat } from "../audio/VoiceChat";
 import { eventToKeyName, prettyKey } from "./SettingsScene";
 import type { ChatMessage, PlayerDirEntry, ModRole } from "../types/network";
 
-
-type Movable = Phaser.GameObjects.GameObject & Phaser.GameObjects.Components.Transform;
-
-
+type Movable = Phaser.GameObjects.GameObject &
+  Phaser.GameObjects.Components.Transform;
 
 type GameplayScene = Phaser.Scene & {
   setTouchDir(dx: number, dy: number): void;
@@ -25,80 +24,124 @@ type GameplayScene = Phaser.Scene & {
   showSpeaking?: (id: string) => void;
 };
 
-
-
+const HUD_STYLE_ID = "pixl-hud-styles";
+function injectHudStyles() {
+  if (document.getElementById(HUD_STYLE_ID)) return;
+  const style = document.createElement("style");
+  style.id = HUD_STYLE_ID;
+  style.textContent = `
+#pixl-hud {
+  position: fixed; inset: 0; pointer-events: none; z-index: 25;
+  font-family: "Monocraft", "Pixelify Sans", monospace; color: #f4e3c2;
+}
+#pixl-hud .hud-panel {
+  background: #2b1d12; border: 3px solid #17100a;
+  box-shadow: inset 0 0 0 2px #6b4f33;
+}
+#pixl-hud .hud-topleft {
+  position: absolute; top: 12px; left: 12px;
+  display: flex; flex-direction: column; gap: 6px; align-items: flex-start;
+}
+#pixl-hud .hud-card { width: 200px; padding: 9px 13px 10px; }
+#pixl-hud .hud-name {
+  font-family: "Pixelify Sans", sans-serif; font-weight: 700;
+  font-size: 15px; color: #ffd166; letter-spacing: 0.5px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+#pixl-hud .hud-hearts { display: flex; gap: 1px; margin: 5px 0 6px; font-size: 13px; line-height: 1; }
+#pixl-hud .hud-hearts span { color: #3a1212; text-shadow: 0 1px 0 rgba(0,0,0,0.6); }
+#pixl-hud .hud-hearts span.on { color: #cc2222; }
+#pixl-hud .hud-cardrow { display: flex; align-items: center; justify-content: space-between; font-size: 13px; }
+#pixl-hud .hud-pixels { color: #ffd166; transform-origin: left center; }
+#pixl-hud .hud-pixels.bump { animation: hud-bump 280ms ease-out; }
+@keyframes hud-bump { from { transform: scale(1.6); } to { transform: scale(1); } }
+#pixl-hud .hud-clock { color: #c9b18c; font-size: 11px; }
+#pixl-hud .hud-online {
+  pointer-events: auto; cursor: ${CURSORS.pointer};
+  display: flex; align-items: center; gap: 7px;
+  padding: 4px 11px 3px; font-size: 11px;
+}
+#pixl-hud .hud-online:hover { background: #46301c; }
+#pixl-hud .hud-online .dot { width: 8px; height: 8px; border-radius: 50%; background: #4ade80; }
+#pixl-hud .hud-status {
+  position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+  padding: 5px 12px 3px; font-size: 11px; white-space: nowrap;
+  background: rgba(23, 16, 10, 0.7); border: 1px solid rgba(255, 255, 255, 0.14);
+}
+#pixl-hud .hud-status.hidden { display: none; }
+#pixl-hud .hud-topright { position: absolute; top: 12px; right: 12px; display: flex; gap: 8px; }
+#pixl-hud .hud-iconbtn {
+  pointer-events: auto; position: relative; width: 46px; height: 46px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px; cursor: ${CURSORS.pointer};
+}
+#pixl-hud .hud-iconbtn:hover { background: #46301c; }
+#pixl-hud .hud-iconbtn.hidden { display: none; }
+#pixl-hud .hud-iconbtn .tip {
+  position: absolute; top: 52px; left: 50%; transform: translateX(-50%);
+  background: #17100acc; padding: 4px 7px; font-size: 11px; white-space: nowrap;
+  opacity: 0; transition: opacity 0.1s; color: #f4e3c2;
+}
+#pixl-hud .hud-iconbtn:hover .tip { opacity: 1; }
+#pixl-hud .hud-badge {
+  position: absolute; top: -6px; right: -6px;
+  min-width: 17px; height: 17px; box-sizing: border-box; border-radius: 9px;
+  background: #e5484d; border: 2px solid #17100a; color: #fff;
+  font-size: 9px; display: flex; align-items: center; justify-content: center;
+  padding: 0 3px;
+}
+#pixl-hud .hud-badge.hidden { display: none; }
+#pixl-hud .hud-coords {
+  position: absolute; bottom: 6px; left: 8px; font-size: 9px;
+  color: #c9b18c; opacity: 0.5;
+}
+`;
+  document.head.appendChild(style);
+}
 
 export class UIScene extends Phaser.Scene {
   private box?: DialogueBox;
   private chat?: ChatBox;
-  private statusText?: Phaser.GameObjects.Text;
-  private statusBg?: Phaser.GameObjects.Rectangle;
-  private coordText?: Phaser.GameObjects.Text;
-  private pixelText?: Phaser.GameObjects.Text;
-  private timeText?: Phaser.GameObjects.Text;
-  private timeIcon?: Phaser.GameObjects.Text;
+
+  // ── DOM HUD chrome ────────────────────────────────────────────────
+  private hudRoot?: HTMLDivElement;
+  private elName?: HTMLDivElement;
+  private elHearts?: HTMLDivElement;
+  private elPixels?: HTMLSpanElement;
+  private elClock?: HTMLSpanElement;
+  private elStatus?: HTMLDivElement;
+  private elOnline?: HTMLDivElement;
+  private elCoords?: HTMLDivElement;
+  private elBadge?: HTMLDivElement;
+  private btnAdmin?: HTMLButtonElement;
+  private btnMap?: HTMLButtonElement;
+
   private lastTimeLabel = "";
   private lastClock = "";
-  private heartIcons: Phaser.GameObjects.Graphics[] = [];
-  private heartBaseX = 27;
-  private heartsY = 50;
   private hp = 10;
   private hpMax = 10;
   private pixels = 0;
 
-
   private onlineCount = 1;
-  private onlineChip?: {
-    bg: Phaser.GameObjects.NineSlice;
-    dot: Phaser.GameObjects.Arc;
-    text: Phaser.GameObjects.Text;
-  };
-  private flashTween?: Phaser.Tweens.Tween;
-  
   private unread = 0;
-  private badgeBg?: Phaser.GameObjects.Arc;
-  private badgeText?: Phaser.GameObjects.Text;
 
-  
-  private playerListOpen = false;
+  private playerListModal?: DomModal;
   private latestPlayers: PlayerDirEntry[] = [];
-  private playerListObjects: Phaser.GameObjects.GameObject[] = [];
 
-  
-  
-  
-  
-  
-  
-  private readonly ICON_SIZE = 50;
-  private readonly ICON_ICON = 23;
-  private readonly ICON_GAP = 8;
-
-  private socialObjects: Movable[] = [];
+  // ── Emote bar / voice / mobile (still canvas) ─────────────────────
   private emoteObjects: Movable[] = [];
-  private socialBaseW = 0;
   private emoteBaseW = 0;
   private emoteBaseH = 0;
-  
   private emotePopup?: Phaser.GameObjects.Container;
   private emotePopupOpen = false;
-  
-  
   private mobileReflow: ((w: number, h: number) => void)[] = [];
-  
   private micBtn?: Phaser.GameObjects.Image;
   private micBusy = false;
 
-  
-  
   private adminRole: ModRole = null;
-  private adminBtn?: { bg: Phaser.GameObjects.NineSlice; icon: Phaser.GameObjects.Text; tooltip: Phaser.GameObjects.Text };
-  private mapEditBtn?: { bg: Phaser.GameObjects.NineSlice; icon: Phaser.GameObjects.Text; tooltip: Phaser.GameObjects.Text };
 
-  
-  
   private nightOverlay?: Phaser.GameObjects.Rectangle;
-  private dayEpoch = 0; 
+  private dayEpoch = 0;
   private dayLengthMs = 0;
 
   constructor() {
@@ -106,38 +149,28 @@ export class UIScene extends Phaser.Scene {
   }
 
   create() {
-    
-    
     this.nightOverlay = this.add
       .rectangle(0, 0, this.scale.width, this.scale.height, 0x0a0a3e, 0)
       .setOrigin(0)
       .setDepth(-10);
 
-    this.buildPlayerCard();
-    this.buildOnlineChip();
-    this.buildStatusBar();
+    this.buildHud();
 
     this.box = new DialogueBox(this);
     this.chat = new ChatBox(this);
     this.chat.onCommand = (raw) => this.handleChatCommand(raw);
     this.buildEmoteBar();
     this.buildVoiceButton();
-    this.buildSocialButtons();
     this.buildMobileControls();
 
-    
-    
     musicEngine.start();
     musicEngine.setEnabled(loadSettings().soundEnabled);
     this.input.once("pointerdown", () => musicEngine.resume());
     this.input.keyboard?.once("keydown", () => musicEngine.resume());
 
-    
     gameSocket.on("players:list", this.onPlayersList);
-    
     gameSocket.on("player:voice", this.onVoice);
 
-    
     this.scale.on("resize", this.layout, this);
     this.events.once("shutdown", () => {
       musicEngine.stop();
@@ -145,23 +178,18 @@ export class UIScene extends Phaser.Scene {
       gameSocket.off("players:list", this.onPlayersList);
       gameSocket.off("player:voice", this.onVoice);
       this.scale.off("resize", this.layout, this);
+      this.playerListModal?.destroy();
+      this.hudRoot?.remove();
+      this.hudRoot = undefined;
     });
   }
 
-  
-  
+  // Only canvas elements need repositioning now — DOM chrome is anchored by CSS.
   private layout = (gameSize: Phaser.Structs.Size) => {
     const w = gameSize.width;
     const h = gameSize.height;
     this.nightOverlay?.setSize(w, h);
-    this.statusBg?.setX(w / 2);
-    this.statusText?.setX(w / 2);
 
-    const sdx = w - this.socialBaseW;
-    if (sdx !== 0) {
-      for (const o of this.socialObjects) o.x += sdx;
-      this.socialBaseW = w;
-    }
     const edx = w - this.emoteBaseW;
     const edy = h - this.emoteBaseH;
     if (edx !== 0 || edy !== 0) {
@@ -174,271 +202,184 @@ export class UIScene extends Phaser.Scene {
     }
 
     this.chat?.relayout();
-    if (this.playerListOpen) this.renderPlayerList();
   };
 
-  
   private dayPhase(): number {
     if (this.dayLengthMs <= 0) return 0.5;
-    const t = (((Date.now() - this.dayEpoch) % this.dayLengthMs) + this.dayLengthMs) % this.dayLengthMs;
+    const t =
+      (((Date.now() - this.dayEpoch) % this.dayLengthMs) + this.dayLengthMs) %
+      this.dayLengthMs;
     return t / this.dayLengthMs;
   }
 
-  
-  private buildPlayerCard() {
-    const X = 12, Y = 12, W = 204, H = 84;
-    panel(this, X, Y, W, H, "ui-panel-dark").setOrigin(0, 0).setAlpha(0.96);
-    const baseX = X + 15;
+  // ── DOM HUD construction ──────────────────────────────────────────
+  private buildHud() {
+    injectHudStyles();
+    const root = el("div");
+    root.id = "pixl-hud";
+    this.hudRoot = root;
 
+    // Top-left: player card + online chip
+    const topleft = el("div", "hud-topleft");
+    const card = el("div", "hud-card hud-panel");
+    this.elName = el("div", "hud-name", getAccountName() || "Player");
+    this.elHearts = el("div", "hud-hearts");
+    const row = el("div", "hud-cardrow");
+    this.elPixels = el("span", "hud-pixels", "🪙 0");
+    this.elClock = el("span", "hud-clock", "☀ --:--");
+    row.append(this.elPixels, this.elClock);
+    card.append(this.elName, this.elHearts, row);
 
-    this.add
-      .text(baseX, Y + 16, truncate(getAccountName() || "Player", 14), {
-        fontFamily: FONT_TITLE,
-        fontSize: "15px",
-        color: COLORS.accent,
-      })
-      .setOrigin(0, 0.5)
-      .setResolution(3);
-
-
-    this.heartBaseX = baseX;
-    this.heartsY = Y + 38;
-    for (let i = 0; i < this.hpMax; i++) {
-      const g = this.add.graphics();
-      g.x = this.heartBaseX + i * 13;
-      g.y = this.heartsY;
-      this.heartIcons.push(g);
-    }
-    this.refreshHearts();
-
-
-    const rowY = Y + 66;
-    this.add.text(baseX, rowY, "🪙", { fontFamily: FONT_EMOJI, fontSize: "14px" }).setOrigin(0, 0.5);
-    this.pixelText = this.add
-      .text(baseX + 20, rowY, "0", { fontFamily: FONT, fontSize: "14px", color: COLORS.accent })
-      .setOrigin(0, 0.5)
-      .setResolution(3);
-
-
-    this.timeIcon = this.add
-      .text(X + W - 62, rowY, "☀", { fontFamily: FONT_EMOJI, fontSize: "13px" })
-      .setOrigin(0, 0.5);
-    this.timeText = this.add
-      .text(X + W - 14, rowY, "--:--", { fontFamily: FONT, fontSize: "11px", color: COLORS.textDim })
-      .setOrigin(1, 0.5)
-      .setResolution(3);
-
-
-    this.coordText = this.add
-      .text(X + 2, Y + H + 32, "", { fontFamily: FONT, fontSize: "8px", color: COLORS.textDim })
-      .setAlpha(0.5);
-  }
-
-
-  private buildOnlineChip() {
-    const X = 12, Y = 12 + 84 + 6, W = 100, H = 24;
-    const bg = uiNineslice(this, X, Y, "ui-panel-dark", W, H, 12)
-      .setOrigin(0, 0)
-      .setAlpha(0.92)
-      .setDepth(50)
-      .setInteractive({ cursor: CURSORS.pointer });
-    const dot = this.add.circle(X + 15, Y + H / 2, 4, 0x4ade80).setDepth(51);
-    const text = this.add
-      .text(X + 27, Y + H / 2, "1 online", { fontFamily: FONT, fontSize: "10px", color: COLORS.text })
-      .setOrigin(0, 0.5)
-      .setResolution(3)
-      .setDepth(51);
-    bg.on("pointerover", () => bg.setTint(0xffe08a));
-    bg.on("pointerout", () => bg.clearTint());
-    bg.on("pointerdown", () => {
+    this.elOnline = el("div", "hud-online hud-panel");
+    const dot = el("span", "dot");
+    const onlineText = el("span", undefined, "1 online");
+    this.elOnline.append(dot, onlineText);
+    this.elOnline.dataset.label = "online";
+    this.elOnline.addEventListener("click", () => {
       playUiSound(this, "sfx-tap", 0.3);
-      if (this.playerListOpen) this.hidePlayerList();
+      if (this.playerListModal) this.hidePlayerList();
       else this.showPlayerList();
     });
-    this.onlineChip = { bg, dot, text };
-    this.refreshOnlineChip();
+    topleft.append(card, this.elOnline);
+    root.append(topleft);
+
+    // Top-center status pill
+    this.elStatus = el("div", "hud-status hidden");
+    root.append(this.elStatus);
+
+    // Top-right action buttons
+    const topright = el("div", "hud-topright");
+    const world = () =>
+      this.scene.get("WorldScene") as
+        | (Phaser.Scene & {
+            openInvitePanel: () => void;
+            openInbox: () => void;
+            openInventory: () => void;
+          })
+        | undefined;
+
+    this.btnMap = this.iconButton("🗺", "Map Editor", () =>
+      this.openMapEditor(),
+    );
+    this.btnMap.classList.add("hidden");
+    this.btnAdmin = this.iconButton("🛡", "Admin", () => this.openAdmin());
+    this.btnAdmin.classList.add("hidden");
+    const invite = this.iconButton("✦", "Invite  [I]", () =>
+      world()?.openInvitePanel(),
+    );
+    const bag = this.iconButton("🎒", "Bag  [B]", () => world()?.openInventory());
+    const inbox = this.iconButton("✉", "Inbox  [N]", () =>
+      world()?.openInbox(),
+    );
+    this.elBadge = el("div", "hud-badge hidden");
+    inbox.append(this.elBadge);
+
+    topright.append(this.btnMap, this.btnAdmin, invite, bag, inbox);
+    root.append(topright);
+
+    // Bottom-left coords
+    this.elCoords = el("div", "hud-coords");
+    root.append(this.elCoords);
+
+    document.body.append(root);
+
+    this.refreshHearts();
   }
 
-  setOnlineCount(n: number) {
-    this.onlineCount = Math.max(1, n | 0);
-    this.refreshOnlineChip();
-  }
-
-  private refreshOnlineChip() {
-    const n = this.onlineCount;
-    this.onlineChip?.text.setText(`${n} online`);
-  }
-
-  
-  private buildStatusBar() {
-    const y = 16;
-    this.statusBg = this.add
-      .rectangle(this.scale.width / 2, y, 10, 22, 0x17100a, 0.62)
-      .setStrokeStyle(1, 0xffffff, 0.14)
-      .setOrigin(0.5)
-      .setVisible(false);
-    this.statusText = this.add
-      .text(this.scale.width / 2, y, "", { fontFamily: FONT, fontSize: "9px", color: COLORS.text })
-      .setOrigin(0.5)
-      .setResolution(3);
-  }
-
-  
-  private buildSocialButtons() {
-    const world = () => this.scene.get("WorldScene") as
-      | (Phaser.Scene & { openInvitePanel: () => void; openInbox: () => void; openInventory: () => void })
-      | undefined;
-
-    
-    this.socialBaseW = this.scale.width;
-    const SIZE = this.ICON_SIZE, GAP = this.ICON_GAP, cy = 12 + SIZE / 2;
-    let x = this.scale.width - 12 - SIZE / 2;
-    const inboxBtn = this.iconButton(x, cy, "✉", "Inbox  [N]", () => world()?.openInbox());
-    x -= SIZE + GAP;
-    this.iconButton(x, cy, "🎒", "Bag  [B]", () => world()?.openInventory());
-    x -= SIZE + GAP;
-    this.iconButton(x, cy, "✦", "Invite  [I]", () => world()?.openInvitePanel());
-
-    
-    const bx = inboxBtn.x + SIZE / 2 - 4;
-    const by = inboxBtn.y - SIZE / 2 + 4;
-    this.badgeBg = this.add.circle(bx, by, 8, 0xe5484d).setStrokeStyle(1.5, 0x17100a).setDepth(60).setVisible(false);
-    this.badgeText = this.add
-      .text(bx, by, "", { fontFamily: FONT, fontSize: "9px", color: "#ffffff" })
-      .setOrigin(0.5)
-      .setResolution(3)
-      .setDepth(61)
-      .setVisible(false);
-    this.socialObjects.push(this.badgeBg, this.badgeText);
-    this.refreshBadge();
-  }
-
-  
-  private iconButton(cx: number, cy: number, glyph: string, tip: string, onClick: () => void) {
-    const SIZE = this.ICON_SIZE;
-    const bg = uiNineslice(this, cx, cy, "ui-panel-dark", SIZE, SIZE, 16)
-      .setOrigin(0.5)
-      .setAlpha(0.96)
-      .setDepth(50)
-      .setInteractive({ cursor: CURSORS.pointer });
-    const icon = this.add
-      .text(cx, cy, glyph, { fontFamily: FONT_EMOJI, fontSize: `${this.ICON_ICON}px` })
-      .setOrigin(0.5)
-      .setDepth(51);
-    
-    const tooltip = this.add
-      .text(cx, cy + SIZE / 2 + 6, tip, {
-        fontFamily: FONT,
-        fontSize: "12px",
-        color: COLORS.text,
-        backgroundColor: "#17100acc",
-        padding: { x: 6, y: 4 },
-      })
-      .setResolution(3)
-      .setOrigin(0.5, 0)
-      .setDepth(62)
-      .setVisible(false);
-
-    bg.on("pointerover", () => {
-      bg.setTint(0xffe08a).setScale(1.08);
-      icon.setScale(1.08);
-      tooltip.setVisible(true);
-    });
-    bg.on("pointerout", () => {
-      bg.clearTint().setScale(1);
-      icon.setScale(1);
-      tooltip.setVisible(false);
-    });
-    bg.on("pointerdown", () => {
+  private iconButton(
+    glyph: string,
+    tip: string,
+    onClick: () => void,
+  ): HTMLButtonElement {
+    const b = el("button", "hud-iconbtn hud-panel");
+    b.type = "button";
+    b.append(document.createTextNode(glyph), el("span", "tip", tip));
+    b.addEventListener("click", () => {
       playUiSound(this, "sfx-tap", 0.3);
       onClick();
     });
-    this.socialObjects.push(bg, icon, tooltip);
-    return bg;
+    return b;
   }
 
-  
+  // ── Online chip / player list ─────────────────────────────────────
+  setOnlineCount(n: number) {
+    this.onlineCount = Math.max(1, n | 0);
+    const label = this.elOnline?.querySelector("span:last-child");
+    if (label) label.textContent = `${this.onlineCount} online`;
+  }
 
-  
-  
+  get isPlayerListOpen(): boolean {
+    return !!this.playerListModal;
+  }
+
+  showPlayerList() {
+    if (this.playerListModal) return;
+    const modal = openDomModal(this, {
+      title: "Players Online",
+      width: 320,
+      onClose: () => this.hidePlayerList(),
+    });
+    this.playerListModal = modal;
+    gameSocket.requestPlayers();
+    this.renderPlayerList();
+  }
+
+  hidePlayerList() {
+    this.playerListModal?.destroy();
+    this.playerListModal = undefined;
+  }
+
+  private onPlayersList = (data: { players: PlayerDirEntry[] }) => {
+    this.latestPlayers = data.players;
+    if (this.playerListModal) this.renderPlayerList();
+  };
+
+  private renderPlayerList() {
+    const modal = this.playerListModal;
+    if (!modal) return;
+    const online = this.latestPlayers
+      .filter((p) => p.online)
+      .sort((a, b) => a.name.localeCompare(b.name));
+    modal.body.replaceChildren();
+
+    if (online.length === 0) {
+      modal.body.append(el("div", "pixl-row-meta", "No one online"));
+      return;
+    }
+    const myId = getAccountId();
+    const list = el("div", "pixl-list");
+    for (const p of online) {
+      const rowEl = el("div", "pixl-row");
+      const dot = el("span");
+      dot.style.cssText =
+        "width:8px; height:8px; border-radius:50%; background:#4ade80; flex-shrink:0;";
+      const mine = p.accountId === myId;
+      const name = el(
+        "div",
+        "pixl-row-name",
+        mine ? `${p.name}  (you)` : p.name,
+      );
+      if (mine) name.style.color = COLORS.accent;
+      rowEl.append(dot, name);
+      list.append(rowEl);
+    }
+    modal.body.append(list);
+  }
+
+  // ── Admin / map editor buttons ────────────────────────────────────
   setAdminRole(role: ModRole) {
     this.adminRole = role;
-    if (role && !this.adminBtn) this.buildAdminButton();
-    const show = role !== null;
-    this.adminBtn?.bg.setVisible(show).setActive(show);
-    this.adminBtn?.icon.setVisible(show);
-    if (!show) this.adminBtn?.tooltip.setVisible(false);
-
-    // Map editing is reserved for full admins (not sub-admins/mods).
-    const showMap = role === "admin";
-    if (showMap && !this.mapEditBtn) this.buildMapEditorButton();
-    this.mapEditBtn?.bg.setVisible(showMap).setActive(showMap);
-    this.mapEditBtn?.icon.setVisible(showMap);
-    if (!showMap) this.mapEditBtn?.tooltip.setVisible(false);
-  }
-
-  
-  private buildAdminButton() {
-    const SIZE = this.ICON_SIZE, GAP = this.ICON_GAP;
-    const x = this.scale.width - 12 - SIZE / 2 - 3 * (SIZE + GAP);
-    const cy = 12 + SIZE / 2;
-    const bg = uiNineslice(this, x, cy, "ui-panel-dark", SIZE, SIZE, 16)
-      .setOrigin(0.5)
-      .setAlpha(0.96)
-      .setDepth(50)
-      .setInteractive({ cursor: CURSORS.pointer });
-    const icon = this.add.text(x, cy, "🛡", { fontFamily: FONT_EMOJI, fontSize: `${this.ICON_ICON}px` }).setOrigin(0.5).setDepth(51);
-    const tooltip = this.add
-      .text(x, cy + SIZE / 2 + 6, "Admin", {
-        fontFamily: FONT, fontSize: "12px", color: COLORS.text, backgroundColor: "#17100acc", padding: { x: 6, y: 4 },
-      })
-      .setResolution(3)
-      .setOrigin(0.5, 0)
-      .setDepth(62)
-      .setVisible(false);
-    bg.on("pointerover", () => { bg.setTint(0xffe08a).setScale(1.08); icon.setScale(1.08); tooltip.setVisible(true); });
-    bg.on("pointerout", () => { bg.clearTint().setScale(1); icon.setScale(1); tooltip.setVisible(false); });
-    bg.on("pointerdown", () => {
-      playUiSound(this, "sfx-tap", 0.3);
-      this.openAdmin();
-    });
-    this.socialObjects.push(bg, icon, tooltip);
-    this.adminBtn = { bg, icon, tooltip };
+    this.btnAdmin?.classList.toggle("hidden", role === null);
+    this.btnMap?.classList.toggle("hidden", role !== "admin");
   }
 
   private openAdmin() {
     if (this.adminRole === null) return;
     if (this.scene.isActive("AdminScene")) return;
-    const from = this.scene.isActive("InteriorScene") ? "InteriorScene" : "WorldScene";
+    const from = this.scene.isActive("InteriorScene")
+      ? "InteriorScene"
+      : "WorldScene";
     this.scene.launch("AdminScene", { from, role: this.adminRole });
-  }
-
-  private buildMapEditorButton() {
-    const SIZE = this.ICON_SIZE, GAP = this.ICON_GAP;
-    const x = this.scale.width - 12 - SIZE / 2 - 4 * (SIZE + GAP);
-    const cy = 12 + SIZE / 2;
-    const bg = uiNineslice(this, x, cy, "ui-panel-dark", SIZE, SIZE, 16)
-      .setOrigin(0.5)
-      .setAlpha(0.96)
-      .setDepth(50)
-      .setInteractive({ cursor: CURSORS.pointer });
-    const icon = this.add.text(x, cy, "🗺", { fontFamily: FONT_EMOJI, fontSize: `${this.ICON_ICON}px` }).setOrigin(0.5).setDepth(51);
-    const tooltip = this.add
-      .text(x, cy + SIZE / 2 + 6, "Map Editor", {
-        fontFamily: FONT, fontSize: "12px", color: COLORS.text, backgroundColor: "#17100acc", padding: { x: 6, y: 4 },
-      })
-      .setResolution(3)
-      .setOrigin(0.5, 0)
-      .setDepth(62)
-      .setVisible(false);
-    bg.on("pointerover", () => { bg.setTint(0xffe08a).setScale(1.08); icon.setScale(1.08); tooltip.setVisible(true); });
-    bg.on("pointerout", () => { bg.clearTint().setScale(1); icon.setScale(1); tooltip.setVisible(false); });
-    bg.on("pointerdown", () => {
-      playUiSound(this, "sfx-tap", 0.3);
-      this.openMapEditor();
-    });
-    this.socialObjects.push(bg, icon, tooltip);
-    this.mapEditBtn = { bg, icon, tooltip };
   }
 
   private openMapEditor() {
@@ -448,24 +389,17 @@ export class UIScene extends Phaser.Scene {
     this.scene.bringToTop("MapEditorScene");
   }
 
-  
+  // ── Unread badge ──────────────────────────────────────────────────
   setUnread(n: number) {
     this.unread = Math.max(0, n | 0);
-    this.refreshBadge();
+    if (!this.elBadge) return;
+    this.elBadge.classList.toggle("hidden", this.unread === 0);
+    this.elBadge.textContent = this.unread > 9 ? "9+" : String(this.unread);
   }
 
-  private refreshBadge() {
-    const show = this.unread > 0;
-    this.badgeBg?.setVisible(show);
-    this.badgeText?.setVisible(show).setText(this.unread > 9 ? "9+" : String(this.unread));
-  }
-
-  
-  
-  
+  // ── Emote bar (canvas) ────────────────────────────────────────────
   private buildEmoteBar() {
     const cell = 40;
-    
     const cells = QUICK_EMOTES.length + 1;
     const w = cells * cell + 16;
     const h = cell + 16;
@@ -473,23 +407,30 @@ export class UIScene extends Phaser.Scene {
     const y = this.scale.height - h - 12;
     this.emoteBaseW = this.scale.width;
     this.emoteBaseH = this.scale.height;
-    const barPanel = panel(this, x, y, w, h, "ui-panel-dark").setOrigin(0, 0).setAlpha(0.95);
+    const barPanel = panel(this, x, y, w, h, "ui-panel-dark")
+      .setOrigin(0, 0)
+      .setAlpha(0.95);
     this.emoteObjects.push(barPanel);
 
     QUICK_EMOTES.forEach((e, i) => {
       const cx = x + 8 + i * cell + cell / 2;
       const cy = y + 8 + cell / 2;
-      this.emoteObjects.push(...this.emoteIcon(cx, cy, e.frame, () => this.sendEmote(e.key)));
+      this.emoteObjects.push(
+        ...this.emoteIcon(cx, cy, e.frame, () => this.sendEmote(e.key)),
+      );
     });
 
-    
     const ex = x + 8 + QUICK_EMOTES.length * cell + cell / 2;
     const ey = y + 8 + cell / 2;
     const moreBg = uiImage(this, ex, ey, "ui-round")
       .setDisplaySize(cell - 6, cell - 6)
       .setInteractive({ cursor: CURSORS.pointer });
     const moreIcon = this.add
-      .text(ex, ey - 1, "•••", { fontFamily: FONT, fontSize: "16px", color: COLORS.text })
+      .text(ex, ey - 1, "•••", {
+        fontFamily: FONT,
+        fontSize: "16px",
+        color: COLORS.text,
+      })
       .setOrigin(0.5);
     moreBg.on("pointerover", () => moreBg.setTint(0xfff2cc));
     moreBg.on("pointerout", () => moreBg.clearTint());
@@ -499,15 +440,12 @@ export class UIScene extends Phaser.Scene {
     });
     this.emoteObjects.push(moreBg, moreIcon);
 
-    
     this.input.keyboard?.on("keydown-C", () => {
       if (this.isChatOpen || this.isDialogueOpen) return;
       this.toggleEmotePopup();
     });
   }
 
-  
-  
   private emoteIcon(
     cx: number,
     cy: number,
@@ -519,7 +457,6 @@ export class UIScene extends Phaser.Scene {
       .image(cx, cy, EMOTE_ATLAS, frame)
       .setOrigin(0.5)
       .setDisplaySize(size, size);
-    
     const hit = this.add
       .zone(cx, cy, size + 12, size + 12)
       .setOrigin(0.5)
@@ -538,8 +475,6 @@ export class UIScene extends Phaser.Scene {
   private toggleEmotePopup() {
     if (this.emotePopupOpen) {
       if (this.emotePopup) {
-        
-        
         const i = this.emoteObjects.indexOf(this.emotePopup);
         if (i >= 0) this.emoteObjects.splice(i, 1);
         this.emotePopup.destroy();
@@ -552,7 +487,6 @@ export class UIScene extends Phaser.Scene {
     this.emotePopupOpen = true;
   }
 
-  
   private buildEmotePopup() {
     const cell = 44;
     const cols = 5;
@@ -561,16 +495,21 @@ export class UIScene extends Phaser.Scene {
     const titleH = 22;
     const w = cols * cell + padX * 2;
     const h = rows * cell + padX + titleH;
-    
     const right = this.scale.width - 12;
     const bottom = this.scale.height - 12 - (40 + 16) - 8;
     const x = right - w;
     const y = bottom - h;
 
     const container = this.add.container(0, 0).setDepth(60);
-    const bg = panel(this, x, y, w, h, "ui-panel-dark").setOrigin(0, 0).setAlpha(0.98);
+    const bg = panel(this, x, y, w, h, "ui-panel-dark")
+      .setOrigin(0, 0)
+      .setAlpha(0.98);
     const title = this.add
-      .text(x + w / 2, y + 12, "EMOTES", { fontFamily: FONT_TITLE, fontSize: "12px", color: COLORS.accent })
+      .text(x + w / 2, y + 12, "EMOTES", {
+        fontFamily: FONT_TITLE,
+        fontSize: "12px",
+        color: COLORS.accent,
+      })
       .setOrigin(0.5);
     container.add([bg, title]);
 
@@ -594,19 +533,13 @@ export class UIScene extends Phaser.Scene {
     this.emoteObjects.push(container);
   }
 
-  
-  
-  
-  
+  // ── Voice button (canvas) ─────────────────────────────────────────
   private buildVoiceButton() {
     if (!voiceChat.supported) return;
     voiceChat.setSender((data, mime) => gameSocket.sendVoiceClip(data, mime));
-    
     voiceChat.onStateChange((on) => this.setMicActive(on));
 
     const SIZE = 48;
-    
-    
     const emoteBarW = (QUICK_EMOTES.length + 1) * 40 + 16;
     const cx = this.scale.width - 12 - emoteBarW - 8 - SIZE / 2;
     const cy = this.scale.height - 12 - SIZE / 2 - 4;
@@ -622,7 +555,6 @@ export class UIScene extends Phaser.Scene {
       .setDepth(51);
     this.micBtn = bg;
 
-    
     const tip = this.add
       .text(cx, cy - SIZE / 2 - 6, `Mic  [${prettyKey(getKeybinds().talk)}]`, {
         fontFamily: FONT,
@@ -646,12 +578,8 @@ export class UIScene extends Phaser.Scene {
     });
     bg.on("pointerdown", () => this.toggleMic());
 
-    
-    
-    
     this.input.keyboard?.on("keydown", (e: KeyboardEvent) => {
       if (e.repeat || this.isChatOpen || this.isDialogueOpen) return;
-      
       if (!this.gameScene()) return;
       if (eventToKeyName(e) === getKeybinds().talk) this.toggleMic();
     });
@@ -667,9 +595,10 @@ export class UIScene extends Phaser.Scene {
     this.micBusy = false;
     this.setMicActive(on);
     if (!wasOn && !on) {
-      
       this.chat?.addSystem(
-        loadSettings().voiceEnabled ? "Microphone unavailable." : "Voice is off (Settings).",
+        loadSettings().voiceEnabled
+          ? "Microphone unavailable."
+          : "Voice is off (Settings).",
       );
     } else {
       this.chat?.addSystem(on ? "Mic on — you're live." : "Mic off.");
@@ -681,15 +610,19 @@ export class UIScene extends Phaser.Scene {
     else this.micBtn?.clearTint();
   }
 
-  private onVoice = ({ id, data, mime }: { id: string; data: ArrayBuffer; mime: string }) => {
+  private onVoice = ({
+    id,
+    data,
+    mime,
+  }: {
+    id: string;
+    data: ArrayBuffer;
+    mime: string;
+  }) => {
     voiceChat.play(id, data, mime);
     this.gameScene()?.showSpeaking?.(id);
   };
 
-  
-
-  
-  
   private gameScene(): GameplayScene | undefined {
     for (const key of ["InteriorScene", "WorldScene"]) {
       const s = this.scene.get(key) as GameplayScene | undefined;
@@ -700,10 +633,6 @@ export class UIScene extends Phaser.Scene {
     return undefined;
   }
 
-  
-  
-  
-  
   private handleChatCommand(raw: string): boolean {
     const parts = raw.slice(1).trim().split(/\s+/);
     const cmd = (parts[0] ?? "").toLowerCase();
@@ -722,7 +651,8 @@ export class UIScene extends Phaser.Scene {
         if (!isAdmin) return say("You don't have permission to use /speed."), true;
         const arg = (parts[1] ?? "").toLowerCase();
         const n = arg === "reset" ? 1 : Number(arg);
-        if (!Number.isFinite(n) || n < 1 || n > 8) return say("Usage: /speed <1-8|reset>"), true;
+        if (!Number.isFinite(n) || n < 1 || n > 8)
+          return say("Usage: /speed <1-8|reset>"), true;
         this.gameScene()?.setSpeedMultiplier?.(n);
         return say(`Walk speed set to ${n}×.`), true;
       }
@@ -730,33 +660,28 @@ export class UIScene extends Phaser.Scene {
         if (!isAdmin) return say("You don't have permission to use /tp."), true;
         const x = Number(parts[1]);
         const y = Number(parts[2]);
-        if (!Number.isInteger(x) || !Number.isInteger(y)) return say("Usage: /tp <x> <y>"), true;
+        if (!Number.isInteger(x) || !Number.isInteger(y))
+          return say("Usage: /tp <x> <y>"), true;
         const ok = this.gameScene()?.teleport?.(x, y);
         return say(ok ? `Teleported to ${x}, ${y}.` : "Can't teleport there."), true;
       }
       default:
-        
         return false;
     }
   }
 
-  
-  
+  // ── Mobile controls (canvas) ──────────────────────────────────────
   private buildMobileControls() {
     const coarse =
-      (typeof window !== "undefined" && !!window.matchMedia?.("(pointer: coarse)").matches) ||
+      (typeof window !== "undefined" &&
+        !!window.matchMedia?.("(pointer: coarse)").matches) ||
       (navigator?.maxTouchPoints ?? 0) > 0;
     if (!coarse) return;
 
     const GAP = 58;
-    
-    
     const clusterX = 96;
-    const clusterDY = -156; 
+    const clusterDY = -156;
 
-    
-    
-    
     const dpad = (ox: number, oy: number, frame: string, dx: number, dy: number) => {
       const SIZE = 64;
       const bg = this.add
@@ -777,29 +702,35 @@ export class UIScene extends Phaser.Scene {
       bg.on("pointerup", release);
       bg.on("pointerout", release);
       bg.on("pointerupoutside", release);
-      this.mobileReflow.push((_w, h) => bg.setPosition(clusterX + ox, h + clusterDY + oy));
+      this.mobileReflow.push((_w, h) =>
+        bg.setPosition(clusterX + ox, h + clusterDY + oy),
+      );
     };
     dpad(0, -GAP, "dpad_element_north", 0, -1);
     dpad(0, GAP, "dpad_element_south", 0, 1);
     dpad(-GAP, 0, "dpad_element_west", -1, 0);
     dpad(GAP, 0, "dpad_element_east", 1, 0);
 
-    
-    this.touchActionButton(-70, -150, "icon_hand", () => this.gameScene()?.mobileInteract?.());
+    this.touchActionButton(-70, -150, "icon_hand", () =>
+      this.gameScene()?.mobileInteract?.(),
+    );
     this.touchActionButton(-150, -110, "icon_talk", () => {
       if (!this.isDialogueOpen) this.openChat();
     });
 
-    
-    const run = () => this.mobileReflow.forEach((f) => f(this.scale.width, this.scale.height));
+    const run = () =>
+      this.mobileReflow.forEach((f) => f(this.scale.width, this.scale.height));
     run();
     this.scale.on("resize", run);
     this.events.once("shutdown", () => this.scale.off("resize", run));
   }
 
-  
-  
-  private touchActionButton(rx: number, ry: number, iconFrame: string, onTap: () => void) {
+  private touchActionButton(
+    rx: number,
+    ry: number,
+    iconFrame: string,
+    onTap: () => void,
+  ) {
     const bg = this.add
       .image(0, 0, "mc", "button_circle")
       .setDisplaySize(64, 64)
@@ -830,107 +761,106 @@ export class UIScene extends Phaser.Scene {
     });
   }
 
+  // ── Day/night ─────────────────────────────────────────────────────
   setDayCycle(tNow: number, dayLengthMs: number, _serverNow: number) {
     this.dayLengthMs = dayLengthMs;
-    
-    
     this.dayEpoch = Date.now() - tNow * dayLengthMs;
   }
 
+  // Scenes that should hide the DOM HUD chrome while open. DOM modals already
+  // cover it, but the canvas ones (InvitePanel/SkinEditor/MapEditor) render
+  // below the HUD layer, so without this the chrome would float over them.
+  private static readonly MODAL_SCENES = [
+    "PauseScene",
+    "SettingsScene",
+    "ShopScene",
+    "InventoryScene",
+    "InboxScene",
+    "InvitePanelScene",
+    "AdminScene",
+    "ProjectsScene",
+    "SkinEditorScene",
+    "MapEditorScene",
+    "CharacterScene",
+  ];
+
+  private syncHudVisibility() {
+    if (!this.hudRoot) return;
+    const blocked = UIScene.MODAL_SCENES.some((k) => this.scene.isActive(k));
+    this.hudRoot.style.display = blocked ? "none" : "";
+  }
+
   update() {
-    
-    
+    this.syncHudVisibility();
     musicEngine.setEnabled(loadSettings().soundEnabled);
 
     if (this.dayLengthMs <= 0 || !this.nightOverlay) return;
-    const phase = this.dayPhase(); 
-    
+    const phase = this.dayPhase();
     const brightness = (1 - Math.cos(2 * Math.PI * phase)) / 2;
-    const darkness = (1 - brightness) * 0.55; 
+    const darkness = (1 - brightness) * 0.55;
     this.nightOverlay.setAlpha(darkness);
 
-    if (this.timeText) {
-
-      const mins = Math.floor(phase * 1440);
-      const hh = String(Math.floor(mins / 60)).padStart(2, "0");
-      const mm = String(mins % 60).padStart(2, "0");
-      const clock = `${hh}:${mm}`;
-      if (clock !== this.lastClock) {
-        this.lastClock = clock;
-        this.timeText.setText(clock);
-      }
-
-      const dayLabel = phase >= 0.25 && phase < 0.75 ? "day" : "night";
-      if (dayLabel !== this.lastTimeLabel) {
-        this.lastTimeLabel = dayLabel;
-        this.timeIcon?.setText(dayLabel === "day" ? "☀" : "🌙");
-      }
+    const mins = Math.floor(phase * 1440);
+    const hh = String(Math.floor(mins / 60)).padStart(2, "0");
+    const mm = String(mins % 60).padStart(2, "0");
+    const clock = `${hh}:${mm}`;
+    const dayLabel = phase >= 0.25 && phase < 0.75 ? "day" : "night";
+    if (clock !== this.lastClock || dayLabel !== this.lastTimeLabel) {
+      this.lastClock = clock;
+      this.lastTimeLabel = dayLabel;
+      if (this.elClock)
+        this.elClock.textContent = `${dayLabel === "day" ? "☀" : "🌙"} ${clock}`;
     }
   }
 
-  
-
+  // ── Status / coords / hearts / wallet ─────────────────────────────
   setStatus(text: string) {
-    if (!this.statusText) return;
-    this.statusText.setText(text);
-    
-    const show = text.length > 0;
-    this.statusText.setVisible(show);
-    this.statusBg?.setVisible(show).setSize(this.statusText.width + 26, 24);
+    if (!this.elStatus) return;
+    this.elStatus.textContent = text;
+    this.elStatus.classList.toggle("hidden", text.length === 0);
   }
 
   private lastCx = NaN;
   private lastCy = NaN;
   setCoords(cx: number, cy: number) {
-    
-    
     if (cx === this.lastCx && cy === this.lastCy) return;
     this.lastCx = cx;
     this.lastCy = cy;
-    this.coordText?.setText(`X ${cx}  Y ${cy}`);
+    if (this.elCoords) this.elCoords.textContent = `X ${cx}  Y ${cy}`;
   }
 
   setHp(hp: number, hpMax?: number) {
-    if (hpMax !== undefined && hpMax !== this.hpMax) {
-      
-      for (const g of this.heartIcons) g.destroy();
-      this.heartIcons.length = 0;
-      this.hpMax = hpMax;
-      for (let i = 0; i < this.hpMax; i++) {
-        const g = this.add.graphics();
-        g.x = this.heartBaseX + i * 13;
-        g.y = this.heartsY;
-        this.heartIcons.push(g);
-      }
-    }
+    if (hpMax !== undefined) this.hpMax = hpMax;
     this.hp = hp;
     this.refreshHearts();
   }
 
-  
-  
+  private refreshHearts() {
+    if (!this.elHearts) return;
+    this.elHearts.replaceChildren();
+    for (let i = 0; i < this.hpMax; i++) {
+      const h = el("span", i < this.hp ? "on" : undefined, "♥");
+      this.elHearts.append(h);
+    }
+  }
+
   get walletTotal(): number {
     return this.pixels;
   }
 
   setWallet(pixels: number, delta: number) {
     this.pixels = pixels;
-    
-    this.pixelText?.setText(`${this.pixels}`);
-    if (delta > 0 && this.pixelText) {
-      this.flashTween?.stop();
-      this.pixelText.setScale(1.6);
-      this.flashTween = this.tweens.add({
-        targets: this.pixelText,
-        scale: 1,
-        duration: 280,
-        ease: "Quad.easeOut",
-      });
+    if (!this.elPixels) return;
+    this.elPixels.textContent = `🪙 ${this.pixels}`;
+    if (delta > 0) {
+      this.elPixels.classList.remove("bump");
+      // reflow to restart the animation
+      void this.elPixels.offsetWidth;
+      this.elPixels.classList.add("bump");
     }
   }
 
-  
-
+  // ── Dialogue passthrough ──────────────────────────────────────────
   get isDialogueOpen(): boolean {
     return this.box?.isOpen ?? false;
   }
@@ -944,8 +874,7 @@ export class UIScene extends Phaser.Scene {
     this.box?.close();
   }
 
-  
-
+  // ── Chat passthrough ──────────────────────────────────────────────
   get isChatOpen(): boolean {
     return this.chat?.isOpen ?? false;
   }
@@ -954,154 +883,5 @@ export class UIScene extends Phaser.Scene {
   }
   addChatMessage(msg: ChatMessage) {
     this.chat?.addMessage(msg);
-  }
-
-  
-
-  get isPlayerListOpen(): boolean {
-    return this.playerListOpen;
-  }
-
-  
-  
-  showPlayerList() {
-    if (this.playerListOpen) return;
-    this.playerListOpen = true;
-    gameSocket.requestPlayers();
-    this.renderPlayerList();
-  }
-
-  hidePlayerList() {
-    if (!this.playerListOpen) return;
-    this.playerListOpen = false;
-    this.destroyPlayerList();
-  }
-
-  private onPlayersList = (data: { players: PlayerDirEntry[] }) => {
-    this.latestPlayers = data.players;
-    if (this.playerListOpen) this.renderPlayerList();
-  };
-
-  private destroyPlayerList() {
-    for (const o of this.playerListObjects) o.destroy();
-    this.playerListObjects.length = 0;
-  }
-
-  private renderPlayerList() {
-    if (!this.playerListOpen) return;
-    this.destroyPlayerList();
-
-    const W = this.scale.width;
-    const H = this.scale.height;
-    const online = this.latestPlayers
-      .filter((p) => p.online)
-      .sort((a, b) => a.name.localeCompare(b.name));
-
-    const rowH = 26;
-    const headerH = 46;
-    const panelW = 320;
-    const bodyH = Math.max(rowH, online.length * rowH);
-    const panelH = headerH + bodyH + 18;
-    const cx = W / 2;
-    const cy = H / 2;
-    const top = cy - panelH / 2;
-    const left = cx - panelW / 2;
-
-    const dim = this.add
-      .rectangle(0, 0, W, H, 0x000000, 0.4)
-      .setOrigin(0)
-      .setDepth(20000);
-    const box = uiNineslice(this, cx, cy, "ui-panel-dark", panelW, panelH, 20)
-      .setOrigin(0.5)
-      .setAlpha(0.98)
-      .setDepth(20001);
-    const title = this.add
-      .text(cx, top + 24, `PLAYERS ONLINE  (${online.length})`, {
-        fontFamily: FONT_TITLE,
-        fontSize: "15px",
-        color: COLORS.accent,
-      })
-      .setOrigin(0.5)
-      .setResolution(3)
-      .setDepth(20002);
-    this.playerListObjects.push(dim, box, title);
-
-    if (online.length === 0) {
-      const empty = this.add
-        .text(cx, top + headerH + rowH / 2, "No one online", {
-          fontFamily: FONT_CHAT,
-          fontSize: "14px",
-          color: COLORS.textDim,
-        })
-        .setOrigin(0.5)
-        .setResolution(3)
-        .setDepth(20002);
-      this.playerListObjects.push(empty);
-      return;
-    }
-
-    const myId = getAccountId();
-    online.forEach((p, i) => {
-      const ry = top + headerH + i * rowH + rowH / 2;
-      const dot = this.add.circle(left + 28, ry, 4, 0x4ade80).setDepth(20002);
-      const mine = p.accountId === myId;
-      const name = this.add
-        .text(left + 44, ry, mine ? `${p.name}  (you)` : p.name, {
-          fontFamily: FONT_CHAT,
-          fontSize: "15px",
-          color: mine ? COLORS.accent : COLORS.text,
-        })
-        .setOrigin(0, 0.5)
-        .setResolution(3)
-        .setDepth(20002);
-      this.playerListObjects.push(dot, name);
-    });
-  }
-
-  
-
-  private refreshHearts() {
-    for (let i = 0; i < this.heartIcons.length; i++) {
-      const g = this.heartIcons[i];
-      g.clear();
-      drawHeart(g, i < this.hp);
-    }
-  }
-}
-
-function truncate(s: string, max: number): string {
-  return s.length > max ? s.slice(0, max - 1) + "…" : s;
-}
-
-const HEART_PIXELS: { x: number; y: number }[] = (() => {
-  const rows = [
-    "0110011",
-    "1111111",
-    "1111111",
-    "1111111",
-    "0111110",
-    "0011100",
-    "0001000",
-  ];
-  const pts: { x: number; y: number }[] = [];
-  for (let r = 0; r < rows.length; r++) {
-    for (let c = 0; c < rows[r].length; c++) {
-      if (rows[r][c] === "1") pts.push({ x: c, y: r });
-    }
-  }
-  return pts;
-})();
-
-function drawHeart(g: Phaser.GameObjects.Graphics, filled: boolean) {
-  const PX = 2;
-  g.fillStyle(0x000000, 0.7);
-  for (const { x, y } of HEART_PIXELS) g.fillRect(x * PX + 1, y * PX + 1, PX, PX);
-  g.fillStyle(filled ? 0xcc2222 : 0x3a1212, 1);
-  for (const { x, y } of HEART_PIXELS) g.fillRect(x * PX, y * PX, PX, PX);
-  if (filled) {
-    g.fillStyle(0xff8888, 1);
-    for (const { x, y } of HEART_PIXELS) {
-      if (y < 2) g.fillRect(x * PX, y * PX, PX, 1);
-    }
   }
 }
