@@ -7,6 +7,7 @@ import type {
   MuteChannel,
   MapEdit,
   NpcEdit,
+  VillageEntities,
 } from "../types/network";
 import { getSessionToken } from "./playerIdentity";
 
@@ -121,6 +122,10 @@ class GameSocket {
 
   npcInteract(npcId: string) {
     this.socket?.emit("npc:interact", { npcId });
+  }
+
+  saveVillageEntities(payload: VillageEntities) {
+    this.socket?.emit("village:saveEntities", payload);
   }
 
   shopBuy(itemId: string) {

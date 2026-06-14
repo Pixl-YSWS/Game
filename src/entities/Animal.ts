@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import { cartToIso, TILE_W, TILE_H } from "../utils/IsoUtils";
 import type { MapObject, MapDef } from "../types/map";
-import { TS } from "../world/tileset";
+import { TS, GRASS, GRASS_DARK } from "../world/tileset";
 import { EMOTE_ATLAS } from "../ui/theme";
 import { emoteFrame } from "../ui/emotes";
 
@@ -202,6 +202,9 @@ export class Animal extends Phaser.GameObjects.Container {
           return false;
         const g = this.mapDef.groundLayer[gr]?.[gc];
         if (g === undefined || !this.mapDef.walkableGround.has(g)) return false;
+        // Grazing animals stick to grass — PATH tiles are drawn with a sandy
+        // beach overlay, so a cow standing there looks like it's eating sand.
+        if (g !== GRASS && g !== GRASS_DARK) return false;
         const d = this.mapDef.decoLayer[gr]?.[gc];
         if (d !== undefined && d >= 0 && this.mapDef.solidDeco.has(d))
           return false;
@@ -282,6 +285,23 @@ export class Animal extends Phaser.GameObjects.Container {
     this.setDepth(this.cy + this.obj.h / SRC_TILE);
     this.playAnim(this.idleAnimKeys, this.idleFps);
     this.scheduleWander();
+  }
+
+  /** Snap to a saved tile when restoring a village's last-known layout. */
+  placeAt(cx: number, cy: number) {
+    if (cx < 0 || cy < 0 || cx >= this.mapDef.cols || cy >= this.mapDef.rows)
+      return;
+    for (const t of this.held) this.occupied.delete(t);
+    this.held.clear();
+    this.cx = cx;
+    this.cy = cy;
+    for (const t of this.footprintTiles(cx, cy)) {
+      this.occupied.add(t);
+      this.held.add(t);
+    }
+    const { x, y } = cartToIso(cx, cy);
+    this.setPosition(x, y);
+    this.setDepth(this.obj.flat ? 0.4 : cy + this.obj.h / SRC_TILE);
   }
 
   /** World-space anchor (top-centre) for a floating prompt above the animal. */

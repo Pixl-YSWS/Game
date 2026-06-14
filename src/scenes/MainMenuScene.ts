@@ -106,6 +106,7 @@ export class MainMenuScene extends Phaser.Scene {
         b.style.width = "100%";
         btns.push(b);
         actions.append(b);
+        return b;
       };
 
       addBtn("Join Village", () =>
@@ -127,7 +128,28 @@ export class MainMenuScene extends Phaser.Scene {
       addBtn("Settings", () =>
         this.scene.launch("SettingsScene", { from: "MainMenuScene" }),
       );
-      addBtn("Logout", () => this.logout(), "grey");
+      // Logout is keyboard-reachable and destructive, so it takes two presses:
+      // a stray Enter/click arms it ("Confirm logout?") instead of logging out.
+      let logoutArmed = false;
+      let logoutRevert: number | undefined;
+      const logoutBtn = addBtn(
+        "Logout",
+        () => {
+          if (!logoutArmed) {
+            logoutArmed = true;
+            logoutBtn.textContent = "Confirm logout?";
+            window.clearTimeout(logoutRevert);
+            logoutRevert = window.setTimeout(() => {
+              logoutArmed = false;
+              logoutBtn.textContent = "Logout";
+            }, 3000);
+            return;
+          }
+          window.clearTimeout(logoutRevert);
+          this.logout();
+        },
+        "grey",
+      );
 
       btns[0]?.focus();
 
@@ -142,6 +164,9 @@ export class MainMenuScene extends Phaser.Scene {
           e.preventDefault();
           btns[(idx - 1 + btns.length) % btns.length].focus();
         } else if (e.key === "Enter" || e.key === " ") {
+          // preventDefault so the focused button isn't *also* activated
+          // natively (a double-fire); we trigger the click ourselves.
+          e.preventDefault();
           if (idx >= 0) btns[idx].click();
         }
       };

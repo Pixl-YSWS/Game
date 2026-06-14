@@ -21,11 +21,11 @@ import {
   editKey,
   type EditLayer,
 } from "../world/mapOverrides";
-import { gameSocket } from "../network/socket";
+import { gameSocket, SERVER_URL } from "../network/socket";
 import { TILE_H, TILE_W, cartToIso, isoToCart } from "../utils/IsoUtils";
 import { getShopItem } from "../shop/catalog";
 import { FONT_DIALOUG, FONT_EMOJI } from "../ui/theme";
-import type { HouseObject } from "../types/network";
+import type { HouseObject, VillageEntities } from "../types/network";
 import {
   getAccountId,
   setAccountId,
@@ -36,6 +36,7 @@ import {
   getCustomSkin,
   setCustomSkin,
   clearCustomSkin,
+  getSessionToken,
 } from "../network/playerIdentity";
 import { loadSettings, getKeybinds } from "../data/Settings";
 import { UIScene } from "./UIScene";
@@ -122,11 +123,16 @@ export class WorldScene extends Phaser.Scene {
 
   private npcs: Npc[] = [];
 
+  // Last-known NPC/animal positions for the current village (from the server),
+  // applied once when the scene is (re)built so it looks as the owner left it.
+  private savedEntities?: VillageEntities;
+  private entitySaveTimer?: Phaser.Time.TimerEvent;
+  // Drives occasional NPC-to-NPC "chats" so the village feels alive.
+  private npcSocialTimer?: Phaser.Time.TimerEvent;
+
   private npcIndicators: {
-    cx: number;
-    cy: number;
+    npc: Npc;
     label: Phaser.GameObjects.Text;
-    bobTween: Phaser.Tweens.Tween;
   }[] = [];
 
   private ui?: UIScene;
@@ -224,6 +230,11 @@ export class WorldScene extends Phaser.Scene {
     this.scale.on("resize", this.onResize, this);
 
     this.events.once("shutdown", () => {
+      this.saveVillageEntities();
+      this.entitySaveTimer?.remove(false);
+      this.entitySaveTimer = undefined;
+      this.npcSocialTimer?.remove(false);
+      this.npcSocialTimer = undefined;
       this.oceanTimer?.remove(false);
       this.oceanTimer = undefined;
       this.clearDoorIndicators();
@@ -317,6 +328,52 @@ export class WorldScene extends Phaser.Scene {
     if (this.scene.isActive("PauseScene")) return;
     this.scene.pause();
     this.scene.launch("PauseScene", { pausedSceneKey: "WorldScene" });
+  }
+
+  private unauthorizedChecking = false;
+
+  /**
+   * Decide whether an `unauthorized` socket rejection is real. Re-checks the
+   * stored token against `/auth/verify` a few times with backoff; only clears
+   * the session and returns to login if the server definitively rejects it.
+   * Otherwise it's treated as a transient blip and socket.io keeps reconnecting.
+   */
+  private async handleUnauthorized() {
+    if (this.unauthorizedChecking) return;
+    this.unauthorizedChecking = true;
+    try {
+      const token = getSessionToken();
+      if (!token) {
+        this.returnToLogin("Please log in to play.");
+        return;
+      }
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          const res = await fetch(
+            `${SERVER_URL}/auth/verify?token=${encodeURIComponent(token)}`,
+          );
+          if (res.ok) {
+            // Token is still valid — the socket rejection was transient.
+            this.showConnError("Reconnecting…");
+            return;
+          }
+          if (res.status === 401) {
+            this.returnToLogin(
+              "Your session has expired. Please log in again.",
+            );
+            return;
+          }
+        } catch {
+          // Network error reaching the server — server may be restarting.
+        }
+        await new Promise((r) => setTimeout(r, 800 * (attempt + 1)));
+      }
+      // Couldn't reach the server to confirm; keep the session and let the
+      // socket keep retrying rather than logging the player out blindly.
+      this.showConnError("Reconnecting…");
+    } finally {
+      this.unauthorizedChecking = false;
+    }
   }
 
   private returnToLogin(message: string, clear = true) {
@@ -508,8 +565,8 @@ export class WorldScene extends Phaser.Scene {
     if (!this.localPlayer) return;
     if (this.editMode) return;
     if (this.ui?.isChatOpen || this.ui?.isDialogueOpen) return;
-    const dx = Math.abs(npc.def.cx - this.localPlayer.cx);
-    const dy = Math.abs(npc.def.cy - this.localPlayer.cy);
+    const dx = Math.abs(npc.cx - this.localPlayer.cx);
+    const dy = Math.abs(npc.cy - this.localPlayer.cy);
     if (dx + dy > 1) {
       this.flashStatus("Walk closer to talk");
       return;
@@ -521,8 +578,8 @@ export class WorldScene extends Phaser.Scene {
     if (!this.localPlayer) return undefined;
     const { cx, cy } = this.localPlayer;
     for (const npc of this.npcs) {
-      const dx = Math.abs(npc.def.cx - cx);
-      const dy = Math.abs(npc.def.cy - cy);
+      const dx = Math.abs(npc.cx - cx);
+      const dy = Math.abs(npc.cy - cy);
 
       if (dx + dy <= 1) return npc;
     }
@@ -606,16 +663,15 @@ export class WorldScene extends Phaser.Scene {
   private rebuildNpcs() {
     this.clearNpcs();
     if (!this.mapDef) return;
+    const occupancy = new Set<string>();
     for (const def of this.mapDef.npcs) {
-      const npc = new Npc(this, def);
+      const npc = new Npc(this, def, this.mapDef, occupancy);
+      const saved = this.savedEntities?.npcs.find((n) => n.id === def.id);
+      if (saved) npc.placeAt(saved.cx, saved.cy);
       npc.on("pointerdown", () => this.onNpcClick(npc));
       this.npcs.push(npc);
-      const { x, y } = cartToIso(def.cx, def.cy);
-      // FIX: snap to integer pixels to avoid sub-pixel blur
-      const labelX = Math.round(x + TILE_W / 2);
-      const labelY = Math.round(y - TILE_H);
       const label = this.add
-        .text(labelX, labelY, this.interactKeyLabel(), {
+        .text(0, 0, this.interactKeyLabel(), {
           fontFamily: FONT,
           fontSize: "8px",
           color: "#ffff66",
@@ -625,23 +681,12 @@ export class WorldScene extends Phaser.Scene {
         .setOrigin(0.5, 1)
         .setDepth(9999)
         .setVisible(false);
-      const bobTween = this.tweens.add({
-        targets: label,
-        y: labelY - 4,
-        duration: 450,
-        ease: "Sine.easeInOut",
-        yoyo: true,
-        repeat: -1,
-      });
-      this.npcIndicators.push({ cx: def.cx, cy: def.cy, label, bobTween });
+      this.npcIndicators.push({ npc, label });
     }
   }
 
   private clearNpcs() {
-    for (const ind of this.npcIndicators) {
-      ind.bobTween.stop();
-      ind.label.destroy();
-    }
+    for (const ind of this.npcIndicators) ind.label.destroy();
     this.npcIndicators.length = 0;
     for (const n of this.npcs) n.destroy();
     this.npcs.length = 0;
@@ -682,8 +727,10 @@ export class WorldScene extends Phaser.Scene {
     this.clearAnimals();
     if (!this.mapDef) return;
     const occupancy = new Set<string>();
-    for (const obj of objs) {
-      const animal = new Animal(this, obj, this.mapDef, occupancy);
+    objs.forEach((obj, i) => {
+      const animal = new Animal(this, obj, this.mapDef!, occupancy);
+      const saved = this.savedEntities?.animals[i];
+      if (saved) animal.placeAt(saved.cx, saved.cy);
       animal.makeClickable(CURSORS.pointer, () => {
         if (
           this.localPlayer &&
@@ -693,7 +740,7 @@ export class WorldScene extends Phaser.Scene {
         else this.flashStatus("Walk closer to pet");
       });
       this.animals.push(animal);
-    }
+    });
   }
 
   private clearAnimals() {
@@ -785,10 +832,18 @@ export class WorldScene extends Phaser.Scene {
       return;
     }
     const { cx, cy } = this.localPlayer;
+    const bob = Math.sin(this.time.now / 150) * 2;
     for (const ind of this.npcIndicators) {
-      const dx = Math.abs(ind.cx - cx);
-      const dy = Math.abs(ind.cy - cy);
-      ind.label.setVisible(dx + dy <= 1);
+      const { npc, label } = ind;
+      const near = Math.abs(npc.cx - cx) + Math.abs(npc.cy - cy) <= 1;
+      label.setVisible(near);
+      if (near) {
+        // Follow the NPC as it wanders (label lives at scene depth, not a child).
+        label.setPosition(
+          Math.round(npc.x),
+          Math.round(npc.y - TILE_H * 1.5 + bob),
+        );
+      }
     }
   }
 
@@ -1145,6 +1200,12 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private rebuildWorld(state: WorldState) {
+    // Capture the current village layout before we leave it for a new world.
+    this.saveVillageEntities();
+    this.entitySaveTimer?.remove(false);
+    this.entitySaveTimer = undefined;
+    this.npcSocialTimer?.remove(false);
+    this.npcSocialTimer = undefined;
     this.world = state.world;
 
     this.isoMap?.destroy();
@@ -1176,6 +1237,7 @@ export class WorldScene extends Phaser.Scene {
 
     this.overrides = state.overrides ?? [];
     this.npcEdits = state.npcEdits ?? [];
+    this.savedEntities = state.entities;
     this.pendingEdits.clear();
     this.pendingNpcEdits.length = 0;
     this.pickedNpcId = undefined;
@@ -1248,6 +1310,93 @@ export class WorldScene extends Phaser.Scene {
     this.scheduleHideLoadingOverlay();
     this.refreshStatus();
     this.refreshOnlineCount();
+    this.setupEntityAutosave();
+    this.setupNpcSocial();
+  }
+
+  /** True when the player is standing in the village they own. */
+  private inOwnVillage(): boolean {
+    return (
+      this.world.kind === "village" &&
+      this.world.ownerPlayerId === getAccountId()
+    );
+  }
+
+  /** Periodically persist where this village's NPCs/animals have wandered, but
+   *  only for the owner — visitors must not overwrite someone else's layout. */
+  private setupEntityAutosave() {
+    this.entitySaveTimer?.remove(false);
+    this.entitySaveTimer = undefined;
+    if (!this.inOwnVillage()) return;
+    this.entitySaveTimer = this.time.addEvent({
+      delay: 8000,
+      loop: true,
+      callback: () => this.saveVillageEntities(),
+    });
+  }
+
+  private saveVillageEntities() {
+    if (!this.inOwnVillage()) return;
+    gameSocket.saveVillageEntities({
+      npcs: this.npcs.map((n) => ({ id: n.def.id, cx: n.cx, cy: n.cy })),
+      animals: this.animals.map((a) => ({ cx: a.cx, cy: a.cy })),
+    });
+  }
+
+  private setupNpcSocial() {
+    this.npcSocialTimer?.remove(false);
+    this.npcSocialTimer = undefined;
+    if (this.npcs.length < 2) return;
+    this.npcSocialTimer = this.time.addEvent({
+      delay: 5000,
+      loop: true,
+      callback: () => this.tryNpcChat(),
+    });
+  }
+
+  // When two idle NPCs happen to be near each other, have them stop and trade a
+  // few emotes so it reads as a little conversation.
+  private tryNpcChat() {
+    const free = this.npcs.filter((n) => n.isAvailable());
+    if (free.length < 2) return;
+    const CHAT_RANGE = 5;
+    for (const a of Phaser.Utils.Array.Shuffle(free.slice())) {
+      let partner: Npc | undefined;
+      let bestD = Infinity;
+      for (const b of free) {
+        if (b === a) continue;
+        const d = Math.abs(a.cx - b.cx) + Math.abs(a.cy - b.cy);
+        if (d < bestD) {
+          bestD = d;
+          partner = b;
+        }
+      }
+      if (partner && bestD <= CHAT_RANGE) {
+        this.startNpcChat(a, partner);
+        return;
+      }
+    }
+  }
+
+  private startNpcChat(a: Npc, b: Npc) {
+    const dur = 3200 + Math.random() * 1800;
+    a.startChat(b.cx, b.cy, dur);
+    b.startChat(a.cx, a.cy, dur);
+    const moods = [
+      "happy",
+      "laugh",
+      "idea",
+      "music",
+      "heart",
+      "exclaim",
+      "question",
+    ];
+    const pick = () => moods[Math.floor(Math.random() * moods.length)];
+    const speakers = [a, b];
+    const turns = 3 + Math.floor(Math.random() * 2);
+    for (let i = 0; i < turns; i++) {
+      this.time.delayedCall(300 + i * 850, () => speakers[i % 2].showEmote(pick()));
+    }
   }
 
   private showLoadingOverlay(message: string) {
@@ -1331,7 +1480,10 @@ export class WorldScene extends Phaser.Scene {
           );
           break;
         case "unauthorized":
-          this.returnToLogin("Your session has expired. Please log in again.");
+          // A single socket rejection can be transient (e.g. the dev server
+          // mid-restart). Confirm the token is really dead over HTTP before we
+          // wipe a still-valid 30-day session and boot the player to login.
+          void this.handleUnauthorized();
           break;
       }
     });

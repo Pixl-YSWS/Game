@@ -24,6 +24,7 @@ import type {
   NpcEdit,
   MapRevision,
   MapRevisionMeta,
+  VillageEntities,
 } from "../src/types/network.ts";
 import { generateMap, generateVillage } from "../src/world/MapGen.ts";
 import { makeHouseInterior } from "../src/world/HouseMap.ts";
@@ -301,6 +302,57 @@ const upsertPosition = db.query<
 const selectPosition = db.query<{ cx: number; cy: number }, [string, string]>(
   "SELECT cx, cy FROM player_positions WHERE player_id = ? AND world_key = ?",
 );
+db.run(`
+  CREATE TABLE IF NOT EXISTS village_entities (
+    owner_id   TEXT PRIMARY KEY,
+    data       TEXT NOT NULL,
+    updated_at INTEGER NOT NULL
+  )
+`);
+const upsertVillageEntities = db.query<unknown, [string, string, number]>(
+  "INSERT INTO village_entities (owner_id, data, updated_at) VALUES (?, ?, ?) " +
+    "ON CONFLICT(owner_id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at",
+);
+const selectVillageEntities = db.query<{ data: string }, [string]>(
+  "SELECT data FROM village_entities WHERE owner_id = ?",
+);
+
+function loadVillageEntities(ownerId: string): VillageEntities | undefined {
+  const row = selectVillageEntities.get(ownerId);
+  if (!row) return undefined;
+  try {
+    return JSON.parse(row.data) as VillageEntities;
+  } catch {
+    return undefined;
+  }
+}
+
+const ENTITY_MAX = 256;
+const COORD_MAX = 10000;
+const clampCoord = (n: unknown): number => {
+  const v = Math.round(Number(n));
+  if (!Number.isFinite(v)) return 0;
+  return Math.max(0, Math.min(COORD_MAX, v));
+};
+
+function saveVillageEntities(ownerId: string, raw: VillageEntities): void {
+  // Sanitise client-supplied positions before persisting.
+  const npcs = Array.isArray(raw?.npcs)
+    ? raw.npcs.slice(0, ENTITY_MAX).flatMap((n) =>
+        typeof n?.id === "string" && n.id.length <= 64
+          ? [{ id: n.id, cx: clampCoord(n.cx), cy: clampCoord(n.cy) }]
+          : [],
+      )
+    : [];
+  const animals = Array.isArray(raw?.animals)
+    ? raw.animals
+        .slice(0, ENTITY_MAX)
+        .map((a) => ({ cx: clampCoord(a?.cx), cy: clampCoord(a?.cy) }))
+    : [];
+  const data: VillageEntities = { npcs, animals };
+  upsertVillageEntities.run(ownerId, JSON.stringify(data), Date.now());
+}
+
 const hasNpcReward = db.query<{ n: number }, [string, string]>(
   "SELECT COUNT(*) AS n FROM npc_rewards WHERE player_id = ? AND npc_id = ?",
 );
@@ -867,6 +919,10 @@ function worldStateFor(state: ServerPlayerState): WorldState {
     players: peersInWorld(state.world, state.id),
     overrides: overridesFor(ek),
     npcEdits: npcEditsFor(ek),
+    entities:
+      state.world.kind === "village"
+        ? loadVillageEntities(state.world.ownerPlayerId)
+        : undefined,
   };
 }
 
@@ -1202,6 +1258,19 @@ io.on("connection", (socket) => {
       delta: npc.reward,
       reason: npc.name,
     });
+  });
+
+  socket.on("village:saveEntities", (payload) => {
+    const player = players.get(socket.id);
+    if (!player) return;
+    // Only the owner standing in their own village may persist its layout.
+    if (
+      player.world.kind !== "village" ||
+      player.world.ownerPlayerId !== player.playerId
+    )
+      return;
+    if (!payload || typeof payload !== "object") return;
+    saveVillageEntities(player.playerId, payload as VillageEntities);
   });
 
   socket.on("shop:buy", ({ itemId }) => {

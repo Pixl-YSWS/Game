@@ -69,6 +69,17 @@ export interface WorldState {
   overrides?: MapEdit[];
   // Persisted admin NPC edits applied (in order) on top of the base NPC list.
   npcEdits?: NpcEdit[];
+  // Last-seen wandering positions of this village's NPCs/animals, restored so
+  // the world looks the same as the owner left it. Only sent for villages.
+  entities?: VillageEntities;
+}
+
+// Live positions of a village's wandering NPCs and animals, persisted so the
+// scene is restored where the owner left it instead of resetting to spawn.
+export interface VillageEntities {
+  npcs: { id: string; cx: number; cy: number }[];
+  // Animals have no stable id; they are matched back by build order (index).
+  animals: { cx: number; cy: number }[];
 }
 
 export interface PlayerDirEntry {
@@ -286,6 +297,10 @@ export interface ClientToServerEvents {
   "notify:respond": (payload: { id: number; accept: boolean }) => void;
 
   "npc:interact": (payload: { npcId: string }) => void;
+
+  /** Autosave the wandering positions of the player's own village so they are
+   *  restored next time. Ignored unless the player is in their own village. */
+  "village:saveEntities": (payload: VillageEntities) => void;
 
   "shop:buy": (payload: { itemId: string }) => void;
 
