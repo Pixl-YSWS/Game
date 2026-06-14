@@ -44,6 +44,7 @@ import {
   secondsByProject,
 } from "./hackatime.ts";
 import { setupHackatimeAuth } from "./hackatimeAuth.ts";
+import * as ysws from "./db.ts";
 import { isValidSkin } from "../src/world/cozyChar.ts";
 import { censorChat } from "./moderation.ts";
 import type {
@@ -178,21 +179,9 @@ function houseObjectsList(): HouseObject[] {
   }));
 }
 
-db.run(`
-  CREATE TABLE IF NOT EXISTS projects (
-    id                INTEGER PRIMARY KEY AUTOINCREMENT,
-    owner_id          TEXT NOT NULL,
-    name              TEXT NOT NULL,
-    description       TEXT,
-    repo_url          TEXT,
-    demo_url          TEXT,
-    hackatime_project TEXT,
-    created_at        INTEGER NOT NULL,
-    updated_at        INTEGER NOT NULL
-  )
-`);
-db.run("CREATE INDEX IF NOT EXISTS idx_projects_owner ON projects(owner_id)");
-
+// Projects (YSWS submissions) live in the Postgres store (server/db.ts), shaped
+// like the Airtable API, because Hack Club's YSWS tooling expects that backend.
+// The rest of the game state below stays on synchronous SQLite.
 interface ProjectRow {
   id: number;
   name: string;
@@ -203,50 +192,6 @@ interface ProjectRow {
   created_at: number;
   updated_at: number;
 }
-const selectProjects = db.query<ProjectRow, [string]>(
-  "SELECT id, name, description, repo_url, demo_url, hackatime_project, created_at, updated_at " +
-    "FROM projects WHERE owner_id = ? ORDER BY created_at DESC",
-);
-const countProjects = db.query<{ n: number }, [string]>(
-  "SELECT COUNT(*) AS n FROM projects WHERE owner_id = ?",
-);
-const insertProject = db.query<
-  { id: number },
-  [
-    string,
-    string,
-    string | null,
-    string | null,
-    string | null,
-    string | null,
-    number,
-    number,
-  ]
->(
-  "INSERT INTO projects (owner_id, name, description, repo_url, demo_url, hackatime_project, created_at, updated_at) " +
-    "VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
-);
-const selectProjectOwner = db.query<{ owner_id: string }, [number]>(
-  "SELECT owner_id FROM projects WHERE id = ?",
-);
-const updateProject = db.query<
-  unknown,
-  [
-    string,
-    string | null,
-    string | null,
-    string | null,
-    string | null,
-    number,
-    number,
-  ]
->(
-  "UPDATE projects SET name = ?, description = ?, repo_url = ?, demo_url = ?, hackatime_project = ?, updated_at = ? WHERE id = ?",
-);
-const deleteProject = db.query<unknown, [number]>(
-  "DELETE FROM projects WHERE id = ?",
-);
-
 const MAX_PROJECTS = 50;
 
 // The hackatime_project column holds a JSON array of project names. Legacy
@@ -1702,8 +1647,11 @@ io.on("connection", (socket) => {
   };
 
   const sendProjectList = async (player: ServerPlayerState) => {
-    const rows = selectProjects.all(player.playerId);
-    const items: Project[] = rows.map(projectFromRow);
+    const res = await ysws.getProjectsByOwner(player.playerId);
+    const records = res.ok ? (await res.json()).records : [];
+    const items: Project[] = records.map((r: { fields: ProjectRow }) =>
+      projectFromRow(r.fields),
+    );
     const key = auth.getHackatimeKey(player.playerId);
     let connected = false;
     if (key) {
@@ -1729,7 +1677,7 @@ io.on("connection", (socket) => {
     void sendProjectList(player);
   });
 
-  socket.on("project:create", (payload) => {
+  socket.on("project:create", async (payload) => {
     const player = players.get(socket.id);
     if (!player) return;
     const name = cleanText(payload?.name, 60);
@@ -1737,60 +1685,64 @@ io.on("connection", (socket) => {
       socket.emit("project:result", { ok: false, reason: "name_required" });
       return;
     }
-    if ((countProjects.get(player.playerId)?.n ?? 0) >= MAX_PROJECTS) {
+    const existing = await ysws.getProjectsByOwner(player.playerId);
+    const count = existing.ok ? (await existing.json()).records.length : 0;
+    if (count >= MAX_PROJECTS) {
       socket.emit("project:result", { ok: false, reason: "too_many" });
       return;
     }
     const now = Date.now();
-    const row = insertProject.get(
-      player.playerId,
+    const res = await ysws.createProject({
+      owner_id: player.playerId,
       name,
-      cleanText(payload?.description, 500) || null,
-      cleanUrl(payload?.repoUrl),
-      cleanUrl(payload?.demoUrl),
-      cleanHackatimeProjects(payload?.hackatimeProjects),
-      now,
-      now,
-    );
-    socket.emit("project:result", { ok: true, id: row?.id });
+      description: cleanText(payload?.description, 500) || null,
+      repo_url: cleanUrl(payload?.repoUrl),
+      demo_url: cleanUrl(payload?.demoUrl),
+      hackatime_project: cleanHackatimeProjects(payload?.hackatimeProjects),
+      created_at: now,
+      updated_at: now,
+    });
+    if (!res.ok) {
+      socket.emit("project:result", { ok: false, reason: "server_error" });
+      return;
+    }
+    const created = await res.json();
+    socket.emit("project:result", { ok: true, id: Number(created.id) });
     void sendProjectList(player);
   });
 
-  socket.on("project:update", (payload) => {
+  socket.on("project:update", async (payload) => {
     const player = players.get(socket.id);
     if (!player) return;
     const id = payload?.id;
     if (!Number.isInteger(id)) return;
-    const owner = selectProjectOwner.get(id)?.owner_id;
-    if (owner !== player.playerId) {
-      socket.emit("project:result", { ok: false, reason: "not_found" });
-      return;
-    }
     const name = cleanText(payload?.name, 60);
     if (!name) {
       socket.emit("project:result", { ok: false, reason: "name_required" });
       return;
     }
-    updateProject.run(
+    const res = await ysws.updateProject(id, player.playerId, {
       name,
-      cleanText(payload?.description, 500) || null,
-      cleanUrl(payload?.repoUrl),
-      cleanUrl(payload?.demoUrl),
-      cleanHackatimeProjects(payload?.hackatimeProjects),
-      Date.now(),
-      id,
-    );
+      description: cleanText(payload?.description, 500) || null,
+      repo_url: cleanUrl(payload?.repoUrl),
+      demo_url: cleanUrl(payload?.demoUrl),
+      hackatime_project: cleanHackatimeProjects(payload?.hackatimeProjects),
+      updated_at: Date.now(),
+    });
+    if (!res.ok) {
+      socket.emit("project:result", { ok: false, reason: "not_found" });
+      return;
+    }
     socket.emit("project:result", { ok: true, id });
     void sendProjectList(player);
   });
 
-  socket.on("project:delete", ({ id }) => {
+  socket.on("project:delete", async ({ id }) => {
     const player = players.get(socket.id);
     if (!player) return;
     if (!Number.isInteger(id)) return;
-    const owner = selectProjectOwner.get(id)?.owner_id;
-    if (owner !== player.playerId) return;
-    deleteProject.run(id);
+    const res = await ysws.deleteProject(id, player.playerId);
+    if (!res.ok) return;
     socket.emit("project:result", { ok: true, id });
     void sendProjectList(player);
   });
@@ -1841,6 +1793,10 @@ io.on("connection", (socket) => {
 });
 
 const PORT = Number(process.env.PORT ?? 3001);
+
+ysws
+  .ensureSchema()
+  .catch((e) => console.error("[ysws] schema bootstrap failed:", e));
 
 migrateLegacyJson().then(() => {
   httpServer.listen(PORT, "0.0.0.0", () => {

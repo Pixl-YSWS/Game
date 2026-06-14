@@ -1,6 +1,7 @@
 import type { Database } from "bun:sqlite";
 import express from "express";
 import { randomBytes } from "crypto";
+import { upsertUser, setUserHackatime } from "./db.ts";
 
 const AUTH_BASE = "https://auth.hackclub.com";
 const SCOPES = "openid profile email name slack_id";
@@ -289,6 +290,15 @@ export function setupAuth(db: Database): AuthModule {
       );
       console.log(`[auth] login ok: ${name} (${accountId})`);
 
+      // Mirror YSWS identity into the Postgres store (fire-and-forget; off the
+      // hot path). The SQLite `accounts` table remains the live session store.
+      void upsertUser({
+        account_id: accountId,
+        name,
+        email: ident.primary_email ?? null,
+        slack_id: ident.slack_id ?? null,
+      }).catch(() => {});
+
       res.redirect(`${CLIENT_URL}/#auth=${sessionToken}`);
     } catch (e) {
       console.error("[auth] callback error:", e);
@@ -377,6 +387,8 @@ export function setupAuth(db: Database): AuthModule {
 
   function setHackatimeKey(accountId: string, key: string) {
     updateHackatimeKey.run(key.length > 0 ? key : null, Date.now(), accountId);
+    // Keep the YSWS mirror's hackatime token in sync (fire-and-forget).
+    void setUserHackatime(accountId, key.length > 0 ? key : null).catch(() => {});
   }
 
   function getHackatimeKey(accountId: string): string | null {
