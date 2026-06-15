@@ -398,8 +398,10 @@ export class Player extends Phaser.GameObjects.Container {
     if (cx < 0 || cy < 0 || cx >= cols || cy >= rows) return false;
     const groundIdx = groundLayer[cy]?.[cx];
     if (groundIdx === undefined) return false;
-    // Water is enterable too — the player swims across it.
-    if (!walkableGround.has(groundIdx) && groundIdx !== WATER) return false;
+    // Water is enterable too — the player swims across it — unless the map
+    // opts out of swimming (e.g. the village, where you stay on the bridges).
+    const canSwim = groundIdx === WATER && !this.mapDef.noSwim;
+    if (!walkableGround.has(groundIdx) && !canSwim) return false;
     const decoIdx = decoLayer[cy]?.[cx];
     if (decoIdx !== undefined && decoIdx >= 0 && solidDeco.has(decoIdx))
       return false;

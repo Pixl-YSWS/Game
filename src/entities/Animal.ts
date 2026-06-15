@@ -287,10 +287,28 @@ export class Animal extends Phaser.GameObjects.Container {
     this.scheduleWander();
   }
 
+  /** True if the animal's whole footprint at (cx,cy) is grazable grass. */
+  private canStandAt(cx: number, cy: number): boolean {
+    const tw = Math.ceil(this.obj.w / SRC_TILE);
+    const th = Math.ceil(this.obj.h / SRC_TILE);
+    for (let r = 0; r < th; r++)
+      for (let c = 0; c < tw; c++) {
+        const g = this.mapDef.groundLayer[cy + r]?.[cx + c];
+        if (g !== GRASS && g !== GRASS_DARK) return false;
+        const d = this.mapDef.decoLayer[cy + r]?.[cx + c];
+        if (d !== undefined && d >= 0 && this.mapDef.solidDeco.has(d))
+          return false;
+      }
+    return true;
+  }
+
   /** Snap to a saved tile when restoring a village's last-known layout. */
   placeAt(cx: number, cy: number) {
     if (cx < 0 || cy < 0 || cx >= this.mapDef.cols || cy >= this.mapDef.rows)
       return;
+    // Ignore a stale saved spot that's no longer grass (e.g. now water) so the
+    // animal stays on its valid map position instead of standing in the sea.
+    if (!this.canStandAt(cx, cy)) return;
     for (const t of this.held) this.occupied.delete(t);
     this.held.clear();
     this.cx = cx;

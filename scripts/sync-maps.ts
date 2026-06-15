@@ -204,7 +204,6 @@ function convert(key: string, file: string): MapResult {
   const usedSets = new Set<Tileset>();
   const cows: Cell[] = [];
   const chickens: Cell[] = [];
-  const trees: Cell[] = [];
   const npcCells: Cell[] = [];
 
   for (const layer of map.layers) {
@@ -221,11 +220,17 @@ function convert(key: string, file: string): MapResult {
       const ts = tilesetFor(gid, sets);
       if (!ts) continue;
 
+      // Drop each map's own inter-map connector bridge — the custom bridge
+      // replaces it.
+      if (ts.texKey === DOCKS_KEY && REMOVE_BRIDGE[file]?.(cx, cy)) continue;
+
       switch (ts.role) {
         case "cow": cows.push({ cx, cy, gid }); break;
         case "chicken": chickens.push({ cx, cy, gid }); break;
-        case "tree": trees.push({ cx, cy, gid }); break;
         case "npc": npcCells.push({ cx, cy, gid }); break;
+        // Trees fall through to `default`: they bake as normal per-tile deco so
+        // dense forests render + depth-sort per tile (no flood-merge, no phantom
+        // solid base rows that would block the grass behind them).
         default: {
           // Static or water tile → bake it and record logical terrain.
           baked[i] = gid;
@@ -268,26 +273,6 @@ function convert(key: string, file: string): MapResult {
     const b = bbox(g);
     objects.push(chickenObject(b.minX, b.minY));
   }
-  // Trees: reconstruct the sprite chunk from the component's top-left tile.
-  const treeTs = sets.find((t) => t.role === "tree");
-  for (const g of components(trees)) {
-    const b = bbox(g);
-    const topLeft = g.find((c) => c.cx === b.minX && c.cy === b.minY) ?? g[0];
-    if (treeTs) {
-      const local = topLeft.gid - treeTs.firstgid;
-      objects.push({
-        key: treeTs.texKey,
-        sx: (local % treeTs.columns) * 16,
-        sy: ((local / treeTs.columns) | 0) * 16,
-        w: b.w * 16,
-        h: b.h * 16,
-        cx: b.minX,
-        cy: b.minY,
-      });
-    }
-    // Solid trunk: bottom row of the tree's footprint.
-    for (let cx = b.minX; cx < b.minX + b.w; cx++) deco[b.minY + b.h - 1][cx] = SOLID;
-  }
 
   // NPCs: pre-assembled character tiles (2×2) → a villager marker. The tileset
   // name (e.g. "oda") selects the villager's role; its char sheet sets the look.
@@ -314,10 +299,9 @@ function convert(key: string, file: string): MapResult {
   // Spawn: prefer a walkable path cell near the map centre.
   const spawn = pickSpawn(ground, deco, cols, rows);
 
-  // Manifest: every baked (static/water) tileset image + the tree texture.
+  // Manifest: every baked tileset image (trees now bake like any other tile).
   const manifest = new Map<string, string>();
   for (const ts of usedSets) manifest.set(ts.texKey, ts.image);
-  if (treeTs && trees.length) manifest.set(treeTs.texKey, treeTs.image);
 
   const bakedTilesets: BakedTileset[] = [...usedSets].map((ts) => ({
     key: ts.texKey,
@@ -391,33 +375,181 @@ ${layers}
 };`;
 }
 
-// ── Run ─────────────────────────────────────────────────────────────────────
-const homeTown = convert("HOME_TOWN", "home_town.json");
-const mainHub = convert("MAIN_HUB", "main_hub.json");
+// ── Stitch ──────────────────────────────────────────────────────────────────
+// The two maps join into one walkable map. main_hub sits at the origin;
+// home_town is placed to its east so home_town's west-edge bridge (0,8)/(0,9)
+// lands right beside main_hub's bottom-island path tip (col 24, rows 29–32).
+// Tweak HOME_TOWN_OFFSET if you redraw the maps.
+interface Placement {
+  res: MapResult;
+  ox: number;
+  oy: number;
+}
 
-const manifest = new Map<string, string>();
-for (const [k, v] of homeTown.manifest) manifest.set(k, v);
-for (const [k, v] of mainHub.manifest) manifest.set(k, v);
-const manifestEntries = [...manifest].map(([key, path]) => ({ key, path }));
+// home_town is placed fully east of main_hub (no overlap) so main_hub's own
+// east water reads as a channel between the two islands. offset.y aligns
+// home_town's west entrance (rows 8/9) to main_hub's gateway rows (29/30).
+const HOME_TOWN_OFFSET = { x: 32, y: 21 };
+
+// Each map drew its own connector bridge stub toward the other; these are
+// dropped (per map) and replaced by one custom bridge span. main_hub's internal
+// vertical bridges (cols 8–12) are left intact.
+const DOCKS_KEY = "vt-docksbridges";
+// The Terrain sheet's brown cliff-face tiles are vertical walls — you can stand
+// on the grass top, not the face. Block these local ids (Terrain = "vt-terrain").
+const TERRAIN_KEY = "vt-terrain";
+const CLIFF_SOLID = new Set([64, 65, 66, 67, 80, 81, 82, 83, 84, 85, 86, 87, 88]);
+const REMOVE_BRIDGE: Record<string, (cx: number, cy: number) => boolean> = {
+  "home_town.json": () => true, // its only bridge is the west connector stub
+  "main_hub.json": (cx, cy) => cy >= 30 && cy <= 31 && cx >= 24, // east stub
+};
+
+// A custom connector bridge across the channel, built from the SAME bridge
+// texture the maps use (DocksBridges). It's a proper east-west bridge: a rope
+// rail row (a collider) above and below a 2-row walkable plank deck, so you
+// can't walk off the sides into the water. Spans main_hub's gateway tip (col 24)
+// to home_town's west land edge (col 35), at rows 29–32.
+const BRIDGE_FROM_COL = 25;
+const BRIDGE_TO_COL = 34;
+const BRIDGE_RAIL_TOP = 29;
+const BRIDGE_DECK = [30, 31];
+const BRIDGE_RAIL_BOT = 32;
+// Local tile ids within DocksBridges (12 cols). Each strip is left-cap / mid /
+// right-cap; rope rails are the solid edges, the deck rows are walkable.
+const BRIDGE_STRIPS = {
+  railTop: { capL: 8, mid: 9, capR: 11 },
+  deckTop: { capL: 20, mid: 21, capR: 23 },
+  deckBot: { capL: 32, mid: 33, capR: 35 },
+  railBot: { capL: 68, mid: 69, capR: 71 },
+};
+
+function stitch(key: string, placements: Placement[]): MapResult {
+  const W = Math.max(...placements.map((p) => p.ox + p.res.cols));
+  const H = Math.max(...placements.map((p) => p.oy + p.res.rows));
+
+  // Unify the per-map tileset tables into one GID namespace.
+  const combined: BakedTileset[] = [];
+  const baseByKey = new Map<string, number>();
+  let next = 1;
+  for (const p of placements)
+    for (const ts of p.res.bakedTilesets)
+      if (!baseByKey.has(ts.key)) {
+        baseByKey.set(ts.key, next);
+        combined.push({ key: ts.key, firstgid: next, columns: ts.columns, count: ts.count });
+        next += ts.count;
+      }
+  const remapFor = (res: MapResult) => (gid: number) => {
+    for (const ts of res.bakedTilesets)
+      if (gid >= ts.firstgid && gid < ts.firstgid + ts.count)
+        return baseByKey.get(ts.key)! + (gid - ts.firstgid);
+    return 0;
+  };
+
+  const ground: number[][] = Array.from({ length: H }, () => Array(W).fill(WATER));
+  const deco: number[][] = Array.from({ length: H }, () => Array(W).fill(-1));
+  const bakedLayers: BakedLayerOut[] = [];
+  const objects: MapObject[] = [];
+  const npcs: NpcDef[] = [];
+  const manifest = new Map<string, string>();
+
+  for (const p of placements) {
+    // Logical layers (later placements win in the overlap region).
+    for (let r = 0; r < p.res.rows; r++)
+      for (let c = 0; c < p.res.cols; c++) {
+        ground[p.oy + r][p.ox + c] = p.res.ground[r][c];
+        deco[p.oy + r][p.ox + c] = p.res.deco[r][c];
+      }
+    // Baked render layers, GIDs remapped + offset into the combined grid.
+    const remap = remapFor(p.res);
+    for (const l of p.res.bakedLayers) {
+      const data = new Array(W * H).fill(0);
+      for (let i = 0; i < l.data.length; i++) {
+        const gid = l.data[i];
+        if (!gid) continue;
+        const c = i % p.res.cols;
+        const r = (i / p.res.cols) | 0;
+        data[(p.oy + r) * W + (p.ox + c)] = remap(gid);
+      }
+      bakedLayers.push({ ...l, data });
+    }
+    for (const o of p.res.objects)
+      objects.push({ ...o, cx: o.cx + p.ox, cy: o.cy + p.oy });
+    for (const n of p.res.npcs)
+      npcs.push({ ...n, cx: n.cx + p.ox, cy: n.cy + p.oy });
+    for (const [k, v] of p.res.manifest) manifest.set(k, v);
+  }
+
+  // Custom connector bridge across the channel, built from the maps' own
+  // DocksBridges texture. Deck rows are walkable; the rope rails above/below are
+  // solid colliders so you stay on the bridge.
+  const docks = combined.find((t) => t.key === DOCKS_KEY);
+  if (docks) {
+    const fg = docks.firstgid;
+    const data = new Array(W * H).fill(0);
+    const strip = (
+      row: number,
+      s: { capL: number; mid: number; capR: number },
+    ) => {
+      for (let c = BRIDGE_FROM_COL; c <= BRIDGE_TO_COL; c++) {
+        const id = c === BRIDGE_FROM_COL ? s.capL : c === BRIDGE_TO_COL ? s.capR : s.mid;
+        data[row * W + c] = fg + id;
+      }
+    };
+    strip(BRIDGE_RAIL_TOP, BRIDGE_STRIPS.railTop);
+    strip(BRIDGE_DECK[0], BRIDGE_STRIPS.deckTop);
+    strip(BRIDGE_DECK[1], BRIDGE_STRIPS.deckBot);
+    strip(BRIDGE_RAIL_BOT, BRIDGE_STRIPS.railBot);
+    for (let c = BRIDGE_FROM_COL; c <= BRIDGE_TO_COL; c++) {
+      // Deck: walkable. Rails: solid colliders.
+      for (const r of BRIDGE_DECK) {
+        ground[r][c] = PATH;
+        deco[r][c] = -1;
+      }
+      deco[BRIDGE_RAIL_TOP][c] = SOLID;
+      deco[BRIDGE_RAIL_BOT][c] = SOLID;
+    }
+    bakedLayers.push({ name: "connector-bridge", perRow: false, depth: 0.2, data });
+  }
+
+  // Spawn from the primary (first) placement.
+  const prim = placements[0];
+  const spawn = {
+    cx: prim.res.spawn.cx + prim.ox,
+    cy: prim.res.spawn.cy + prim.oy,
+  };
+
+  return {
+    key, cols: W, rows: H, ground, deco,
+    bakedTilesets: combined, bakedLayers, objects, npcs, spawn, manifest,
+  };
+}
+
+// ── Run ─────────────────────────────────────────────────────────────────────
+const mainHub = convert("MAIN_HUB", "main_hub.json");
+const homeTown = convert("HOME_TOWN", "home_town.json");
+
+const village = stitch("VILLAGE", [
+  { res: mainHub, ox: 0, oy: 0 },
+  { res: homeTown, ox: HOME_TOWN_OFFSET.x, oy: HOME_TOWN_OFFSET.y },
+]);
+
+const manifestEntries = [...village.manifest].map(([key, path]) => ({ key, path }));
 
 const output = `// AUTO-GENERATED by scripts/sync-maps.ts — do not edit by hand.
 // Run \`bun run sync-maps\` after editing maps/home_town.* or maps/main_hub.*.
 import type { MapDef } from "../types/map";
 
-/** Tileset images the baked village maps render from. Loaded in BootScene. */
+/** Tileset images the baked village map renders from. Loaded in BootScene. */
 export const VILLAGE_TILESETS: { key: string; path: string }[] = ${obj(manifestEntries)};
 
-${emitMap(mainHub)}
-
-${emitMap(homeTown)}
+${emitMap(village)}
 `;
 
 writeFileSync(OUT_PATH, output);
 console.log(
   `✓ Synced village maps → src/data/villageMaps.ts\n` +
-    `  MAIN_HUB   ${mainHub.cols}×${mainHub.rows}  ` +
-    `${mainHub.objects.length} objects, ${mainHub.npcs.length} npcs, ${mainHub.bakedLayers.length} layers\n` +
-    `  HOME_TOWN  ${homeTown.cols}×${homeTown.rows}  ` +
-    `${homeTown.objects.length} objects, ${homeTown.npcs.length} npcs, ${homeTown.bakedLayers.length} layers\n` +
+    `  VILLAGE  ${village.cols}×${village.rows}  ` +
+    `${village.objects.length} objects, ${village.npcs.length} npcs, ${village.bakedLayers.length} layers\n` +
+    `  (main_hub @0,0 + home_town @${HOME_TOWN_OFFSET.x},${HOME_TOWN_OFFSET.y})\n` +
     `  ${manifestEntries.length} tileset textures`,
 );

@@ -77,6 +77,9 @@ export interface MapDef {
   // Present on hand-authored Tiled maps; when set, IsoMap uses the baked path.
   baked?: BakedRender;
 
+  // Disables the swim mechanic — players can't walk onto WATER tiles here.
+  noSwim?: boolean;
+
   cozy?: boolean;
   objects?: MapObject[];
   walkableGround: ReadonlySet<number>;

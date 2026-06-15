@@ -14,7 +14,7 @@ import type {
 } from "../types/network";
 import type { MapDef, MapObject, NpcDef } from "../types/map";
 import { generateMap } from "../world/MapGen";
-import { villageMap, bridgeAt } from "../world/village";
+import { villageMap } from "../world/village";
 import { makeHouseInterior } from "../world/HouseMap";
 import { TS } from "../world/tileset";
 import {
@@ -492,19 +492,6 @@ export class WorldScene extends Phaser.Scene {
 
       if (this.world.kind === "house" && this.doorTiles.has(`${cx},${cy}`)) {
         gameSocket.quickJoinLobby();
-      }
-
-      // Walking onto a bridge tile crosses to the village's other area.
-      if (this.world.kind === "village") {
-        const link = bridgeAt(this.world.area ?? "hub", cx, cy);
-        if (link) {
-          this.showLoadingOverlay("Crossing the bridge…");
-          gameSocket.enterWorld({
-            kind: "village",
-            ownerPlayerId: this.world.ownerPlayerId,
-            area: link.to,
-          });
-        }
       }
     }
 
@@ -1281,7 +1268,7 @@ export class WorldScene extends Phaser.Scene {
       state.world.kind === "house"
         ? makeHouseInterior()
         : state.world.kind === "village"
-          ? villageMap(state.world.area ?? "hub")
+          ? villageMap()
           : generateMap(state.seed, {
               houses: false,
               sharedHouse: true,
