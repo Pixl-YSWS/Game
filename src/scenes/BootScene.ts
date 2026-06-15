@@ -7,6 +7,7 @@ import {
   FRAME_H,
 } from "../world/cozyChar";
 import { worldSheetSpecs } from "../world/tileset";
+import { VILLAGE_TILESETS } from "../data/villageMaps";
 import { SERVER_URL } from "../network/socket";
 import {
   getSessionToken,
@@ -58,6 +59,15 @@ export class BootScene extends Phaser.Scene {
     );
 
     for (const spec of worldSheetSpecs) {
+      this.load.image(spec.key, spec.path);
+    }
+
+    // Tileset images for the hand-authored (baked) village maps. Skip any key
+    // already queued by worldSheetSpecs (e.g. the shared water sheet).
+    const loaded = new Set(worldSheetSpecs.map((s) => s.key));
+    for (const spec of VILLAGE_TILESETS) {
+      if (loaded.has(spec.key)) continue;
+      loaded.add(spec.key);
       this.load.image(spec.key, spec.path);
     }
 

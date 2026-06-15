@@ -27,7 +27,8 @@ import type {
   MapRevisionMeta,
   VillageEntities,
 } from "../src/types/network.ts";
-import { generateMap, generateVillage } from "../src/world/MapGen.ts";
+import { generateMap } from "../src/world/MapGen.ts";
+import { villageMap, bridgeArrival } from "../src/world/village.ts";
 import { makeHouseInterior } from "../src/world/HouseMap.ts";
 import {
   applyMapOverrides,
@@ -544,7 +545,7 @@ function serializeWorld(w: WorldRef): string {
   if (w.kind === "openworld") return "openworld";
   if (w.kind === "house") return "house";
   if (w.kind === "lobby") return `lobby:${w.id}`;
-  return `village:${w.ownerPlayerId}`;
+  return `village:${w.ownerPlayerId}:${w.area ?? "hub"}`;
 }
 
 function deserializeWorld(s: string): WorldRef | null {
@@ -556,9 +557,16 @@ function deserializeWorld(s: string): WorldRef | null {
     return { kind: "lobby", id };
   }
   if (s.startsWith("village:")) {
-    const ownerPlayerId = s.slice("village:".length);
-    if (!ownerPlayerId) return null;
-    return { kind: "village", ownerPlayerId };
+    // "village:<owner>" (legacy) or "village:<owner>:<hub|town>".
+    let rest = s.slice("village:".length);
+    let area: "hub" | "town" | undefined;
+    const tail = rest.slice(rest.lastIndexOf(":") + 1);
+    if (tail === "hub" || tail === "town") {
+      area = tail;
+      rest = rest.slice(0, rest.lastIndexOf(":"));
+    }
+    if (!rest) return null;
+    return { kind: "village", ownerPlayerId: rest, ...(area ? { area } : {}) };
   }
   return null;
 }
@@ -637,7 +645,7 @@ function worldKey(world: WorldRef): WorldKey {
   if (world.kind === "openworld") return "openworld";
   if (world.kind === "house") return "house";
   if (world.kind === "lobby") return `lobby:${world.id}`;
-  return `village:${world.ownerPlayerId}`;
+  return `village:${world.ownerPlayerId}:${world.area ?? "hub"}`;
 }
 
 function worldSeed(world: WorldRef): number {
@@ -704,7 +712,7 @@ function mapFor(world: WorldRef) {
       world.kind === "house"
         ? makeHouseInterior()
         : world.kind === "village"
-          ? generateVillage()
+          ? villageMap(world.area ?? "hub")
           : // openworld and lobbies share the same overworld generator
             generateMap(worldSeed(world), { houses: false });
     applyMapOverrides(m, overridesFor(key));
@@ -1180,6 +1188,7 @@ function switchWorld(
 ) {
   const state = players.get(socket.id);
   if (!state) return;
+  const prevWorld = state.world;
   const oldRoom = worldKey(state.world);
   const newRoom = worldKey(next);
   if (oldRoom === newRoom) return;
@@ -1192,9 +1201,20 @@ function switchWorld(
   state.world = next;
   state.hidden = false;
 
+  // Crossing the bridge between village areas lands you at the far bridge mouth.
+  const crossing =
+    prevWorld.kind === "village" &&
+    next.kind === "village" &&
+    prevWorld.ownerPlayerId === next.ownerPlayerId
+      ? bridgeArrival(prevWorld.area ?? "hub", next.area ?? "hub")
+      : undefined;
+
   const remembered =
     next.kind === "house" ? null : getRememberedPosition(state.playerId, next);
-  if (remembered && isWalkable(next, remembered.cx, remembered.cy)) {
+  if (crossing && isWalkable(next, crossing.cx, crossing.cy)) {
+    state.cx = crossing.cx;
+    state.cy = crossing.cy;
+  } else if (remembered && isWalkable(next, remembered.cx, remembered.cy)) {
     state.cx = remembered.cx;
     state.cy = remembered.cy;
   } else {

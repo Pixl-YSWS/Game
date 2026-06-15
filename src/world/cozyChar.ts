@@ -101,7 +101,7 @@ export const texBottom = (n: number) => `cv-bottom-${n}`;
 
 export const NPC_CHARS = 9;
 const NPC_CHAR_DIR =
-  "assets/CozyValley_Premium_1.3/CozyValley_Premium_1.3/Characters/-- Pre-assembled Characters";
+  "assets/cozy-towns/CozyValley_Premium_1.3/Characters/-- Pre-assembled Characters";
 export const texNpcChar = (n: number) => `cv-npc-${n}`;
 export function npcCharSheetSpecs(): SheetSpec[] {
   const specs: SheetSpec[] = [];
@@ -111,7 +111,7 @@ export function npcCharSheetSpecs(): SheetSpec[] {
   return specs;
 }
 
-const BASE_DIR = "assets/CozyValley_Basic_1.0/CozyValley_Basic_1.0/Characters";
+const BASE_DIR = "assets/cozy-towns/CozyValley_Basic_1.0/Characters";
 export interface SheetSpec {
   key: string;
   path: string;

@@ -14,7 +14,9 @@ export interface PlayerState {
 export type WorldRef =
   | { kind: "openworld" }
   | { kind: "house" }
-  | { kind: "village"; ownerPlayerId: string }
+  // A village is two hand-authored maps joined by a bridge: the "hub" (default)
+  // and the "town". Omitted `area` means the hub (keeps legacy refs valid).
+  | { kind: "village"; ownerPlayerId: string; area?: "hub" | "town" }
   // A capped, instanceable shared overworld. Public lobbies are auto-filled by
   // matchmaking; private ones are joined by their short code (which is the id).
   | { kind: "lobby"; id: string };

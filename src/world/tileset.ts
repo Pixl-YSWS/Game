@@ -19,10 +19,10 @@ export const TS = {
   iprops: "cv-iprops",
 } as const;
 
-const PV = "assets/CozyValley_Premium_1.3/CozyValley_Premium_1.3";
+const PV = "assets/cozy-towns/CozyValley_Premium_1.3";
 const P = `${PV}/Tilesets`;
-const B = "assets/CozyValley_Basic_1.0/CozyValley_Basic_1.0/Tilesets";
-const HOUSING = "assets/CozyTowns_v1/Housing";
+const B = "assets/cozy-towns/CozyValley_Basic_1.0/Tilesets";
+const HOUSING = "assets/cozy-towns/Housing";
 const EX = `${HOUSING}/Exterior`;
 
 export interface SheetSpec {

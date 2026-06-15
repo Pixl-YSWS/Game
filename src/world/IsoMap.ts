@@ -45,7 +45,8 @@ export class IsoMap {
 
   build() {
     const { cols, rows, cozy } = this.mapDef;
-    if (cozy) this.buildCozy();
+    if (this.mapDef.baked) this.buildBaked();
+    else if (cozy) this.buildCozy();
     else this.buildLegacy();
 
     this.boundsX = 0;
@@ -212,6 +213,73 @@ export class IsoMap {
         }),
       );
     }
+  }
+
+  // Hand-authored Tiled maps: stamp each layer's GIDs verbatim, resolving every
+  // GID against the map's own multi-tileset table. Animals/trees were extracted
+  // to `objects` by the sync script and stamp on top.
+  private buildBaked() {
+    const baked = this.mapDef.baked!;
+    const { cols } = this.mapDef;
+    const T = baked.tileSize;
+
+    const resolve = (gid: number) => {
+      let best: (typeof baked.tilesets)[number] | undefined;
+      for (const t of baked.tilesets)
+        if (gid >= t.firstgid && gid < t.firstgid + t.count)
+          if (!best || t.firstgid > best.firstgid) best = t;
+      if (!best) return null;
+      const local = gid - best.firstgid;
+      return {
+        key: best.key,
+        sx: (local % best.columns) * T,
+        sy: Math.floor(local / best.columns) * T,
+      };
+    };
+
+    for (const layer of baked.layers) {
+      for (let i = 0; i < layer.data.length; i++) {
+        const gid = layer.data[i];
+        if (!gid) continue;
+        const col = i % cols;
+        const row = (i / cols) | 0;
+        const src = resolve(gid);
+        if (!src) continue;
+        const { x, y } = cartToIso(col, row);
+        const depth = layer.perRow ? row + 1 : layer.depth;
+
+        if (layer.animateWater) {
+          this.stampBakedWater(src.key, src.sy, x, y, depth);
+        } else {
+          this.stampSub(src.key, src.sx, src.sy, T, T, x, y, depth);
+        }
+      }
+    }
+
+    for (const obj of this.mapDef.objects ?? []) this.stampObject(obj);
+  }
+
+  // A water tile shimmers through the four columns of its own row.
+  private stampBakedWater(
+    key: string,
+    sy: number,
+    wx: number,
+    wy: number,
+    depth: number,
+  ) {
+    const texture = this.scene.textures.get(key);
+    const frames: string[] = [];
+    for (let c = 0; c < 4; c++) {
+      const sx = c * SRC_TILE;
+      const fk = `${key}_bw${sx}_${sy}`;
+      if (!texture.has(fk)) texture.add(fk, 0, sx, sy, SRC_TILE, SRC_TILE);
+      frames.push(fk);
+    }
+    const img = this.scene.add.image(wx, wy, key, frames[0]).setOrigin(0, 0);
+    img.setScale(TILE_W / SRC_TILE, TILE_H / SRC_TILE);
+    img.setDepth(depth);
+    this.stamps.push(img);
+    this.waterStamps.push({ img, frames });
   }
 
   private buildLegacy() {

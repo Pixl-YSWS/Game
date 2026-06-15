@@ -1,13 +1,13 @@
 {
-    "activeFile": "maps/map1.json",
+    "activeFile": "maps/main_hub.json",
     "expandedProjectPaths": [
-        "maps",
-        "public/assets/kenney_tiny-ski/Tiled",
-        ".",
-        "public/assets/kenney_ui-pack-adventure/Spritesheet",
         "public",
-        "public/assets/kenney_ui-pack-adventure",
-        "public/assets"
+        "maps",
+        "public/assets/kenney_ui-pack-adventure/Spritesheet",
+        ".",
+        "public/assets/kenney_tiny-ski/Tiled",
+        "public/assets",
+        "public/assets/kenney_ui-pack-adventure"
     ],
     "file.lastUsedOpenFilter": "All Files (*)",
     "fileStates": {
@@ -15,9 +15,23 @@
             "scaleInDock": 1,
             "scaleInEditor": 32
         },
+        "maps/Bridge.tsx": {
+            "scaleInDock": 1
+        },
+        "maps/Cow_brownwhite.tsx": {
+            "scaleInDock": 1
+        },
         "maps/Grass.tsx": {
+            "dynamicWrapping": true,
             "scaleInDock": 2,
             "scaleInEditor": 4
+        },
+        "maps/Ground.tsx": {
+            "dynamicWrapping": false,
+            "scaleInDock": 1
+        },
+        "maps/Grounddecor.tsx": {
+            "scaleInDock": 1
         },
         "maps/House-1.tsj": {
             "scaleInDock": 1,
@@ -30,6 +44,9 @@
         "maps/House-3.tsj": {
             "scaleInDock": 2,
             "scaleInEditor": 1
+        },
+        "maps/Houses.tsx": {
+            "scaleInDock": 1
         },
         "maps/MiniTown.json": {
             "scaleInDock": 2,
@@ -47,21 +64,65 @@
             "scaleInDock": 1,
             "scaleInEditor": 45
         },
+        "maps/Tree_oak.tsx": {
+            "scaleInDock": 1
+        },
+        "maps/Water.tsx": {
+            "scaleInDock": 1
+        },
+        "maps/barn.tsx": {
+            "scaleInDock": 1
+        },
+        "maps/chicken.tsx": {
+            "scaleInDock": 1
+        },
+        "maps/farm_deco.tsx": {
+            "scaleInDock": 1
+        },
+        "maps/fence.tsx": {
+            "dynamicWrapping": false,
+            "scaleInDock": 1
+        },
+        "maps/home_town.json": {
+            "scale": 2,
+            "selectedLayer": 1,
+            "viewCenter": {
+                "x": 246.75,
+                "y": 174
+            }
+        },
         "maps/house-asdasdas.tsj": {
             "scaleInDock": 2,
             "scaleInEditor": 1
+        },
+        "maps/main_hub.json": {
+            "scale": 0.8201171875,
+            "selectedLayer": 0,
+            "viewCenter": {
+                "x": 255.45129792807808,
+                "y": 512.1219337937605
+            }
         },
         "maps/map1.json": {
             "scale": 2,
             "selectedLayer": 0,
             "viewCenter": {
-                "x": 239.75,
-                "y": 177.5
+                "x": 344.75,
+                "y": 129
             }
+        },
+        "maps/oda.tsx": {
+            "scaleInDock": 1
         },
         "maps/sadasdasdsad.tsj": {
             "scaleInDock": 2,
             "scaleInEditor": 1
+        },
+        "maps/sand.tsx": {
+            "scaleInDock": 1
+        },
+        "maps/tent.tsx": {
+            "scaleInDock": 1
         },
         "maps/treee2.tsj": {
             "scaleInDock": 2,
@@ -103,22 +164,24 @@
         "maps/treeee5.tsj",
         "maps/treee5.tsj",
         "maps/sadasdasdsad.tsj",
-        "maps/house-asdasdas.tsj"
+        "maps/house-asdasdas.tsj",
+        "maps/home_town.json",
+        "maps/main_hub.json"
     ],
     "project": "map1.tiled-project",
     "recentFiles": [
-        "maps/house-asdasdas.tsj",
-        "maps/sadasdasdsad.tsj",
-        "maps/treee5.tsj",
-        "maps/treeee5.tsj",
-        "maps/treeeeeee4.tsj",
-        "maps/treeeeeeeee3.tsj",
-        "maps/treee2.tsj",
         "maps/map1.json",
+        "maps/treee2.tsj",
+        "maps/treeeeeeeee3.tsj",
+        "maps/treeeeeee4.tsj",
+        "maps/treeee5.tsj",
+        "maps/treee5.tsj",
+        "maps/sadasdasdsad.tsj",
+        "maps/house-asdasdas.tsj",
+        "maps/home_town.json",
+        "maps/main_hub.json",
         "maps/Grass.tsx",
-        "maps/MiniTown.json",
-        "maps/Tanks.json",
-        "maps/Tree-1.json"
+        "maps/MiniTown.json"
     ],
     "tileset.lastUsedFormat": "json",
     "tileset.tileSize": {

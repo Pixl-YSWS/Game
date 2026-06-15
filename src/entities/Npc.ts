@@ -5,6 +5,7 @@ import { FONT, CURSORS, EMOTE_ATLAS } from "../ui/theme";
 import { emoteFrame } from "../ui/emotes";
 import {
   texNpcChar,
+  NPC_CHARS,
   ANIM,
   IDLE_FRAME_MS,
   WALK_FRAME_MS,
@@ -79,7 +80,12 @@ export class Npc extends Phaser.GameObjects.Container {
       0.25,
     );
 
-    const charN = npcCharIndex(def.id);
+    // Hand-authored maps pick the character directly (via the tileset they drew
+    // the NPC with); fall back to the id lookup for procedurally-placed NPCs.
+    const charN =
+      def.sprite >= 1 && def.sprite <= NPC_CHARS
+        ? def.sprite
+        : npcCharIndex(def.id);
     this.charSprite = scene.add
       .sprite(0, TILE_H / 2 + 3, texNpcChar(charN), ANIM.idle.down[0])
       .setOrigin(0.5, 1);
