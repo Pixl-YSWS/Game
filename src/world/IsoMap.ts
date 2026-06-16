@@ -25,10 +25,6 @@ export class IsoMap {
 
   private waterStamps: { img: Phaser.GameObjects.Image; frames: string[] }[] = [];
 
-  // Baked maps batch their flat background + water into RenderTextures (a couple
-  // of draw calls instead of thousands of per-tile Images).
-  private rts: Phaser.GameObjects.RenderTexture[] = [];
-
   public boundsX = 0;
   public boundsY = 0;
   public boundsW = 0;
@@ -44,8 +40,6 @@ export class IsoMap {
     this.animTimers.length = 0;
     for (const img of this.stamps) img.destroy();
     this.stamps.length = 0;
-    for (const rt of this.rts) rt.destroy();
-    this.rts.length = 0;
     this.waterStamps.length = 0;
   }
 
@@ -243,76 +237,49 @@ export class IsoMap {
       };
     };
 
-    const { rows } = this.mapDef;
-    const W = cols * TILE_W;
-    const H = rows * TILE_H;
-    const TL = { originX: 0, originY: 0 } as const;
-    const reg = (key: string, sx: number, sy: number) => {
-      const fk = `${key}_r${sx}_${sy}_${T}_${T}`;
-      const tex = this.scene.textures.get(key);
-      if (!tex.has(fk)) tex.add(fk, 0, sx, sy, T, T);
-      return fk;
-    };
-
-    // Flat layers (water + ground/path/bridge) are static-ish background that
-    // never sorts with the player, so bake them into RenderTextures: one for the
-    // opaque background, four animation-frame textures for the water.
-    const bg = this.scene.add.renderTexture(0, 0, W, H).setOrigin(0, 0);
-    bg.setDepth(0.25);
-    const waterRTs = [0, 1, 2, 3].map(() => {
-      const rt = this.scene.add.renderTexture(0, 0, W, H).setOrigin(0, 0);
-      rt.setDepth(0);
-      return rt;
-    });
     for (const layer of baked.layers) {
-      if (layer.perRow) continue; // depth-sorted props handled as images below
       for (let i = 0; i < layer.data.length; i++) {
         const gid = layer.data[i];
         if (!gid) continue;
-        const src = resolve(gid);
-        if (!src) continue;
-        const { x, y } = cartToIso(i % cols, (i / cols) | 0);
-        if (layer.animateWater) {
-          for (let c = 0; c < 4; c++)
-            waterRTs[c].stamp(src.key, reg(src.key, c * T, src.sy), x, y, TL);
-        } else {
-          bg.stamp(src.key, reg(src.key, src.sx, src.sy), x, y, TL);
-        }
-      }
-    }
-    waterRTs.forEach((rt, c) => rt.setVisible(c === 0));
-    this.rts.push(bg, ...waterRTs);
-
-    // Animate water by flipping which frame-texture is visible (1 swap, not 2k).
-    let wf = 0;
-    this.animTimers.push(
-      this.scene.time.addEvent({
-        delay: 250,
-        loop: true,
-        callback: () => {
-          waterRTs[wf].setVisible(false);
-          wf = (wf + 1) % 4;
-          waterRTs[wf].setVisible(true);
-        },
-      }),
-    );
-
-    // Per-row layers (buildings, trees, fences) keep individual images so they
-    // depth-sort with the player as they walk behind them.
-    for (const layer of baked.layers) {
-      if (!layer.perRow) continue;
-      for (let i = 0; i < layer.data.length; i++) {
-        const gid = layer.data[i];
-        if (!gid) continue;
-        const src = resolve(gid);
-        if (!src) continue;
+        const col = i % cols;
         const row = (i / cols) | 0;
-        const { x, y } = cartToIso(i % cols, row);
-        this.stampSub(src.key, src.sx, src.sy, T, T, x, y, row + 1);
+        const src = resolve(gid);
+        if (!src) continue;
+        const { x, y } = cartToIso(col, row);
+        const depth = layer.perRow ? row + 1 : layer.depth;
+
+        if (layer.animateWater) {
+          this.stampBakedWater(src.key, src.sy, x, y, depth);
+        } else {
+          this.stampSub(src.key, src.sx, src.sy, T, T, x, y, depth);
+        }
       }
     }
 
     for (const obj of this.mapDef.objects ?? []) this.stampObject(obj);
+  }
+
+  // A water tile shimmers through the four columns of its own row.
+  private stampBakedWater(
+    key: string,
+    sy: number,
+    wx: number,
+    wy: number,
+    depth: number,
+  ) {
+    const texture = this.scene.textures.get(key);
+    const frames: string[] = [];
+    for (let c = 0; c < 4; c++) {
+      const sx = c * SRC_TILE;
+      const fk = `${key}_bw${sx}_${sy}`;
+      if (!texture.has(fk)) texture.add(fk, 0, sx, sy, SRC_TILE, SRC_TILE);
+      frames.push(fk);
+    }
+    const img = this.scene.add.image(wx, wy, key, frames[0]).setOrigin(0, 0);
+    img.setScale(TILE_W / SRC_TILE, TILE_H / SRC_TILE);
+    img.setDepth(depth);
+    this.stamps.push(img);
+    this.waterStamps.push({ img, frames });
   }
 
   private buildLegacy() {
