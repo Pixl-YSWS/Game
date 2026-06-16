@@ -1388,7 +1388,7 @@ export class WorldScene extends Phaser.Scene {
     this.npcSocialTimer = undefined;
     if (this.npcs.length < 2) return;
     this.npcSocialTimer = this.time.addEvent({
-      delay: 5000,
+      delay: 20000,
       loop: true,
       callback: () => this.tryNpcChat(),
     });
@@ -1397,9 +1397,12 @@ export class WorldScene extends Phaser.Scene {
   // When two idle NPCs happen to be near each other, have them stop and trade a
   // few emotes so it reads as a little conversation.
   private tryNpcChat() {
+    // Only occasionally — most ticks pass quietly so it reads as the odd
+    // greeting, not constant emoting.
+    if (Math.random() > 0.35) return;
     const free = this.npcs.filter((n) => n.isAvailable());
     if (free.length < 2) return;
-    const CHAT_RANGE = 5;
+    const CHAT_RANGE = 3;
     for (const a of Phaser.Utils.Array.Shuffle(free.slice())) {
       let partner: Npc | undefined;
       let bestD = Infinity;
@@ -1433,9 +1436,9 @@ export class WorldScene extends Phaser.Scene {
     ];
     const pick = () => moods[Math.floor(Math.random() * moods.length)];
     const speakers = [a, b];
-    const turns = 3 + Math.floor(Math.random() * 2);
+    const turns = 1 + Math.floor(Math.random() * 2);
     for (let i = 0; i < turns; i++) {
-      this.time.delayedCall(300 + i * 850, () => speakers[i % 2].showEmote(pick()));
+      this.time.delayedCall(400 + i * 1100, () => speakers[i % 2].showEmote(pick()));
     }
   }
 

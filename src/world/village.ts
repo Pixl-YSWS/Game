@@ -1,5 +1,13 @@
 import type { MapDef, NpcDef } from "../types/map";
 import { VILLAGE } from "../data/villageMaps";
+import { sharkObject, WATER } from "./tileset";
+
+// Friendly blahaj that patrol the channel between the islands (open-water tiles).
+const BLAHAJ_SPOTS: ReadonlyArray<readonly [number, number]> = [
+  [29, 25],
+  [29, 40],
+  [31, 44],
+];
 
 interface Cell {
   cx: number;
@@ -67,6 +75,13 @@ export function villageMap(): MapDef {
   };
 
   injectExtras(m);
+
+  // Blahaj — only where the spot is actually open water on the current map.
+  m.objects = m.objects ?? [];
+  for (const [cx, cy] of BLAHAJ_SPOTS) {
+    if (m.groundLayer[cy]?.[cx] === WATER) m.objects.push(sharkObject(cx, cy));
+  }
+
   return m;
 }
 
