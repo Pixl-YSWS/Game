@@ -24,38 +24,39 @@
 
 **Pixl** Pixl is a pixel-themed [YSWS](https://hackclub.com) where you evolve in a retro 2D open world and level up by building real projects. By exploring the map, you will discover different regions such as a cyberpunk city, an underwater region or even a gambling one. Each region will have sidequests like making apps, websites, or hardware for in-game characters that will pay you. You can also make regular software and hardware projects in your main village and sell them to merchants. Earn pixels, the in-game currency to buy nice items in the shop, or unlock funding. The more pixels you get, the best regions you can unlock and the more pixels you will get from the merchants.
 
-- **Shared open world** — explore with other Hack Clubbers in real time
-- **Private village** — your own procedurally generated space, seeded from your account
-- **Shop & economy** — spend Pixels on a shop to get prizes (mainly grants as we know you love that)
-- **Custom skins** — draw your own 16×16 pixel avatar --- WILL BE ADDED LATER
-- **Chat & voice** — communicate with nearby players
-- **Project submissions** — ship projects via the in-game **Pip** NPC
-- **Hackatime integration** — coding time is automatically tracked and rewarded
+- **Shared open world** - explore with other Hack Clubbers in real time
+- **Private village** - your own procedurally generated space, seeded from your account
+- **Shop & economy** - spend Pixels on a shop to get prizes (mainly grants as we know you love that)
+- **Custom skins** - draw your own 16×16 pixel avatar --- WILL BE ADDED LATER
+- **Chat & voice** - communicate with nearby players
+- **Project submissions** - ship projects via the in-game **Pip** NPC
+- **Hackatime integration** - coding time is automatically tracked and rewarded
 
 ---
 
 ## Screenshots
 
-> _Screenshots coming soon — add yours by opening a PR!_
+> _Screenshots coming soon, add yours by opening a PR!_
 
 <table>
   <tr>
     <td align="center">
-      <img src="public/assets/preview.png" alt="Game preview" width="400"/><br/>
-      <sub><b>Open World</b></sub>
+      <img width=400 alt="image" src="https://github.com/user-attachments/assets/4811829c-61fa-42e2-ae8c-030b5627c02f" /><br/>
+      <sub><b>private village</b></sub>
     </td>
     <td align="center">
-      <img src="docs/screenshots/village.png" alt="Private village" width="400"/><br/>
-      <sub><b>Your Private Village</b></sub>
+      <img width=400 alt="image" src="https://github.com/user-attachments/assets/7998b7d1-9366-4e16-bb6a-2af67ed38de9" /><br/>
+      <sub><b>openworld</b></sub>
     </td>
   </tr>
   <tr>
     <td align="center">
-      <img src="docs/screenshots/shop.png" alt="Shop" width="400"/><br/>
+      <img width=400 alt="image" src="https://github.com/user-attachments/assets/b86c3eba-578c-4f1f-9116-6cec3281e087" />
+<br/>
       <sub><b>In-Game Shop</b></sub>
     </td>
     <td align="center">
-      <img src="docs/screenshots/skin-editor.png" alt="Skin editor" width="400"/><br/>
+      <img width=400 alt="image" src="https://github.com/user-attachments/assets/f3eba801-37c8-4561-be33-e568c2ea9ecb" /><br/>
       <sub><b>Custom Skin Editor</b></sub>
     </td>
   </tr>
@@ -66,24 +67,24 @@
 ## Features
 
 ### Multiplayer World
-A real-time top-down world powered by Socket.IO. The shared **open world** uses a fixed seed (`0xC0FFEE`) so everyone sees the same landscape. Your **private village** is procedurally generated from your own account ID — unique to you, but visitable by others by inviting them.
+A real-time top-down world powered by Socket.IO. The shared **open world** uses a fixed seed (`0xC0FFEE`) so everyone sees the same landscape. Your **private village** is procedurally generated from your own account ID, unique to you, but visitable by others by inviting them.
 
-### Consistency system
+### Consistency system (for the future ysws, not implemented yet)
 The more project you ship, the best merchants you unlock in your village, meaning that they will pay you more !
 
-### Pixel Economy
+### Pixel Economy (for the future ysws, not implemented yet)
 Earn **Pixels** by shipping projects. Spend them in the shop on prizes. Prices are enforced server-side — no spoofing possible.
 
-### Character Customisation
+### Character Customisation 
 Choose from 5 preset character skins, or open the **Skin Editor** to draw a completely custom 16×16 avatar. Your skin is saved to your account and broadcast to all nearby players.
 
-### Project Submissions (YSWS)
+### Project Submissions (YSWS) (for the future ysws, not implemented yet)
 Talk to the **Pip** NPC in your village to submit projects with a name, description, repo URL, and demo link. Link your [Hackatime](https://hackatime.hackclub.com/) account to automatically sync coding time to your projects.
 
 ### Procedural Audio
 An ambient music engine built entirely with the Web Audio API — no audio files needed. The musical scale shifts from major (day) to minor (night) in sync with the in-game day/night cycle.
 
-### Map Authoring
+### Map Authoring 
 Maps are created in [Tiled](https://www.mapeditor.org/) and exported to JSON. Run `bun run sync-map` to regenerate the TypeScript map data. Walkable tiles and solid decorations are preserved across syncs.
 
 ---
@@ -315,9 +316,9 @@ Full command list: `accounts`, `whois`, `admins`, `mutes`, `add-admin`, `add-sub
 Contributions are very welcome! Here is how to get started:
 
 1. Fork the repository
-2. Create a feature branch — `git checkout -b feat/amazing-feature`
-3. Commit your changes — `git commit -m 'feat: add amazing feature'`
-4. Push to the branch — `git push origin feat/amazing-feature`
+2. Create a feature branch - `git checkout -b feat/amazing-feature`
+3. Commit your changes - `git commit -m 'feat: add amazing feature'`
+4. Push to the branch - `git push origin feat/amazing-feature`
 5. Open a Pull Request
 
 Please check the [open issues](https://github.com/Pixl-YSWS/Game/issues) before starting work on something new.
