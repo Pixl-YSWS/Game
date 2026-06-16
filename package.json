@@ -9,9 +9,7 @@
     "start:client": "vite",
     "tauri": "tauri",
     "build": "tsc && vite build",
-    "preview": "vite preview",
-    "sync-map": "bun scripts/sync-map.ts",
-    "sync-maps": "bun scripts/sync-maps.ts"
+    "preview": "vite preview"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.11.2",
