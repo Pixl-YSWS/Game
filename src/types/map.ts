@@ -92,5 +92,9 @@ export interface MapDef {
 
   portal?: { cx: number; cy: number };
 
+  // "col,row" keys of tiles a bridge is drawn over. Sharks may swim *under*
+  // these (and render below the bridge) even though players walk on top.
+  bridgeTiles?: ReadonlySet<string>;
+
   npcs: NpcDef[];
 }

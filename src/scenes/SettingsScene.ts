@@ -96,6 +96,8 @@ export class SettingsScene extends Phaser.Scene {
       title: "Settings",
       width: 420,
       onClose: () => this.scene.stop(),
+      bgVideo:
+        this.fromKey === "MainMenuScene" ? "/main-menu.mp4" : undefined,
     });
 
     const body = this.modal.body;

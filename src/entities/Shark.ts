@@ -91,7 +91,7 @@ export class Shark extends Phaser.GameObjects.Container {
 
     scene.add.existing(this);
 
-    this.setDepth(obj.cy + obj.h / SRC_TILE);
+    this.setDepth(this.swimDepth(this.cy));
 
     this.startSwimAnim();
     this.scheduleDecide(400 + Math.random() * 300);
@@ -286,6 +286,10 @@ export class Shark extends Phaser.GameObjects.Container {
     this.startHappyWiggle();
   }
 
+  private isBridge(cx: number, cy: number): boolean {
+    return this.mapDef.bridgeTiles?.has(`${cx},${cy}`) ?? false;
+  }
+
   private canMoveTo(cx: number, cy: number): boolean {
     const tw = Math.ceil(this.obj.w / SRC_TILE);
     const th = Math.ceil(this.obj.h / SRC_TILE);
@@ -295,6 +299,9 @@ export class Shark extends Phaser.GameObjects.Container {
         const gr = cy + r;
         if (gc < 0 || gr < 0 || gc >= this.mapDef.cols || gr >= this.mapDef.rows)
           return false;
+        // A bridge tile is passable — the shark swims beneath it — regardless of
+        // the paved ground / solid railing deco stamped there for players.
+        if (this.isBridge(gc, gr)) continue;
         const g = this.mapDef.groundLayer[gr]?.[gc];
         if (g === undefined || g !== WATER) return false;
         const d = this.mapDef.decoLayer[gr]?.[gc];
@@ -303,6 +310,12 @@ export class Shark extends Phaser.GameObjects.Container {
       }
     }
     return true;
+  }
+
+  // Depth that keeps the shark below the bridge deck (bridge layers sit at
+  // depth 0.2) when it's swimming under one, else its normal in-water depth.
+  private swimDepth(cy: number): number {
+    return this.isBridge(this.cx, cy) ? 0.15 : cy + this.obj.h / SRC_TILE;
   }
 
   private swimTo(cx: number, cy: number, dx: number) {
@@ -333,12 +346,16 @@ export class Shark extends Phaser.GameObjects.Container {
       duration: dur,
       ease: "Sine.easeInOut",
       onUpdate: () => {
-        this.setDepth(this.y / TILE_H + this.obj.h / SRC_TILE);
+        this.setDepth(
+          this.isBridge(this.cx, this.cy)
+            ? 0.15
+            : this.y / TILE_H + this.obj.h / SRC_TILE,
+        );
       },
       onComplete: () => {
         this.isMoving = false;
         this.sprite.y = 0;
-        this.setDepth(this.cy + this.obj.h / SRC_TILE);
+        this.setDepth(this.swimDepth(this.cy));
       },
     });
   }

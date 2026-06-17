@@ -173,12 +173,18 @@ export class IsoMap {
     wx: number,
     wy: number,
     depth: number,
+    flipX = false,
+    flipY = false,
   ) {
     const frameKey = `${key}_r${sx}_${sy}_${w}_${h}`;
     const texture = this.scene.textures.get(key);
     if (!texture.has(frameKey)) texture.add(frameKey, 0, sx, sy, w, h);
     const img = this.scene.add.image(wx, wy, key, frameKey).setOrigin(0, 0);
     img.setScale(TILE_W / SRC_TILE, TILE_H / SRC_TILE);
+    // flipX/flipY mirror the texture in place (origin is top-left), so the tile
+    // still occupies the same cell.
+    if (flipX) img.setFlipX(true);
+    if (flipY) img.setFlipY(true);
     img.setDepth(depth);
     this.stamps.push(img);
   }
@@ -237,10 +243,18 @@ export class IsoMap {
       };
     };
 
+    // Tiled stores horizontal/vertical/diagonal flips in the top 3 GID bits.
+    const FLIP_H = 0x80000000;
+    const FLIP_V = 0x40000000;
+    const GID_MASK = 0x1fffffff;
+
     for (const layer of baked.layers) {
       for (let i = 0; i < layer.data.length; i++) {
-        const gid = layer.data[i];
-        if (!gid) continue;
+        const raw = layer.data[i];
+        if (!raw) continue;
+        const flipX = (raw & FLIP_H) !== 0;
+        const flipY = (raw & FLIP_V) !== 0;
+        const gid = raw & GID_MASK;
         const col = i % cols;
         const row = (i / cols) | 0;
         const src = resolve(gid);
@@ -251,7 +265,7 @@ export class IsoMap {
         if (layer.animateWater) {
           this.stampBakedWater(src.key, src.sy, x, y, depth);
         } else {
-          this.stampSub(src.key, src.sx, src.sy, T, T, x, y, depth);
+          this.stampSub(src.key, src.sx, src.sy, T, T, x, y, depth, flipX, flipY);
         }
       }
     }

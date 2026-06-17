@@ -158,6 +158,43 @@ export function injectStyles(): void {
 .pixl-hint { font-size: 14px; color: #c9b18c; text-align: center; line-height: 1.7; margin: 14px 0; }
 .pixl-empty { text-align: center; color: #c9b18c; font-size: 14.5px; line-height: 1.8; padding: 28px 0; }
 .pixl-overlay button { cursor: ${CURSORS.pointer}; }
+.pixl-loading {
+  z-index: 100001;
+  background: rgba(10, 6, 2, 0.78);
+}
+.pixl-loading-box {
+  display: flex; align-items: center; gap: 16px;
+  background:
+    repeating-conic-gradient(rgba(255, 226, 170, 0.04) 0% 25%, transparent 0% 50%) 0 0 / 6px 6px,
+    #2b1d12;
+  border: 3px solid #17100a;
+  box-shadow: inset 0 0 0 3px #6b4f33, 8px 8px 0 rgba(0, 0, 0, 0.5);
+  padding: 18px 26px;
+  font-family: "Pixelify Sans", sans-serif;
+  font-size: 19px; letter-spacing: 1px;
+  color: #ffd166;
+}
+.pixl-spinner {
+  width: 20px; height: 20px; flex-shrink: 0;
+  border: 4px solid #6b4f33;
+  border-top-color: #ffd166;
+  border-radius: 50%;
+  animation: pixl-spin 0.8s steps(8) infinite;
+}
+@keyframes pixl-spin { to { transform: rotate(360deg); } }
+/* Single shared, always-playing menu background — one <video> element reused by
+   every menu/modal so they stay perfectly in sync. Sits below all overlays;
+   opted-in overlays go transparent (.pixl-has-bg) to reveal it. */
+#pixl-shared-bg { position: fixed; inset: 0; z-index: 30; }
+#pixl-shared-bg .pixl-menu-bg {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover; image-rendering: pixelated;
+}
+#pixl-shared-bg .pixl-shared-scrim {
+  position: absolute; inset: 0; background: rgba(10, 6, 2, 0.55);
+}
+.pixl-has-bg { background: transparent !important; }
 `;
   document.head.appendChild(style);
 }
@@ -177,6 +214,42 @@ export interface DomModalOpts {
   title: string;
   width?: number;
   onClose: () => void;
+  /** When set, plays this video as a full-screen background behind the modal
+   *  (used for menus opened from the main menu, not the in-game pause menu). */
+  bgVideo?: string;
+}
+
+// One shared <video> element reused by every menu so they stay in sync. It's
+// created on first use, plays continuously, and is just shown/hidden via a
+// reference count as menus open and close.
+let sharedBg: HTMLDivElement | undefined;
+let sharedBgRefs = 0;
+
+/** Reveal the shared menu background video (creating it on first call). */
+export function acquireMenuBg(src: string): void {
+  injectStyles();
+  if (!sharedBg) {
+    sharedBg = el("div");
+    sharedBg.id = "pixl-shared-bg";
+    const v = el("video");
+    v.className = "pixl-menu-bg";
+    v.src = src;
+    v.autoplay = true;
+    v.loop = true;
+    v.muted = true;
+    v.playsInline = true;
+    v.setAttribute("aria-hidden", "true");
+    sharedBg.append(v, el("div", "pixl-shared-scrim"));
+    document.body.append(sharedBg);
+  }
+  sharedBgRefs++;
+  sharedBg.style.display = "block";
+}
+
+/** Drop one reference to the shared menu background; hides it when none remain. */
+export function releaseMenuBg(): void {
+  sharedBgRefs = Math.max(0, sharedBgRefs - 1);
+  if (sharedBgRefs === 0 && sharedBg) sharedBg.style.display = "none";
 }
 
 export interface DomModal {
@@ -196,6 +269,10 @@ export function openDomModal(
 
   const root = el("div", "pixl-overlay");
   root.tabIndex = -1;
+  if (opts.bgVideo) {
+    root.classList.add("pixl-has-bg");
+    acquireMenuBg(opts.bgVideo);
+  }
   const modal = el("div", "pixl-modal");
   if (opts.width)
     modal.style.width = `min(${opts.width}px, calc(100vw - 28px))`;
@@ -213,14 +290,18 @@ export function openDomModal(
   document.body.append(root);
   root.focus();
 
+  let destroyed = false;
   const handle: DomModal = {
     root,
     modal,
     body,
     onEscape: opts.onClose,
     destroy: () => {
+      if (destroyed) return;
+      destroyed = true;
       window.removeEventListener("keydown", onKey, true);
       root.remove();
+      if (opts.bgVideo) releaseMenuBg();
     },
   };
 
@@ -236,6 +317,33 @@ export function openDomModal(
   scene.events.once("shutdown", handle.destroy);
 
   return handle;
+}
+
+export interface DomLoading {
+  root: HTMLDivElement;
+  setMessage(message: string): void;
+  destroy(): void;
+}
+
+/** Full-screen loading overlay skinned with the same pixl- UI as the modals. */
+export function openDomLoading(message: string): DomLoading {
+  injectStyles();
+
+  const root = el("div", "pixl-overlay pixl-loading");
+  const box = el("div", "pixl-loading-box");
+  const spinner = el("div", "pixl-spinner");
+  const label = el("span", undefined, message);
+  box.append(spinner, label);
+  root.append(box);
+  document.body.append(root);
+
+  return {
+    root,
+    setMessage: (m: string) => {
+      label.textContent = m;
+    },
+    destroy: () => root.remove(),
+  };
 }
 
 export function domBtn(

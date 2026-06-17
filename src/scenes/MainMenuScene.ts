@@ -1,5 +1,12 @@
 import Phaser from "phaser";
-import { domBtn, el, injectStyles, openDomModal } from "../ui/dom";
+import {
+  acquireMenuBg,
+  domBtn,
+  el,
+  injectStyles,
+  openDomModal,
+  releaseMenuBg,
+} from "../ui/dom";
 import { CURSORS } from "../ui/theme";
 import {
   getAccountId,
@@ -28,7 +35,7 @@ function injectMainStyles(): void {
   font-family: "Monocraft", "Pixelify Sans", monospace;
   font-size: 15px;
   color: #f4e3c2;
-  background: #0d0d1a;
+  background: transparent;
   outline: none;
 }
 #pixl-main-root .pixl-title {
@@ -67,8 +74,10 @@ export class MainMenuScene extends Phaser.Scene {
 
     this.root = el("div", "pixl-overlay");
     this.root.id = "pixl-main-root";
-    this.root.style.background = "#0d0d1a";
     this.root.style.zIndex = "50";
+
+    // Shared looping video behind every menu (kept in sync across all of them).
+    acquireMenuBg("/main-menu.mp4");
 
     const title = el("div", "pixl-title", "PixlGame");
     this.root.append(title);
@@ -190,6 +199,7 @@ export class MainMenuScene extends Phaser.Scene {
     this.events.once("shutdown", () => {
       this.root?.remove();
       this.root = undefined;
+      releaseMenuBg();
     });
   }
 
@@ -246,12 +256,14 @@ export class MainMenuScene extends Phaser.Scene {
     this.showRoot(false);
     const modal = openDomModal(this, {
       title: "Lobbies",
-      width: 420,
+      width: 640,
       onClose: () => {
         this.showRoot(true);
         modal.destroy();
       },
+      bgVideo: "/main-menu.mp4",
     });
+    modal.modal.style.minHeight = "min(580px, calc(100vh - 120px))";
     const go = (a: LobbyAction) => {
       modal.destroy();
       this.startLobby(a);

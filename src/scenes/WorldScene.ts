@@ -45,6 +45,7 @@ import { UIScene } from "./UIScene";
 import { CURSORS, FONT } from "../ui/theme";
 import { formatChatBubble } from "../ui/ChatBox";
 import { playUiSound } from "../ui/UIKit";
+import { openDomLoading, type DomLoading } from "../ui/dom";
 
 export class WorldScene extends Phaser.Scene {
   private isoMap?: IsoMap;
@@ -56,8 +57,7 @@ export class WorldScene extends Phaser.Scene {
   private loadingText?: Phaser.GameObjects.Text;
   private connErrorText?: Phaser.GameObjects.Text;
 
-  private loadingOverlay?: Phaser.GameObjects.Rectangle;
-  private loadingOverlayText?: Phaser.GameObjects.Text;
+  private loadingOverlay?: DomLoading;
 
   private loadingShownAt = 0;
   private static readonly MIN_LOADING_MS = 1000;
@@ -334,8 +334,6 @@ export class WorldScene extends Phaser.Scene {
     const h = gameSize.height;
     this.loadingText?.setPosition(w / 2, h / 2);
     this.connErrorText?.setPosition(w / 2, h / 2);
-    this.loadingOverlay?.setPosition(w / 2, h / 2).setSize(w, h);
-    this.loadingOverlayText?.setPosition(w / 2, h / 2);
   }
 
   // Scenes that overlay the world and should suspend its input (but not pause
@@ -1444,30 +1442,10 @@ export class WorldScene extends Phaser.Scene {
 
   private showLoadingOverlay(message: string) {
     if (!this.loadingOverlay) {
-      this.loadingOverlay = this.add
-        .rectangle(
-          this.scale.width / 2,
-          this.scale.height / 2,
-          this.scale.width,
-          this.scale.height,
-          0x000000,
-          0.7,
-        )
-        .setScrollFactor(0)
-        .setDepth(100001);
+      this.loadingOverlay = openDomLoading(message);
+    } else {
+      this.loadingOverlay.setMessage(message);
     }
-    if (!this.loadingOverlayText) {
-      this.loadingOverlayText = this.add
-        .text(this.scale.width / 2, this.scale.height / 2, "", {
-          fontFamily: FONT,
-          fontSize: "12px",
-          color: "#ffffff",
-        })
-        .setOrigin(0.5)
-        .setScrollFactor(0)
-        .setDepth(100002);
-    }
-    this.loadingOverlayText.setText(message);
     this.loadingShownAt = this.time.now;
   }
 
@@ -1485,8 +1463,6 @@ export class WorldScene extends Phaser.Scene {
   private hideLoadingOverlay() {
     this.loadingOverlay?.destroy();
     this.loadingOverlay = undefined;
-    this.loadingOverlayText?.destroy();
-    this.loadingOverlayText = undefined;
   }
 
   private refreshStatus() {

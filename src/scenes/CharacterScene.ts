@@ -63,6 +63,8 @@ export class CharacterScene extends Phaser.Scene {
       title: "Customise your look",
       width: 460,
       onClose: () => this.scene.stop(),
+      bgVideo:
+        this.fromKey === "MainMenuScene" ? "/main-menu.mp4" : undefined,
     });
     this.modal = modal;
 

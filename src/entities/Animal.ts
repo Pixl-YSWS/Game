@@ -109,10 +109,18 @@ export class Animal extends Phaser.GameObjects.Container {
     this.add(this.sprite);
     scene.add.existing(this);
 
-    this.setDepth(obj.flat ? 0.4 : obj.cy + obj.h / SRC_TILE);
+    this.setDepth(obj.flat ? 0.4 : this.bodyDepth(obj.cy));
 
     this.playAnim(this.idleAnimKeys, this.idleFps);
     this.scheduleWander();
+  }
+
+  // Depth for an animal whose sprite top sits on `topRow`. The +0.5 matches the
+  // bias players/NPCs use (feet-row + 1.5) so the body sorts *above* grass deco
+  // standing on the same row as its feet instead of tying with it (which let
+  // grass draw over the cow).
+  private bodyDepth(topRow: number): number {
+    return topRow + this.obj.h / SRC_TILE + 0.5;
   }
 
   private playAnim(keys: string[], fps: number) {
@@ -265,7 +273,7 @@ export class Animal extends Phaser.GameObjects.Container {
       duration: dur,
       ease: "Linear",
       onUpdate: () => {
-        this.setDepth(Math.floor(this.y / TILE_H) + this.obj.h / SRC_TILE);
+        this.setDepth(this.bodyDepth(Math.floor(this.y / TILE_H)));
       },
       onComplete: () => {
         const keep = new Set(newFoot);
@@ -282,7 +290,7 @@ export class Animal extends Phaser.GameObjects.Container {
   private endStroll() {
     this.isMoving = false;
     this.sprite.y = 0;
-    this.setDepth(this.cy + this.obj.h / SRC_TILE);
+    this.setDepth(this.bodyDepth(this.cy));
     this.playAnim(this.idleAnimKeys, this.idleFps);
     this.scheduleWander();
   }
@@ -319,7 +327,7 @@ export class Animal extends Phaser.GameObjects.Container {
     }
     const { x, y } = cartToIso(cx, cy);
     this.setPosition(x, y);
-    this.setDepth(this.obj.flat ? 0.4 : cy + this.obj.h / SRC_TILE);
+    this.setDepth(this.obj.flat ? 0.4 : this.bodyDepth(cy));
   }
 
   /** World-space anchor (top-centre) for a floating prompt above the animal. */

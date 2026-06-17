@@ -403,9 +403,9 @@ const VILLAGER_TEMPLATES: Omit<NpcDef, "cx" | "cy">[] = [
   },
   {
     id: "merchant_oda",
-    name: "Oda",
+    name: "Gabin",
     sprite: 0,
-    dialogue: ["(Oda opens her shop.)"],
+    dialogue: ["(Gabin opens his shop.)"],
     shopId: "village_shop",
   },
   {
