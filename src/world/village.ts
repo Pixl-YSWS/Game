@@ -92,7 +92,7 @@ export function villageMap(): MapDef {
 // couple tiles above the building and can't walk behind the roof peak. Clear
 // just the top roof rows of each building's collision (so you can slip behind
 // the peak) while keeping the bulk of the body solid.
-const ROOF_CLEAR_ROWS = 2;
+const ROOF_CLEAR_ROWS = 1;
 const BUILDING_TILESETS = new Set(["vt-houses", "vt-barn", "vt-tents_big"]);
 const GID_MASK = 0x1fffffff;
 
