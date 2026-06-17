@@ -18,7 +18,6 @@ dist-ssr
 !.env.example
 
 .claude
-CLAUDE.md
 
 # Vercel CLI link state (org/project ids live in repo secrets instead)
 .vercel
@@ -36,3 +35,6 @@ server/data/
 *.sln
 *.sw?
 .env*
+
+*tiled-project
+*tiled-session

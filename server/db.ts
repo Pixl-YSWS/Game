@@ -1,3 +1,6 @@
+// WRITTEN BY CLAUDE
+// MADE TO SUPPORT HACKATIME DB..... CLONED FROM ALCHEMIZE
+
 // YSWS data store — Postgres via Drizzle, shaped like the Airtable REST API.
 //
 // Hack Club's YSWS tooling expects submissions to live in an Airtable-shaped
@@ -10,12 +13,7 @@
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { and, desc, eq } from "drizzle-orm";
-import {
-  bigint,
-  pgTable,
-  serial,
-  varchar,
-} from "drizzle-orm/pg-core";
+import { bigint, pgTable, serial, varchar } from "drizzle-orm/pg-core";
 
 // ── Schemas ──────────────────────────────────────────────────────────
 export const userTable = pgTable("users", {
@@ -74,10 +72,7 @@ const isNeon = DATABASE_URL?.includes("neon.tech");
 
 // We decide SSL ourselves (below), so strip any sslmode/ssl query param from the
 // URL — otherwise pg-connection-string logs a noisy deprecation warning for it.
-const connectionString = DATABASE_URL?.replace(
-  /(sslmode|ssl)=[^&]*&?/gi,
-  "",
-)
+const connectionString = DATABASE_URL?.replace(/(sslmode|ssl)=[^&]*&?/gi, "")
   .replace(/[?&]$/, "")
   .replace(/\?&/, "?");
 
