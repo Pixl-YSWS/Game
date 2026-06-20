@@ -1,5 +1,6 @@
 [gd_scene format=4 uid="uid://clxv1ienuxcb8"]
 
+[ext_resource type="Script" uid="uid://cirbekqc68h62" path="res://scripts/game.gd" id="1_0sl42"]
 [ext_resource type="PackedScene" uid="uid://fa3fub2wlv3v" path="res://scenes/player.tscn" id="1_uwrxv"]
 [ext_resource type="Texture2D" uid="uid://cn3b8hjbfaex3" path="res://assets/cozy-towns/CozyValley_Premium_1.3/Tilesets/DocksBridges.png" id="2_lbhrr"]
 [ext_resource type="Texture2D" uid="uid://dt1vs2st37iti" path="res://assets/cozy-towns/CozyValley_Premium_1.3/Tilesets/Terrain.png" id="2_sgl2t"]
@@ -3013,13 +3014,11 @@ size = Vector2(21, 26)
 
 [node name="Game" type="Node2D" unique_id=1814781088]
 y_sort_enabled = true
+script = ExtResource("1_0sl42")
 
 [node name="player" parent="." unique_id=393070258 instance=ExtResource("1_uwrxv")]
 z_index = 10
 position = Vector2(-25, -86)
-
-[node name="Camera2D" type="Camera2D" parent="player" unique_id=1963726510]
-zoom = Vector2(4, 4)
 
 [node name="StairTrigger" type="Area2D" parent="." unique_id=610429191]
 script = ExtResource("32_wljb1")
@@ -3092,7 +3091,7 @@ tile_set = SubResource("TileSet_kvpfn")
 [node name="Houses" type="TileMapLayer" parent="." unique_id=218909901]
 z_index = 10
 y_sort_enabled = true
-tile_map_data = PackedByteArray("AAABAPr/CAAAAAAAAAD8/wIACwACAAQAAAD8//X/BwAAAAAAAAAIAPP/CwAEAAAAAAA=")
+tile_map_data = PackedByteArray("AAABAPr/CAAAAAAAAAD8/wIACwACAAQAAAD8//X/BwAAAAAAAAAIAPP/CwACAAQAAAA=")
 tile_set = SubResource("TileSet_dinhu")
 
 [node name="Props" type="TileMapLayer" parent="." unique_id=1968509645]
@@ -3133,8 +3132,14 @@ theme_override_colors/font_color = Color(0.77315557, 0.55160576, 0.26933688, 1)
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_constants/outline_size = 2
 theme_override_font_sizes/font_size = 11
+text = "Press E to enter"
+
+[node name="PlayerSpawn" type="Marker2D" parent="." unique_id=332008319]
+position = Vector2(-57, -135)
 
 [connection signal="body_entered" from="StairTrigger" to="player" method="_on_stair_trigger_body_entered"]
 [connection signal="body_exited" from="StairTrigger" to="player" method="_on_stair_trigger_body_exited"]
+[connection signal="body_entered" from="DoorTrigger" to="." method="_on_door_trigger_body_entered"]
 [connection signal="body_entered" from="DoorTrigger" to="player" method="_on_door_trigger_body_entered"]
+[connection signal="body_exited" from="DoorTrigger" to="." method="_on_door_trigger_body_exited"]
 [connection signal="body_exited" from="DoorTrigger" to="player" method="_on_door_trigger_body_exited"]
