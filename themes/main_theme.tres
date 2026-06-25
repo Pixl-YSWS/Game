@@ -1,0 +1,33 @@
+[gd_resource type="Theme" format=3 uid="uid://bv3yjmmciab5v"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_rjgu6"]
+content_margin_left = 40.0
+content_margin_top = 5.0
+content_margin_right = 40.0
+content_margin_bottom = 5.0
+bg_color = Color(1, 0.8745098, 0.5411765, 1)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_vxwtt"]
+content_margin_left = 40.0
+content_margin_top = 5.0
+content_margin_right = 40.0
+content_margin_bottom = 5.0
+bg_color = Color(1, 0.81960785, 0.4, 1)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
+corner_detail = 13
+
+[resource]
+Button/colors/font_color = Color(0.22745098, 0.14117648, 0.0627451, 1)
+Button/colors/font_disabled_color = Color(0.875, 0.875, 0.875, 0.5)
+Button/colors/font_hover_color = Color(0.22745098, 0.14117648, 0.0627451, 1)
+Button/colors/font_hover_pressed_color = Color(1, 1, 1, 1)
+Button/styles/hover = SubResource("StyleBoxFlat_rjgu6")
+Button/styles/normal = SubResource("StyleBoxFlat_vxwtt")
+VBoxContainer/constants/separation = 7

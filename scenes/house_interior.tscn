@@ -23,6 +23,7 @@
 [ext_resource type="Texture2D" uid="uid://ug86rm6k7y5d" path="res://assets/cozy-towns/Housing/Props/Base/BaseProps_red.png" id="20_eni3h"]
 [ext_resource type="Texture2D" uid="uid://djomqxsurnba7" path="res://assets/cozy-towns/Housing/Props/Base/BaseProps_white.png" id="21_eoikt"]
 [ext_resource type="Texture2D" uid="uid://cbqb47lkunt7a" path="res://assets/cozy-towns/Housing/Props/Base/BaseProps_yellow.png" id="22_85ggi"]
+[ext_resource type="Script" uid="uid://c6o1bgj0ub2mo" path="res://scripts/door_trigger.gd" id="24_sujwc"]
 
 [sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_cmt1b"]
 texture = ExtResource("1_c30tn")
@@ -1230,8 +1231,8 @@ physics_layer_0/collision_layer = 1
 sources/0 = SubResource("TileSetAtlasSource_j7pb1")
 sources/1 = SubResource("TileSetAtlasSource_m081c")
 
-[sub_resource type="RectangleShape2D" id="RectangleShape2D_te6ld"]
-size = Vector2(24.5, 9)
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_6hqto"]
+size = Vector2(31.5, 7)
 
 [node name="HouseInterior" type="Node2D" unique_id=823584393]
 script = ExtResource("1_te6ld")
@@ -1259,31 +1260,33 @@ tile_set = SubResource("TileSet_t4len")
 [node name="PlayerSpawn" type="Marker2D" parent="." unique_id=730039262]
 position = Vector2(-33, 29)
 
-[node name="DoorTrigger" type="Area2D" parent="." unique_id=1122620501]
-z_index = 13
-position = Vector2(-36, 28)
-collision_mask = 2
-
-[node name="CollisionShape2D" type="CollisionShape2D" parent="DoorTrigger" unique_id=909737138]
-shape = SubResource("RectangleShape2D_te6ld")
-
-[node name="Label" type="Label" parent="DoorTrigger" unique_id=85855759]
-visible = false
-offset_left = -17.0
-offset_top = -20.0
-offset_right = 38.0
-offset_bottom = 3.0
-theme_override_colors/font_color = Color(0.77315557, 0.55160576, 0.26933688, 1)
-theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
-theme_override_constants/outline_size = 2
-theme_override_font_sizes/font_size = 11
-text = "Press E to exitaw"
-
 [node name="StaticBody2D" type="StaticBody2D" parent="." unique_id=1869204179]
 
 [node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="StaticBody2D" unique_id=1658459386]
 position = Vector2(0, 68)
 polygon = PackedVector2Array(10, -11, -48, -35, 48, -35, 49, -106, -48, -108, -49, -37, -57, -21, -72, -96, -61, -150, -24, -157, 62, -144, 104, -122, 92, -14, 40, -7)
 
-[connection signal="body_entered" from="DoorTrigger" to="." method="_on_door_trigger_body_entered"]
-[connection signal="body_exited" from="DoorTrigger" to="." method="_on_door_trigger_body_exited"]
+[node name="DoorTrigger" type="Area2D" parent="." unique_id=328908785]
+z_index = 13
+position = Vector2(-40, 14)
+collision_mask = 2
+script = ExtResource("24_sujwc")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="DoorTrigger" unique_id=316634271]
+position = Vector2(7.25, 15.5)
+shape = SubResource("RectangleShape2D_6hqto")
+
+[node name="Label" type="Label" parent="DoorTrigger" unique_id=1767791041]
+visible = false
+offset_left = -38.0
+offset_top = -32.0
+offset_right = 46.0
+offset_bottom = -9.0
+theme_override_colors/font_color = Color(0.77315557, 0.55160576, 0.26933688, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 2
+theme_override_font_sizes/font_size = 11
+text = "Press E to exit"
+
+[connection signal="body_entered" from="DoorTrigger" to="DoorTrigger" method="_on_body_entered"]
+[connection signal="body_exited" from="DoorTrigger" to="DoorTrigger" method="_on_body_exited"]

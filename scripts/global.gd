@@ -2,9 +2,10 @@ extends Node
 
 const PLAYER_SCENE = preload("res://scenes/player.tscn")
 
-var current_scene: String = "game"
+var current_scene: String = "village"
 var transition_scene: bool = false
 var spawn_point: String = "PlayerSpawn" 
+var player_in_range: bool = false
 
 func request_transition(target_scene: String, spawn_name: String = "PlayerSpawn") -> void:
 	transition_scene = true

@@ -1,0 +1,40 @@
+[gd_scene format=3 uid="uid://dv6e2uxkej2n7"]
+
+[ext_resource type="Theme" uid="uid://bv3yjmmciab5v" path="res://themes/main_theme.tres" id="1_nw41r"]
+[ext_resource type="Script" uid="uid://dnli4mn0oyso2" path="res://scripts/login.gd" id="1_pymad"]
+
+[node name="Login" type="Control" unique_id=2039546782]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme = ExtResource("1_nw41r")
+script = ExtResource("1_pymad")
+
+[node name="CenterContainer" type="CenterContainer" parent="." unique_id=223593209]
+layout_mode = 0
+offset_right = 1154.0
+offset_bottom = 650.0
+
+[node name="VBoxContainer" type="VBoxContainer" parent="CenterContainer" unique_id=1270512282]
+layout_mode = 2
+
+[node name="TitleLabel" type="Label" parent="CenterContainer/VBoxContainer" unique_id=424695268]
+layout_mode = 2
+text = "Pixl"
+
+[node name="StatusLabel" type="Label" parent="CenterContainer/VBoxContainer" unique_id=1483478206]
+layout_mode = 2
+
+[node name="LoginButton" type="Button" parent="CenterContainer/VBoxContainer" unique_id=134122846]
+layout_mode = 2
+text = "Login with Hack Club"
+
+[node name="DemoLoginButton" type="Button" parent="CenterContainer/VBoxContainer" unique_id=2023112825]
+layout_mode = 2
+text = "Login as Guest"
+
+[node name="DemoNameInput" type="LineEdit" parent="CenterContainer/VBoxContainer" unique_id=1281949373]
+layout_mode = 2

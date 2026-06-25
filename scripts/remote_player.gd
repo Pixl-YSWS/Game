@@ -2,7 +2,7 @@ extends CharacterBody2D
 var speed = 150
 var current_dir = "none"
 var is_on_stairs = false
-@export var is_local: bool = true
+@export var is_local: bool = false
 
 func _ready() -> void:
 	$AnimatedSprite2D.play("front_idle")
@@ -10,7 +10,6 @@ func _ready() -> void:
 		$NameLabel.text = "You"
 	elif not is_local:
 		$NameLabel.text = NetworkManager.display_name
-		$CollisionShape2D.disabled = true
 
 func _physics_process(delta: float) -> void:
 	if is_local:

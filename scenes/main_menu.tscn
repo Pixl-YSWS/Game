@@ -1,0 +1,41 @@
+[gd_scene format=3 uid="uid://bko40f8bhcrgr"]
+
+[ext_resource type="Script" uid="uid://cp8p63bbkw3k" path="res://scripts/main_menu.gd" id="1_l6cm7"]
+
+[node name="MainMenu" type="Control" unique_id=190975438]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_l6cm7")
+
+[node name="CenterContainer" type="CenterContainer" parent="." unique_id=727448648]
+layout_mode = 0
+offset_left = 7.0
+offset_top = -5.0
+offset_right = 1155.0
+offset_bottom = 660.0
+
+[node name="VBoxContainer" type="VBoxContainer" parent="CenterContainer" unique_id=1888440411]
+layout_mode = 2
+
+[node name="TitleLabel" type="Label" parent="CenterContainer/VBoxContainer" unique_id=60049771]
+layout_mode = 2
+text = "Pixl"
+
+[node name="StatusLabel" type="Label" parent="CenterContainer/VBoxContainer" unique_id=386432290]
+layout_mode = 2
+
+[node name="PlayButton" type="Button" parent="CenterContainer/VBoxContainer" unique_id=959161397]
+layout_mode = 2
+text = "Enter Village"
+
+[node name="OpenworldButton" type="Button" parent="CenterContainer/VBoxContainer" unique_id=643420737]
+layout_mode = 2
+text = "Join Open-world"
+
+[node name="LogoutButton" type="Button" parent="CenterContainer/VBoxContainer" unique_id=1318844018]
+layout_mode = 2
+text = "Logout"
