@@ -1,0 +1,68 @@
+name: Export Web & Deploy to Vercel
+
+on:
+  push:
+    branches: ["**"]
+  workflow_dispatch:
+
+env:
+  GODOT_VERSION: "4.6"
+  GODOT_RELEASE: "stable"
+  EXPORT_PRESET: "Web"
+
+jobs:
+  export-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Godot ${{ env.GODOT_VERSION }}-${{ env.GODOT_RELEASE }} (headless)
+        run: |
+          set -euo pipefail
+          BASE="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-${GODOT_RELEASE}"
+          curl -fSL -o godot.zip "${BASE}/Godot_v${GODOT_VERSION}-${GODOT_RELEASE}_linux.x86_64.zip"
+          curl -fSL -o templates.tpz "${BASE}/Godot_v${GODOT_VERSION}-${GODOT_RELEASE}_export_templates.tpz"
+          unzip -q godot.zip
+          mv "Godot_v${GODOT_VERSION}-${GODOT_RELEASE}_linux.x86_64" /usr/local/bin/godot
+          chmod +x /usr/local/bin/godot
+          # Install export templates to the path Godot expects
+          mkdir -p "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.${GODOT_RELEASE}"
+          unzip -q templates.tpz
+          mv templates/* "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.${GODOT_RELEASE}/"
+
+      - name: Import project resources
+        run: |
+          # Headless import pass so all resources exist before export
+          godot --headless --import --quit-after 200 || true
+
+      - name: Export Web build
+        run: |
+          set -euo pipefail
+          mkdir -p build
+          godot --headless --verbose --export-release "${EXPORT_PRESET}" build/index.html
+          # Vercel serves index.html by default; verify it was produced
+          test -f build/index.html
+
+      - name: Stage Vercel config
+        run: cp vercel.json build/vercel.json
+
+      - name: Install Vercel CLI
+        run: npm install -g vercel@latest
+
+      - name: Deploy to Vercel
+        working-directory: build
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          set -euo pipefail
+          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            vercel deploy --prod --yes --token="$VERCEL_TOKEN" > deploy-url.txt
+          else
+            vercel deploy --yes --token="$VERCEL_TOKEN" > deploy-url.txt
+          fi
+          echo "Deployed: $(cat deploy-url.txt)"
+          echo "### Deployed to Vercel :rocket:" >> "$GITHUB_STEP_SUMMARY"
+          echo "$(cat deploy-url.txt)" >> "$GITHUB_STEP_SUMMARY"
