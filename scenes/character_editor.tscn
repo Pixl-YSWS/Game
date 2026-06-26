@@ -1,7 +1,7 @@
-[gd_scene format=3]
+[gd_scene format=3 uid="uid://clriuxt7p6d21"]
 
+[ext_resource type="Script" uid="uid://bmdrawmhbvmnc" path="res://scripts/character_editor.gd" id="1_script"]
 [ext_resource type="Theme" uid="uid://bv3yjmmciab5v" path="res://themes/main_theme.tres" id="1_theme"]
-[ext_resource type="Script" path="res://scripts/character_editor.gd" id="1_script"]
 
 [node name="CharacterEditor" type="Control"]
 layout_mode = 3
@@ -12,3 +12,234 @@ grow_horizontal = 2
 grow_vertical = 2
 theme = ExtResource("1_theme")
 script = ExtResource("1_script")
+
+[node name="Backdrop" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.078431, 0.062745, 0.039216, 1)
+
+[node name="CenterContainer" type="CenterContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="VBox" type="VBoxContainer" parent="CenterContainer"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="TitleLabel" type="Label" parent="CenterContainer/VBox"]
+layout_mode = 2
+size_flags_horizontal = 4
+theme_type_variation = &"TitleText"
+text = "Customise your look"
+horizontal_alignment = 1
+
+[node name="TopRow" type="HBoxContainer" parent="CenterContainer/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 20
+alignment = 1
+
+[node name="Preview" type="TextureRect" parent="CenterContainer/VBox/TopRow"]
+unique_name_in_owner = true
+texture_filter = 1
+custom_minimum_size = Vector2(96, 96)
+layout_mode = 2
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Steppers" type="VBoxContainer" parent="CenterContainer/VBox/TopRow"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="SkinStepper" type="HBoxContainer" parent="CenterContainer/VBox/TopRow/Steppers"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="NameLabel" type="Label" parent="CenterContainer/VBox/TopRow/Steppers/SkinStepper"]
+custom_minimum_size = Vector2(70, 0)
+layout_mode = 2
+text = "Skin"
+
+[node name="Dec" type="Button" parent="CenterContainer/VBox/TopRow/Steppers/SkinStepper"]
+layout_mode = 2
+text = "<"
+
+[node name="Value" type="Label" parent="CenterContainer/VBox/TopRow/Steppers/SkinStepper"]
+custom_minimum_size = Vector2(56, 0)
+layout_mode = 2
+text = "1 / 3"
+horizontal_alignment = 1
+
+[node name="Inc" type="Button" parent="CenterContainer/VBox/TopRow/Steppers/SkinStepper"]
+layout_mode = 2
+text = ">"
+
+[node name="HairStepper" type="HBoxContainer" parent="CenterContainer/VBox/TopRow/Steppers"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="NameLabel" type="Label" parent="CenterContainer/VBox/TopRow/Steppers/HairStepper"]
+custom_minimum_size = Vector2(70, 0)
+layout_mode = 2
+text = "Hair"
+
+[node name="Dec" type="Button" parent="CenterContainer/VBox/TopRow/Steppers/HairStepper"]
+layout_mode = 2
+text = "<"
+
+[node name="Value" type="Label" parent="CenterContainer/VBox/TopRow/Steppers/HairStepper"]
+custom_minimum_size = Vector2(56, 0)
+layout_mode = 2
+text = "1 / 6"
+horizontal_alignment = 1
+
+[node name="Inc" type="Button" parent="CenterContainer/VBox/TopRow/Steppers/HairStepper"]
+layout_mode = 2
+text = ">"
+
+[node name="TopStepper" type="HBoxContainer" parent="CenterContainer/VBox/TopRow/Steppers"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="NameLabel" type="Label" parent="CenterContainer/VBox/TopRow/Steppers/TopStepper"]
+custom_minimum_size = Vector2(70, 0)
+layout_mode = 2
+text = "Top"
+
+[node name="Dec" type="Button" parent="CenterContainer/VBox/TopRow/Steppers/TopStepper"]
+layout_mode = 2
+text = "<"
+
+[node name="Value" type="Label" parent="CenterContainer/VBox/TopRow/Steppers/TopStepper"]
+custom_minimum_size = Vector2(56, 0)
+layout_mode = 2
+text = "1 / 6"
+horizontal_alignment = 1
+
+[node name="Inc" type="Button" parent="CenterContainer/VBox/TopRow/Steppers/TopStepper"]
+layout_mode = 2
+text = ">"
+
+[node name="BottomStepper" type="HBoxContainer" parent="CenterContainer/VBox/TopRow/Steppers"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="NameLabel" type="Label" parent="CenterContainer/VBox/TopRow/Steppers/BottomStepper"]
+custom_minimum_size = Vector2(70, 0)
+layout_mode = 2
+text = "Bottom"
+
+[node name="Dec" type="Button" parent="CenterContainer/VBox/TopRow/Steppers/BottomStepper"]
+layout_mode = 2
+text = "<"
+
+[node name="Value" type="Label" parent="CenterContainer/VBox/TopRow/Steppers/BottomStepper"]
+custom_minimum_size = Vector2(56, 0)
+layout_mode = 2
+text = "1 / 6"
+horizontal_alignment = 1
+
+[node name="Inc" type="Button" parent="CenterContainer/VBox/TopRow/Steppers/BottomStepper"]
+layout_mode = 2
+text = ">"
+
+[node name="RandomButton" type="Button" parent="CenterContainer/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 4
+text = "Random"
+
+[node name="HintLabel" type="Label" parent="CenterContainer/VBox"]
+layout_mode = 2
+size_flags_horizontal = 4
+theme_type_variation = &"StatusText"
+text = "— or pick a character —"
+horizontal_alignment = 1
+
+[node name="PresetGrid" type="GridContainer" parent="CenterContainer/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_constants/h_separation = 8
+theme_override_constants/v_separation = 8
+columns = 5
+
+[node name="Preset1" type="TextureButton" parent="CenterContainer/VBox/PresetGrid"]
+texture_filter = 1
+custom_minimum_size = Vector2(52, 52)
+layout_mode = 2
+ignore_texture_size = true
+stretch_mode = 5
+
+[node name="Preset2" type="TextureButton" parent="CenterContainer/VBox/PresetGrid"]
+texture_filter = 1
+custom_minimum_size = Vector2(52, 52)
+layout_mode = 2
+ignore_texture_size = true
+stretch_mode = 5
+
+[node name="Preset3" type="TextureButton" parent="CenterContainer/VBox/PresetGrid"]
+texture_filter = 1
+custom_minimum_size = Vector2(52, 52)
+layout_mode = 2
+ignore_texture_size = true
+stretch_mode = 5
+
+[node name="Preset4" type="TextureButton" parent="CenterContainer/VBox/PresetGrid"]
+texture_filter = 1
+custom_minimum_size = Vector2(52, 52)
+layout_mode = 2
+ignore_texture_size = true
+stretch_mode = 5
+
+[node name="Preset5" type="TextureButton" parent="CenterContainer/VBox/PresetGrid"]
+texture_filter = 1
+custom_minimum_size = Vector2(52, 52)
+layout_mode = 2
+ignore_texture_size = true
+stretch_mode = 5
+
+[node name="Preset6" type="TextureButton" parent="CenterContainer/VBox/PresetGrid"]
+texture_filter = 1
+custom_minimum_size = Vector2(52, 52)
+layout_mode = 2
+ignore_texture_size = true
+stretch_mode = 5
+
+[node name="Preset7" type="TextureButton" parent="CenterContainer/VBox/PresetGrid"]
+texture_filter = 1
+custom_minimum_size = Vector2(52, 52)
+layout_mode = 2
+ignore_texture_size = true
+stretch_mode = 5
+
+[node name="Preset8" type="TextureButton" parent="CenterContainer/VBox/PresetGrid"]
+texture_filter = 1
+custom_minimum_size = Vector2(52, 52)
+layout_mode = 2
+ignore_texture_size = true
+stretch_mode = 5
+
+[node name="Preset9" type="TextureButton" parent="CenterContainer/VBox/PresetGrid"]
+texture_filter = 1
+custom_minimum_size = Vector2(52, 52)
+layout_mode = 2
+ignore_texture_size = true
+stretch_mode = 5
+
+[node name="DoneButton" type="Button" parent="CenterContainer/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 4
+text = "Done"

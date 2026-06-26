@@ -1,11 +1,24 @@
 extends Control
-## Standalone "Customise your look" screen (its own scene, not an overlay).
-## Skin/Hair/Top/Bottom steppers + Random + a grid of 9 pre-assembled
-## characters, with a live preview. Choices are sent to the server (persisted
-## and broadcast); Done returns to whichever scene opened the editor.
+## Logic for the "Customise your look" screen. The UI lives in
+## character_editor.tscn — this script just wires the nodes and applies the
+## chosen skin (sent to the server, which persists and broadcasts it). Done
+## returns to whichever scene opened the editor.
 
-var _preview: TextureRect
-var _value_labels: Dictionary = {}        # part -> Label ("n / max")
+# Each stepper row is %<part>Stepper with children [NameLabel, Dec, Value, Inc].
+@onready var _steppers := {
+	"body": %SkinStepper,
+	"hair": %HairStepper,
+	"top": %TopStepper,
+	"bottom": %BottomStepper,
+}
+@onready var _maxes := {
+	"body": SkinUtil.NUM_BODY,
+	"hair": SkinUtil.NUM_HAIR,
+	"top": SkinUtil.NUM_TOP,
+	"bottom": SkinUtil.NUM_BOTTOM,
+}
+
+var _value_labels: Dictionary = {}
 var _preset_buttons: Array[TextureButton] = []
 
 # Current outfit (used when not on a preset) and the selected preset (0 = none).
@@ -16,113 +29,26 @@ var _bottom := 1
 var _preset := 1
 
 func _ready() -> void:
-	_build_ui()
+	for part in _steppers:
+		var row: Control = _steppers[part]
+		var maxv: int = _maxes[part]
+		(row.get_node("Dec") as Button).pressed.connect(_on_step.bind(part, -1, maxv))
+		(row.get_node("Inc") as Button).pressed.connect(_on_step.bind(part, 1, maxv))
+		_value_labels[part] = row.get_node("Value")
+
+	var n := 1
+	for child in %PresetGrid.get_children():
+		if child is TextureButton:
+			child.texture_normal = SkinUtil.portrait("cvc:%d" % n)
+			child.pressed.connect(_on_pick_preset.bind(n))
+			_preset_buttons.append(child)
+			n += 1
+
+	%RandomButton.pressed.connect(_on_random)
+	%DoneButton.pressed.connect(_on_done)
+
 	_load_from(NetworkManager.local_skin)
 	_refresh()
-
-func _build_ui() -> void:
-	var backdrop := ColorRect.new()
-	backdrop.color = Color(0.078431, 0.062745, 0.039216, 1.0)
-	backdrop.set_anchors_preset(Control.PRESET_FULL_RECT)
-	add_child(backdrop)
-
-	var center := CenterContainer.new()
-	center.set_anchors_preset(Control.PRESET_FULL_RECT)
-	add_child(center)
-
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 12)
-	center.add_child(vbox)
-
-	var title := Label.new()
-	title.text = "Customise your look"
-	title.theme_type_variation = &"TitleText"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	vbox.add_child(title)
-
-	# Top row: live preview on the left, steppers on the right.
-	var top := HBoxContainer.new()
-	top.add_theme_constant_override("separation", 20)
-	top.alignment = BoxContainer.ALIGNMENT_CENTER
-	vbox.add_child(top)
-
-	_preview = TextureRect.new()
-	_preview.custom_minimum_size = Vector2(96, 96)
-	_preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	_preview.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	_preview.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	top.add_child(_preview)
-
-	var steppers := VBoxContainer.new()
-	steppers.add_theme_constant_override("separation", 8)
-	top.add_child(steppers)
-	steppers.add_child(_stepper("Skin", "body", SkinUtil.NUM_BODY))
-	steppers.add_child(_stepper("Hair", "hair", SkinUtil.NUM_HAIR))
-	steppers.add_child(_stepper("Top", "top", SkinUtil.NUM_TOP))
-	steppers.add_child(_stepper("Bottom", "bottom", SkinUtil.NUM_BOTTOM))
-
-	var random_btn := Button.new()
-	random_btn.text = "Random"
-	random_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	random_btn.pressed.connect(_on_random)
-	vbox.add_child(random_btn)
-
-	var hint := Label.new()
-	hint.text = "— or pick a character —"
-	hint.theme_type_variation = &"StatusText"
-	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	hint.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	vbox.add_child(hint)
-
-	var grid := GridContainer.new()
-	grid.columns = 5
-	grid.add_theme_constant_override("h_separation", 8)
-	grid.add_theme_constant_override("v_separation", 8)
-	grid.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	vbox.add_child(grid)
-	for n in range(1, SkinUtil.NUM_PRESETS + 1):
-		var btn := TextureButton.new()
-		btn.ignore_texture_size = true
-		btn.stretch_mode = TextureButton.STRETCH_KEEP_ASPECT_CENTERED
-		btn.custom_minimum_size = Vector2(52, 52)
-		btn.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-		btn.texture_normal = SkinUtil.portrait("cvc:%d" % n)
-		btn.pressed.connect(_on_pick_preset.bind(n))
-		grid.add_child(btn)
-		_preset_buttons.append(btn)
-
-	var done_btn := Button.new()
-	done_btn.text = "Done"
-	done_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	done_btn.pressed.connect(_on_done)
-	vbox.add_child(done_btn)
-
-func _stepper(label_text: String, part: String, maxv: int) -> Control:
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 8)
-
-	var name_label := Label.new()
-	name_label.text = label_text
-	name_label.custom_minimum_size = Vector2(70, 0)
-	row.add_child(name_label)
-
-	var dec := Button.new()
-	dec.text = "<"
-	dec.pressed.connect(_on_step.bind(part, -1, maxv))
-	row.add_child(dec)
-
-	var value := Label.new()
-	value.custom_minimum_size = Vector2(56, 0)
-	value.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	row.add_child(value)
-	_value_labels[part] = value
-
-	var inc := Button.new()
-	inc.text = ">"
-	inc.pressed.connect(_on_step.bind(part, 1, maxv))
-	row.add_child(inc)
-	return row
 
 func _load_from(desc: String) -> void:
 	var o := SkinUtil.parse_outfit(desc)
@@ -192,6 +118,6 @@ func _refresh() -> void:
 	_value_labels["hair"].text = "%d / %d" % [_hair, SkinUtil.NUM_HAIR]
 	_value_labels["top"].text = "%d / %d" % [_top, SkinUtil.NUM_TOP]
 	_value_labels["bottom"].text = "%d / %d" % [_bottom, SkinUtil.NUM_BOTTOM]
-	_preview.texture = SkinUtil.portrait(_current_desc())
+	%Preview.texture = SkinUtil.portrait(_current_desc())
 	for i in _preset_buttons.size():
 		_preset_buttons[i].modulate = Color.WHITE if (i + 1) == _preset else Color(0.5, 0.5, 0.5, 1.0)

@@ -1,13 +1,9 @@
 class_name SkinUtil
-## Shared character-appearance helpers. A skin is a string descriptor:
-##   "cvc:N"            -> pre-assembled character N (1..9), single sheet
-##   "cv1:bB hH tT oO"  -> layered outfit (body/hair/top/bottom), baked at runtime
-## All sheets are 160x576 (32x32 frames, 5 cols) so layers composite 1:1.
-
+#
 const PRESET_DIR := "res://assets/cozy-towns/CozyValley_Premium_1.3/Characters/-- Pre-assembled Characters/"
 const BASE_DIR := "res://assets/cozy-towns/CozyValley_Basic_1.0/Characters/"
 const SHEET_SIZE := Vector2i(160, 576)
-## Front-facing idle frame, used for menu portraits.
+
 const PORTRAIT_REGION := Rect2(0, 288, 32, 32)
 
 const NUM_BODY := 3
