@@ -4,6 +4,7 @@
 [ext_resource type="Script" uid="uid://7ivnevyjw3hi" path="res://scripts/stair_trigger.gd" id="3_beyr0"]
 [ext_resource type="Texture2D" uid="uid://cn3b8hjbfaex3" path="res://assets/cozy-towns/CozyValley_Premium_1.3/Tilesets/DocksBridges.png" id="4_1baa2"]
 [ext_resource type="Texture2D" uid="uid://cegp6ts1gtb1b" path="res://assets/cozy-towns/CozyValley_Premium_1.3/Tilesets/Beach.png" id="5_l8n4v"]
+[ext_resource type="FontFile" uid="uid://oex4cc8vn0hy" path="res://assets/fonts/Monocraft.ttf" id="5_o0j8d"]
 [ext_resource type="Texture2D" uid="uid://dcf01uco6haij" path="res://assets/cozy-towns/CozyValley_Premium_1.3/Tilesets/Water.png" id="6_o0j8d"]
 [ext_resource type="Texture2D" uid="uid://bj1slphb7wwt4" path="res://assets/cozy-towns/CozyValley_Premium_1.3/Tilesets/Seaprops.png" id="7_j3t0u"]
 [ext_resource type="Script" uid="uid://ch7tdp8lxj0t5" path="res://scripts/water.gd" id="8_x34sj"]
@@ -2597,6 +2598,7 @@ offset_bottom = -9.0
 theme_override_colors/font_color = Color(0.77315557, 0.55160576, 0.26933688, 1)
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_constants/outline_size = 2
+theme_override_fonts/font = ExtResource("5_o0j8d")
 theme_override_font_sizes/font_size = 11
 text = "Press E to enter"
 

@@ -1,18 +1,16 @@
 extends Control
 
-@onready var welcome_label: Label = $CenterContainer/VBoxContainer/TitleLabel
+@onready var status_label: Label = $CenterContainer/VBoxContainer/StatusLabel
 @onready var play_button: Button = $CenterContainer/VBoxContainer/PlayButton
 @onready var openworld_button: Button = $CenterContainer/VBoxContainer/OpenworldButton
 @onready var logout_button: Button = $CenterContainer/VBoxContainer/LogoutButton
 
 func _ready() -> void:
-	# Not authenticated (no saved/active session) — the menu has nothing to show,
-	# so bounce straight to the login screen.
 	if NetworkManager.session_token == "":
 		get_tree().change_scene_to_file("res://scenes/login.tscn")
 		return
 
-	welcome_label.text = "Logged in as: " + NetworkManager.display_name
+	status_label.text = "Logged in as: " + NetworkManager.display_name
 
 	play_button.pressed.connect(_on_play_pressed)
 	openworld_button.pressed.connect(_on_openworld_pressed)
@@ -21,10 +19,10 @@ func _ready() -> void:
 	NetworkManager.disconnected_from_server.connect(_on_disconnected)
 
 func _on_play_pressed() -> void:
-	get_tree().change_scene_to_file("res://scenes/village.tscn")
+	Loader.change_scene("res://scenes/village.tscn", "Entering village")
 
 func _on_openworld_pressed() -> void:
-	get_tree().change_scene_to_file("res://scenes/open_world.tscn")
+	Loader.change_scene("res://scenes/open_world.tscn", "Joining open-world")
 
 func _on_logout_pressed() -> void:
 	NetworkManager.logout()

@@ -26,6 +26,7 @@ func spawn_player_at(pos: Vector2) -> void:
 	player.z_index = 10
 	player.global_position = pos
 	add_child(player)
+	Loader.hide_loading()
 
 func _process(delta: float) -> void:
 	if global.player_in_range and can_transition and Input.is_action_just_pressed("interact"):

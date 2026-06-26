@@ -15,6 +15,7 @@ func spawn_local_player(pos: Vector2) -> void:
 	player.is_local = true
 	player.global_position = pos
 	add_child(player)
+	Loader.hide_loading()
 
 func _on_scene_init(your_id: String, your_pos: Vector2, others: Array, spawn_at_default: bool) -> void:
 	if spawn_at_default:

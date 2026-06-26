@@ -32,7 +32,6 @@ var _http: HTTPRequest
 func _ready() -> void:
 	_http = HTTPRequest.new()
 	add_child(_http)
-	_http.request_completed.connect(_on_demo_login_response)
 
 	if OS.has_feature("web"):
 		_check_web_login_callback()
@@ -137,27 +136,6 @@ func _check_web_login_callback() -> void:
 		JavaScriptBridge.eval(
 			"window.history.replaceState({}, document.title, window.location.pathname);", true
 		)
-
-func start_demo_login(name: String) -> void:
-	var url = SERVER_HTTP_URL + "/auth/demo?name=" + name.uri_encode()
-	_http.request(url)
-
-func _on_demo_login_response(result: int, response_code: int, headers: PackedStringArray, body: PackedByteArray) -> void:
-	if response_code != 200:
-		push_error("Demo login failed: " + body.get_string_from_utf8())
-		return
-	var json = JSON.parse_string(body.get_string_from_utf8())
-	if json == null or not json.has("token"):
-		push_error("Demo login response malformed")
-		return
-
-	session_token = json["token"]
-	display_name = json["name"]
-	_save_session()
-	emit_signal("logged_in", display_name)
-	_connect_to_server()
-
-# --- DESKTOP LOCAL CALLBACK LISTENER ---
 func _process_login_listener() -> void:
 	if not _tcp_server.is_connection_available():
 		return

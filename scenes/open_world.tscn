@@ -3548,6 +3548,7 @@ sources/12 = SubResource("TileSetAtlasSource_0kgfl")
 size = Vector2(21, 26)
 
 [node name="OpenWorld" type="Node2D" unique_id=732456473]
+y_sort_enabled = true
 script = ExtResource("1_uwfmm")
 
 [node name="Water" type="TileMapLayer" parent="." unique_id=802566842]

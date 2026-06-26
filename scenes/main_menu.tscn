@@ -13,22 +13,40 @@ grow_vertical = 2
 theme = ExtResource("1_ekxnf")
 script = ExtResource("1_l6cm7")
 
+[node name="Backdrop" type="ColorRect" parent="." unique_id=104857601]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.078431, 0.062745, 0.039216, 1)
+
 [node name="CenterContainer" type="CenterContainer" parent="." unique_id=727448648]
-layout_mode = 0
-offset_left = 7.0
-offset_top = -5.0
-offset_right = 1155.0
-offset_bottom = 660.0
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
 
 [node name="VBoxContainer" type="VBoxContainer" parent="CenterContainer" unique_id=1888440411]
+custom_minimum_size = Vector2(320, 0)
 layout_mode = 2
 
 [node name="TitleLabel" type="Label" parent="CenterContainer/VBoxContainer" unique_id=60049771]
 layout_mode = 2
+size_flags_horizontal = 4
+theme_type_variation = &"TitleText"
+theme_override_constants/line_spacing = 4
 text = "Pixl"
+horizontal_alignment = 1
 
 [node name="StatusLabel" type="Label" parent="CenterContainer/VBoxContainer" unique_id=386432290]
 layout_mode = 2
+size_flags_horizontal = 4
+theme_type_variation = &"StatusText"
+horizontal_alignment = 1
 
 [node name="PlayButton" type="Button" parent="CenterContainer/VBoxContainer" unique_id=959161397]
 layout_mode = 2
