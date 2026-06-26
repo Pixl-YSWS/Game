@@ -5,43 +5,43 @@ var is_on_stairs = false
 @export var is_local: bool = true
 ## Display name for a remote player; set by the spawner before add_child().
 var player_name: String = ""
-## Pre-assembled character (1..9); set by the spawner before add_child().
-var character: int = 1
-
-const CHAR_DIR := "res://assets/cozy-towns/CozyValley_Premium_1.3/Characters/-- Pre-assembled Characters/"
+## Appearance descriptor (see SkinUtil); set by the spawner before add_child().
+var skin: String = "cvc:1"
 
 var _last_sent_pos: Vector2 = Vector2.INF
 var _last_sent_dir: String = ""
 ## Latest position received from the network for a remote player. We interpolate
 ## toward this every frame so movement is smooth between (throttled) packets.
 var _target_pos: Vector2 = Vector2.INF
+## Pristine SpriteFrames from the scene; supplies the frame regions we re-skin.
+var _base_frames: SpriteFrames
 
 func _ready() -> void:
+	_base_frames = $AnimatedSprite2D.sprite_frames
 	if is_local:
 		$NameLabel.text = "You"
-		character = NetworkManager.local_character
+		skin = NetworkManager.local_skin
 	else:
 		$NameLabel.text = player_name
 		$CollisionShape2D.disabled = true
-	set_character(character)
+	set_skin(skin)
 	$AnimatedSprite2D.play("front_idle")
 
-## Swap the sprite sheet to the given pre-assembled character (1..9). The
-## SpriteFrames is deep-duplicated first so this instance gets its own atlas
-## copy and doesn't re-skin every other player sharing the scene resource.
-func set_character(n: int) -> void:
-	character = clampi(n, 1, 9)
-	var tex: Texture2D = load(CHAR_DIR + "char%d.png" % character)
+## Re-skin to the given descriptor. The SpriteFrames is deep-duplicated so this
+## instance gets its own atlas copy and doesn't re-skin every other player
+## sharing the scene's resource.
+func set_skin(desc: String) -> void:
+	skin = desc
+	var tex := SkinUtil.resolve_sheet(desc)
 	if tex == null:
 		return
-	var sprite: AnimatedSprite2D = $AnimatedSprite2D
-	var frames: SpriteFrames = sprite.sprite_frames.duplicate(true)
+	var frames: SpriteFrames = _base_frames.duplicate(true)
 	for anim in frames.get_animation_names():
 		for i in frames.get_frame_count(anim):
 			var frame_tex = frames.get_frame_texture(anim, i)
 			if frame_tex is AtlasTexture:
 				frame_tex.atlas = tex
-	sprite.sprite_frames = frames
+	$AnimatedSprite2D.sprite_frames = frames
 
 func _physics_process(delta: float) -> void:
 	if is_local:
