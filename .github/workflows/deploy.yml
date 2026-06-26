@@ -1,19 +1,15 @@
-name: Export Web & Deploy to GitHub Pages
+name: Export Web & Deploy to Vercel
 
 on:
   push:
     branches: [main, feat/godot-rewrite]
   workflow_dispatch:
 
-# Allow the workflow to publish to GitHub Pages
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
-# One live Pages site; don't run deploys on top of each other
 concurrency:
-  group: pages
+  group: vercel-deploy
   cancel-in-progress: true
 
 env:
@@ -22,7 +18,7 @@ env:
   EXPORT_PRESET: "Web"
 
 jobs:
-  build:
+  build-and-deploy:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -51,18 +47,15 @@ jobs:
           godot --headless --verbose --export-release "${EXPORT_PRESET}" build/index.html
           test -f build/index.html
 
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: build
+      - name: Add Vercel config (cross-origin isolation headers for threads)
+        run: cp vercel.json build/vercel.json
 
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Deploy to Vercel
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          set -euo pipefail
+          npm i -g vercel@latest
+          vercel deploy build --prod --yes --token "$VERCEL_TOKEN"
