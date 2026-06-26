@@ -4,7 +4,7 @@ const PRESET_DIR := "res://assets/cozy-towns/CozyValley_Premium_1.3/Characters/-
 const BASE_DIR := "res://assets/cozy-towns/CozyValley_Basic_1.0/Characters/"
 const SHEET_SIZE := Vector2i(160, 576)
 
-const PORTRAIT_REGION := Rect2(0, 288, 32, 32)
+const PORTRAIT_REGION := Rect2(0, 32, 32, 32)
 
 const NUM_BODY := 3
 const NUM_HAIR := 6

@@ -1,4 +1,4 @@
-[gd_scene load_steps=21 format=3 uid="uid://clriuxt7p6d21"]
+[gd_scene format=3 uid="uid://clriuxt7p6d21"]
 
 [ext_resource type="Script" uid="uid://bmdrawmhbvmnc" path="res://scripts/character_editor.gd" id="1_script"]
 [ext_resource type="Theme" uid="uid://bv3yjmmciab5v" path="res://themes/main_theme.tres" id="1_theme"]
@@ -14,39 +14,39 @@
 
 [sub_resource type="AtlasTexture" id="atlas1"]
 atlas = ExtResource("char1")
-region = Rect2(0, 288, 32, 32)
+region = Rect2(0, 32, 32, 32)
 
 [sub_resource type="AtlasTexture" id="atlas2"]
 atlas = ExtResource("char2")
-region = Rect2(0, 288, 32, 32)
+region = Rect2(0, 32, 32, 32)
 
 [sub_resource type="AtlasTexture" id="atlas3"]
 atlas = ExtResource("char3")
-region = Rect2(0, 288, 32, 32)
+region = Rect2(0, 32, 32, 32)
 
 [sub_resource type="AtlasTexture" id="atlas4"]
 atlas = ExtResource("char4")
-region = Rect2(0, 288, 32, 32)
+region = Rect2(0, 32, 32, 32)
 
 [sub_resource type="AtlasTexture" id="atlas5"]
 atlas = ExtResource("char5")
-region = Rect2(0, 288, 32, 32)
+region = Rect2(0, 32, 32, 32)
 
 [sub_resource type="AtlasTexture" id="atlas6"]
 atlas = ExtResource("char6")
-region = Rect2(0, 288, 32, 32)
+region = Rect2(0, 32, 32, 32)
 
 [sub_resource type="AtlasTexture" id="atlas7"]
 atlas = ExtResource("char7")
-region = Rect2(0, 288, 32, 32)
+region = Rect2(0, 32, 32, 32)
 
 [sub_resource type="AtlasTexture" id="atlas8"]
 atlas = ExtResource("char8")
-region = Rect2(0, 288, 32, 32)
+region = Rect2(0, 32, 32, 32)
 
 [sub_resource type="AtlasTexture" id="atlas9"]
 atlas = ExtResource("char9")
-region = Rect2(0, 288, 32, 32)
+region = Rect2(0, 32, 32, 32)
 
 [node name="CharacterEditor" type="Control" unique_id=1808379231]
 layout_mode = 3
