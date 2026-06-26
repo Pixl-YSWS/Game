@@ -1,11 +1,9 @@
-extends CanvasLayer
-## Autoloaded "Customise your look" editor. Layered Skin/Hair/Top/Bottom steppers
-## plus a grid of 9 pre-assembled characters. Picks are sent to the server, which
-## persists and broadcasts so every client re-skins this player.
+extends Control
+## Standalone "Customise your look" screen (its own scene, not an overlay).
+## Skin/Hair/Top/Bottom steppers + Random + a grid of 9 pre-assembled
+## characters, with a live preview. Choices are sent to the server (persisted
+## and broadcast); Done returns to whichever scene opened the editor.
 
-const THEME := preload("res://themes/main_theme.tres")
-
-var _root: Control
 var _preview: TextureRect
 var _value_labels: Dictionary = {}        # part -> Label ("n / max")
 var _preset_buttons: Array[TextureButton] = []
@@ -18,26 +16,19 @@ var _bottom := 1
 var _preset := 1
 
 func _ready() -> void:
-	layer = 110
-	process_mode = Node.PROCESS_MODE_ALWAYS
 	_build_ui()
-	_root.visible = false
+	_load_from(NetworkManager.local_skin)
+	_refresh()
 
 func _build_ui() -> void:
-	_root = Control.new()
-	_root.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_root.theme = THEME
-	add_child(_root)
-
 	var backdrop := ColorRect.new()
-	backdrop.color = Color(0.039216, 0.031373, 0.019608, 0.9)
+	backdrop.color = Color(0.078431, 0.062745, 0.039216, 1.0)
 	backdrop.set_anchors_preset(Control.PRESET_FULL_RECT)
-	backdrop.mouse_filter = Control.MOUSE_FILTER_STOP
-	_root.add_child(backdrop)
+	add_child(backdrop)
 
 	var center := CenterContainer.new()
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_root.add_child(center)
+	add_child(center)
 
 	var vbox := VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", 12)
@@ -104,7 +95,7 @@ func _build_ui() -> void:
 	var done_btn := Button.new()
 	done_btn.text = "Done"
 	done_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	done_btn.pressed.connect(close)
+	done_btn.pressed.connect(_on_done)
 	vbox.add_child(done_btn)
 
 func _stepper(label_text: String, part: String, maxv: int) -> Control:
@@ -133,16 +124,7 @@ func _stepper(label_text: String, part: String, maxv: int) -> Control:
 	row.add_child(inc)
 	return row
 
-func open() -> void:
-	_load_from(NetworkManager.local_skin)
-	_refresh()
-	_root.visible = true
-
-func close() -> void:
-	_root.visible = false
-
 func _load_from(desc: String) -> void:
-	# Always keep a sensible outfit underlying the steppers; track preset on top.
 	var o := SkinUtil.parse_outfit(desc)
 	_body = o.body
 	_hair = o.hair
@@ -175,6 +157,9 @@ func _on_random() -> void:
 	_preset = 0
 	_apply()
 
+func _on_done() -> void:
+	get_tree().change_scene_to_file(global.editor_return_scene)
+
 func _get_part(part: String) -> int:
 	match part:
 		"body": return _body
@@ -190,11 +175,7 @@ func _set_part(part: String, v: int) -> void:
 		"bottom": _bottom = v
 
 func _apply() -> void:
-	var desc := _current_desc()
-	NetworkManager.send_set_skin(desc)
-	var local := _find_local_player()
-	if local:
-		local.set_skin(desc)
+	NetworkManager.send_set_skin(_current_desc())
 	_refresh()
 
 func _refresh() -> void:
@@ -205,12 +186,3 @@ func _refresh() -> void:
 	_preview.texture = SkinUtil.portrait(_current_desc())
 	for i in _preset_buttons.size():
 		_preset_buttons[i].modulate = Color.WHITE if (i + 1) == _preset else Color(0.5, 0.5, 0.5, 1.0)
-
-func _find_local_player() -> Node:
-	var scene := get_tree().current_scene
-	if scene == null:
-		return null
-	for child in scene.get_children():
-		if child is CharacterBody2D and child.is_local:
-			return child
-	return null

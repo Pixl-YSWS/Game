@@ -49,7 +49,7 @@ func _build_ui() -> void:
 
 	var character_button := Button.new()
 	character_button.text = "Customise Look"
-	character_button.pressed.connect(CharacterMenu.open)
+	character_button.pressed.connect(_on_character)
 	vbox.add_child(character_button)
 
 	var menu_button := Button.new()
@@ -83,6 +83,14 @@ func resume_game() -> void:
 	_is_paused = false
 	get_tree().paused = false
 	_root.visible = false
+
+func _on_character() -> void:
+	# Return to the world we paused over once the player is done customising.
+	var current := get_tree().current_scene
+	if current and current.scene_file_path != "":
+		global.editor_return_scene = current.scene_file_path
+	resume_game()
+	get_tree().change_scene_to_file("res://scenes/character_editor.tscn")
 
 func _quit_to_menu() -> void:
 	resume_game()

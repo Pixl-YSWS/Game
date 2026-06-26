@@ -21,7 +21,6 @@ global="*uid://c53v2w31qfgbo"
 NetworkManager="*uid://brjjqf0223g1e"
 Loader="*res://scripts/loader.gd"
 PauseMenu="*res://scripts/pause_menu.gd"
-CharacterMenu="*res://scripts/character_menu.gd"
 
 [editor_plugins]
 
