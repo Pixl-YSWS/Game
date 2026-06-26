@@ -4,6 +4,9 @@ var current_dir = "none"
 var is_on_stairs = false
 @export var is_local: bool = false
 
+var _last_sent_pos: Vector2 = Vector2.INF
+var _last_sent_dir: String = ""
+
 func _ready() -> void:
 	$AnimatedSprite2D.play("front_idle")
 	if is_local and NetworkManager.display_name != "":
@@ -46,7 +49,12 @@ func player_movement(delta: float)-> void:
 		if !is_on_stairs:
 			speed = 150
 	move_and_slide()
-	NetworkManager.send_move(global_position, current_dir)
+	# Only hit the network when something actually changed — sending every
+	# physics frame floods the WebSocket (and the JS bridge) on the web build.
+	if global_position.distance_squared_to(_last_sent_pos) > 1.0 or current_dir != _last_sent_dir:
+		_last_sent_pos = global_position
+		_last_sent_dir = current_dir
+		NetworkManager.send_move(global_position, current_dir)
 
 func play_anim(movement: int) -> void:
 	var dir = current_dir
