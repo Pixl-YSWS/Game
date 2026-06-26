@@ -30,6 +30,10 @@ var _listening: bool = false
 var _http: HTTPRequest
 
 func _ready() -> void:
+	# Keep polling the socket even while the tree is paused (pause menu), so the
+	# connection isn't dropped for the server's ping timeout.
+	process_mode = Node.PROCESS_MODE_ALWAYS
+
 	_http = HTTPRequest.new()
 	add_child(_http)
 
