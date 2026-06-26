@@ -36,10 +36,10 @@ func _ready() -> void:
 		(row.get_node("Inc") as Button).pressed.connect(_on_step.bind(part, 1, maxv))
 		_value_labels[part] = row.get_node("Value")
 
+	# Preset thumbnails are assigned in the scene; here we just wire them up.
 	var n := 1
 	for child in %PresetGrid.get_children():
 		if child is TextureButton:
-			child.texture_normal = SkinUtil.portrait("cvc:%d" % n)
 			child.pressed.connect(_on_pick_preset.bind(n))
 			_preset_buttons.append(child)
 			n += 1
