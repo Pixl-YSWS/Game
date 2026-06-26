@@ -45,7 +45,7 @@ func _spawn_remote(user_id: String, name: String, pos: Vector2) -> void:
 	var node = PLAYER_SCENE.instantiate()
 	node.z_index = 10
 	node.is_local = false
-	node.get_node("NameLabel").text = name
+	node.player_name = name
 	node.global_position = pos
 	add_child(node)
 	remote_players[user_id] = node

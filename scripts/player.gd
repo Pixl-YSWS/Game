@@ -3,21 +3,28 @@ var speed = 150
 var current_dir = "none"
 var is_on_stairs = false
 @export var is_local: bool = true
+## Display name for a remote player; set by the spawner before add_child().
+var player_name: String = ""
 
 var _last_sent_pos: Vector2 = Vector2.INF
 var _last_sent_dir: String = ""
+## Latest position received from the network for a remote player. We interpolate
+## toward this every frame so movement is smooth between (throttled) packets.
+var _target_pos: Vector2 = Vector2.INF
 
 func _ready() -> void:
 	$AnimatedSprite2D.play("front_idle")
-	if is_local and NetworkManager.display_name != "":
+	if is_local:
 		$NameLabel.text = "You"
-	elif not is_local:
-		$NameLabel.text = NetworkManager.display_name
+	else:
+		$NameLabel.text = player_name
 		$CollisionShape2D.disabled = true
 
 func _physics_process(delta: float) -> void:
 	if is_local:
 		player_movement(delta)
+	else:
+		remote_movement(delta)
 
 func player_movement(delta: float)-> void:
 	if Input.is_action_pressed("move_right"):
@@ -82,10 +89,23 @@ func play_anim(movement: int) -> void:
 		elif movement == 0:
 			anim.play("back_idle")
 
+## Called when a movement packet arrives; just records the latest target.
 func remote_update(pos: Vector2, direction: String) -> void:
-	global_position = global_position.lerp(pos, 0.3)
+	_target_pos = pos
 	current_dir = direction
-	play_anim(1)
+
+## Smoothly chase the last known network position every frame, so remote
+## players glide instead of teleporting on each packet. Plays the walk
+## animation while moving and idles once we've caught up.
+func remote_movement(delta: float) -> void:
+	if _target_pos == Vector2.INF:
+		return
+	var dist := global_position.distance_to(_target_pos)
+	global_position = global_position.lerp(_target_pos, clampf(delta * 12.0, 0.0, 1.0))
+	if dist > 2.0:
+		play_anim(1)
+	else:
+		play_anim(0)
 
 func _on_stair_trigger_body_entered(body: Node2D) -> void:
 	is_on_stairs = true
