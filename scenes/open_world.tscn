@@ -3664,6 +3664,12 @@ theme_override_constants/outline_size = 2
 theme_override_font_sizes/font_size = 11
 text = "Press E to enter"
 
+[node name="StaticBody2D" type="StaticBody2D" parent="." unique_id=794157930]
+
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="StaticBody2D" unique_id=1201330055]
+position = Vector2(38, 317)
+polygon = PackedVector2Array(0, -3, -186, -88, -264, -502, -257, -657, -33, -716, 329, -662, 365, -435, 279, -149, 141, -35, -23, 5, 63, 73, 194, 28, 300, -35, 368, -127, 442, -322, 448, -417, 416, -605, 398, -715, 290, -750, 112, -779, -178, -779, -289, -728, -357, -662, -371, -484, -357, -410, -347, -323, -320, -243, -299, -172, -276, -90, -223, 16, -128, 45, -62, 70, 34, 79, 57, 71)
+
 [connection signal="body_entered" from="DoorTrigger" to="DoorTrigger" method="_on_body_entered"]
 [connection signal="body_exited" from="DoorTrigger" to="DoorTrigger" method="_on_body_exited"]
 [connection signal="body_entered" from="DoorTrigger2" to="DoorTrigger2" method="_on_body_entered"]

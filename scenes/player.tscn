@@ -315,7 +315,6 @@ collision_mask = 3
 script = ExtResource("1_g2els")
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="." unique_id=753521157]
-z_index = 1
 sprite_frames = SubResource("SpriteFrames_t4otl")
 animation = &"front_idle"
 offset = Vector2(0, -15)
