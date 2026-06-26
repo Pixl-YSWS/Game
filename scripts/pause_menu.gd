@@ -47,6 +47,11 @@ func _build_ui() -> void:
 	_resume_button.pressed.connect(resume_game)
 	vbox.add_child(_resume_button)
 
+	var character_button := Button.new()
+	character_button.text = "Customise Look"
+	character_button.pressed.connect(CharacterMenu.open)
+	vbox.add_child(character_button)
+
 	var menu_button := Button.new()
 	menu_button.text = "Main Menu"
 	menu_button.pressed.connect(_quit_to_menu)

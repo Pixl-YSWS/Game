@@ -3,6 +3,7 @@ extends Control
 @onready var status_label: Label = $CenterContainer/VBoxContainer/StatusLabel
 @onready var play_button: Button = $CenterContainer/VBoxContainer/PlayButton
 @onready var openworld_button: Button = $CenterContainer/VBoxContainer/OpenworldButton
+@onready var character_button: Button = $CenterContainer/VBoxContainer/CharacterButton
 @onready var logout_button: Button = $CenterContainer/VBoxContainer/LogoutButton
 
 func _ready() -> void:
@@ -14,6 +15,7 @@ func _ready() -> void:
 
 	play_button.pressed.connect(_on_play_pressed)
 	openworld_button.pressed.connect(_on_openworld_pressed)
+	character_button.pressed.connect(CharacterMenu.open)
 	logout_button.pressed.connect(_on_logout_pressed)
 
 	NetworkManager.disconnected_from_server.connect(_on_disconnected)

@@ -56,6 +56,10 @@ text = "Enter Village"
 layout_mode = 2
 text = "Join Open-world"
 
+[node name="CharacterButton" type="Button" parent="CenterContainer/VBoxContainer" unique_id=643420738]
+layout_mode = 2
+text = "Customise Look"
+
 [node name="LogoutButton" type="Button" parent="CenterContainer/VBoxContainer" unique_id=1318844018]
 layout_mode = 2
 text = "Logout"

@@ -2,10 +2,11 @@ extends Node
 signal logged_in(display_name: String)
 signal connected_to_server
 signal disconnected_from_server
-signal player_joined(user_id: String, display_name: String, pos: Vector2, direction: String)
+signal player_joined(user_id: String, display_name: String, pos: Vector2, direction: String, character: int)
 signal player_moved(user_id: String, pos: Vector2, direction: String)
 signal player_left(user_id: String)
 signal scene_init(your_user_id: String, your_pos: Vector2, other_players: Array, spawn_at_default: bool)
+signal player_character_changed(user_id: String, character: int)
 
 const DEV_SERVER_URL = "http://localhost:4728"
 const DEV_WS_URL = "ws://localhost:4728/ws"
@@ -20,6 +21,7 @@ const SERVER_WS_URL = PROD_WS_URL if USE_PROD else DEV_WS_URL
 var session_token: String = ""
 var user_id: String = ""
 var display_name: String = ""
+var local_character: int = 1
 var current_scene_name: String = "village"
 var _socket: WebSocketPeer = WebSocketPeer.new()
 var _connected: bool = false
@@ -208,6 +210,7 @@ func _handle_message(raw: String) -> void:
 		"init":
 			user_id = json["you"]["userId"]
 			display_name = json["you"]["displayName"]
+			local_character = int(json["you"].get("character", local_character))
 			var my_pos = Vector2(json["you"]["posX"], json["you"]["posY"])
 			# When the server has no saved position for this scene yet, it asks the
 			# client to spawn at the scene's own default marker instead.
@@ -220,7 +223,8 @@ func _handle_message(raw: String) -> void:
 				json["userId"],
 				json["displayName"],
 				Vector2(json["posX"], json["posY"]),
-				json.get("direction", "bottom")
+				json.get("direction", "bottom"),
+				int(json.get("character", 1))
 			)
 		"player_moved":
 			emit_signal(
@@ -231,6 +235,12 @@ func _handle_message(raw: String) -> void:
 			)
 		"player_left":
 			emit_signal("player_left", json["userId"])
+		"player_character":
+			var uid = json["userId"]
+			var ch = int(json.get("character", 1))
+			if uid == user_id:
+				local_character = ch
+			emit_signal("player_character_changed", uid, ch)
 
 func send_move(pos: Vector2, direction: String) -> void:
 	if not _connected:
@@ -242,6 +252,15 @@ func send_move(pos: Vector2, direction: String) -> void:
 		"direction": direction
 	}
 	_socket.send_text(JSON.stringify(msg))
+
+func send_set_character(character: int) -> void:
+	local_character = character
+	if not _connected:
+		return
+	_socket.send_text(JSON.stringify({
+		"type": "set_character",
+		"character": character
+	}))
 
 func send_scene_change(scene_name: String) -> void:
 	if not _connected:
