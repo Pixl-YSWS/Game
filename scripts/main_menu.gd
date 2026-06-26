@@ -6,6 +6,12 @@ extends Control
 @onready var logout_button: Button = $CenterContainer/VBoxContainer/LogoutButton
 
 func _ready() -> void:
+	# Not authenticated (no saved/active session) — the menu has nothing to show,
+	# so bounce straight to the login screen.
+	if NetworkManager.session_token == "":
+		get_tree().change_scene_to_file("res://scenes/login.tscn")
+		return
+
 	welcome_label.text = "Logged in as: " + NetworkManager.display_name
 
 	play_button.pressed.connect(_on_play_pressed)

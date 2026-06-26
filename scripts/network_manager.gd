@@ -5,7 +5,7 @@ signal disconnected_from_server
 signal player_joined(user_id: String, display_name: String, pos: Vector2, direction: String)
 signal player_moved(user_id: String, pos: Vector2, direction: String)
 signal player_left(user_id: String)
-signal scene_init(your_user_id: String, your_pos: Vector2, other_players: Array)
+signal scene_init(your_user_id: String, your_pos: Vector2, other_players: Array, spawn_at_default: bool)
 
 const DEV_SERVER_URL = "http://localhost:4728"
 const DEV_WS_URL = "ws://localhost:4728/ws"
@@ -227,7 +227,10 @@ func _handle_message(raw: String) -> void:
 			user_id = json["you"]["userId"]
 			display_name = json["you"]["displayName"]
 			var my_pos = Vector2(json["you"]["posX"], json["you"]["posY"])
-			emit_signal("scene_init", user_id, my_pos, json.get("players", []))
+			# When the server has no saved position for this scene yet, it asks the
+			# client to spawn at the scene's own default marker instead.
+			var spawn_at_default = json.get("spawnAtDefault", false)
+			emit_signal("scene_init", user_id, my_pos, json.get("players", []), spawn_at_default)
 			emit_signal("connected_to_server")
 		"player_joined":
 			emit_signal(

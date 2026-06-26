@@ -3595,7 +3595,7 @@ position = Vector2(54, -130)
 z_index = 10
 y_sort_enabled = true
 position = Vector2(10, 0)
-tile_map_data = PackedByteArray("AADZ/9z/CAAAAAAAAADk/9v/CAAAAAAAAAADAPL/BwAAAAAAAAD6//L/BwASAAAAAAAMAPL/BwAYAAAAAAA=")
+tile_map_data = PackedByteArray("AAADAPL/BwAAAAAAAAD6//L/BwASAAAAAAAMAPL/BwAYAAAAAAA=")
 tile_set = SubResource("TileSet_1knqj")
 
 [node name="DoorTrigger" type="Area2D" parent="." unique_id=1872262273]

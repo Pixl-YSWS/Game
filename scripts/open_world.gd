@@ -16,7 +16,10 @@ func spawn_local_player(pos: Vector2) -> void:
 	player.global_position = pos
 	add_child(player)
 
-func _on_scene_init(your_id: String, your_pos: Vector2, others: Array) -> void:
+func _on_scene_init(your_id: String, your_pos: Vector2, others: Array, spawn_at_default: bool) -> void:
+	if spawn_at_default:
+		var marker = get_node_or_null("PlayerSpawn")
+		your_pos = marker.global_position if marker else Vector2.ZERO
 	spawn_local_player(your_pos)
 	for p in others:
 		if p["userId"] == your_id:

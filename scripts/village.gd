@@ -10,8 +10,11 @@ func _ready() -> void:
 	await get_tree().create_timer(0.3).timeout
 	can_transition = true
 
-func _on_scene_init(your_user_id: String, your_pos: Vector2, other_players: Array) -> void:
-	spawn_player_at(your_pos)
+func _on_scene_init(your_user_id: String, your_pos: Vector2, other_players: Array, spawn_at_default: bool) -> void:
+	if spawn_at_default:
+		spawn_player_at_marker()
+	else:
+		spawn_player_at(your_pos)
 
 func spawn_player_at_marker() -> void:
 	var marker = get_node_or_null(global.spawn_point)
