@@ -158,7 +158,16 @@ func _on_random() -> void:
 	_apply()
 
 func _on_done() -> void:
-	get_tree().change_scene_to_file(global.editor_return_scene)
+	var target := global.editor_return_scene
+	# World scenes wait on a server round-trip before the player spawns, so cover
+	# the gap with the loading overlay (they hide it once spawned). The menu has
+	# nothing to wait on, so it just switches instantly.
+	if target.ends_with("village.tscn"):
+		Loader.change_scene(target, "Entering village")
+	elif target.ends_with("open_world.tscn"):
+		Loader.change_scene(target, "Joining open-world")
+	else:
+		get_tree().change_scene_to_file(target)
 
 func _get_part(part: String) -> int:
 	match part:
