@@ -138,7 +138,6 @@ func _check_web_login_callback() -> void:
 			"window.history.replaceState({}, document.title, window.location.pathname);", true
 		)
 
-# --- DEMO LOGIN (testing only) ---
 func start_demo_login(name: String) -> void:
 	var url = SERVER_HTTP_URL + "/auth/demo?name=" + name.uri_encode()
 	_http.request(url)
