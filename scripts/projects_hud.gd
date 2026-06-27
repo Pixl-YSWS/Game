@@ -11,6 +11,9 @@ const PROJECT_CREATE := preload("res://scenes/project_create.tscn")
 var _open := false
 var _ht_projects: Array = []
 var _create_screen: Control
+var _confirm_root: Control
+var _confirm_label: Label
+var _pending_delete_id := 0
 
 func _ready() -> void:
 	_root.visible = false
@@ -26,6 +29,7 @@ func _ready() -> void:
 	_root.add_child(_create_screen)
 	_create_screen.submitted.connect(_on_create_submitted)
 	_create_screen.cancelled.connect(func(): _create_screen.visible = false)
+	_build_confirm_ui()
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_H:
@@ -52,15 +56,27 @@ func close() -> void:
 	_open = false
 	get_tree().paused = false
 	_create_screen.visible = false
+	_confirm_root.visible = false
 	_root.visible = false
 
 func _open_create() -> void:
 	_create_screen.open(_ht_projects)
 
+func _open_edit(project: Dictionary) -> void:
+	_create_screen.open_edit(project, _ht_projects)
+
 func _on_create_submitted(data: Dictionary) -> void:
-	_api(HTTPClient.METHOD_POST, "/api/projects", data, func(_code, _json):
-		_create_screen.visible = false
-		_api(HTTPClient.METHOD_GET, "/api/projects", null, _on_projects)
+	var method := HTTPClient.METHOD_POST
+	var path := "/api/projects"
+	if data.has("id"):
+		method = HTTPClient.METHOD_PUT
+		path = "/api/projects/%d" % int(data["id"])
+	_api(method, path, data, func(code, _json):
+		if code >= 200 and code < 300:
+			_create_screen.visible = false
+			_api(HTTPClient.METHOD_GET, "/api/projects", null, _on_projects)
+		else:
+			_create_screen.on_submit_failed()
 	)
 
 # --- networking ------------------------------------------------------------
@@ -115,24 +131,81 @@ func _on_projects(code: int, json: Variant) -> void:
 func _project_row(p: Dictionary) -> Control:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 8)
-	var name_label := Label.new()
-	name_label.text = String(p.get("name", "?"))
-	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_child(name_label)
+	var open_button := Button.new()
+	open_button.text = String(p.get("name", "?"))
+	open_button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	open_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	open_button.pressed.connect(_open_edit.bind(p))
+	row.add_child(open_button)
 	var del := Button.new()
 	del.text = "✕"
-	del.pressed.connect(_on_delete.bind(int(p.get("id", 0))))
+	del.pressed.connect(_ask_delete.bind(p))
 	row.add_child(del)
 	return row
+
+func _build_confirm_ui() -> void:
+	_confirm_root = Control.new()
+	_confirm_root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_confirm_root.visible = false
+	_root.add_child(_confirm_root)
+
+	var backdrop := ColorRect.new()
+	backdrop.color = Color(0.039216, 0.031373, 0.019608, 0.8)
+	backdrop.set_anchors_preset(Control.PRESET_FULL_RECT)
+	backdrop.mouse_filter = Control.MOUSE_FILTER_STOP
+	_confirm_root.add_child(backdrop)
+
+	var center := CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_confirm_root.add_child(center)
+
+	var card := PanelContainer.new()
+	center.add_child(card)
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 22)
+	margin.add_theme_constant_override("margin_right", 22)
+	margin.add_theme_constant_override("margin_top", 18)
+	margin.add_theme_constant_override("margin_bottom", 18)
+	card.add_child(margin)
+
+	var panel := VBoxContainer.new()
+	panel.custom_minimum_size = Vector2(360, 0)
+	panel.add_theme_constant_override("separation", 16)
+	margin.add_child(panel)
+
+	_confirm_label = Label.new()
+	_confirm_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_confirm_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	panel.add_child(_confirm_label)
+
+	var buttons := HBoxContainer.new()
+	buttons.add_theme_constant_override("separation", 10)
+	panel.add_child(buttons)
+	var cancel := Button.new()
+	cancel.text = "Cancel"
+	cancel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	cancel.pressed.connect(func(): _confirm_root.visible = false)
+	buttons.add_child(cancel)
+	var confirm := Button.new()
+	confirm.text = "Delete"
+	confirm.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	confirm.pressed.connect(_do_delete)
+	buttons.add_child(confirm)
+
+func _ask_delete(p: Dictionary) -> void:
+	_pending_delete_id = int(p.get("id", 0))
+	_confirm_label.text = "Delete \"%s\"?" % String(p.get("name", "this project"))
+	_confirm_root.visible = true
+
+func _do_delete() -> void:
+	_confirm_root.visible = false
+	_api(HTTPClient.METHOD_DELETE, "/api/projects/%d" % _pending_delete_id, null, func(_code, _json): _api(HTTPClient.METHOD_GET, "/api/projects", null, _on_projects))
 
 func _muted(text: String) -> Label:
 	var l := Label.new()
 	l.text = text
 	l.theme_type_variation = &"InfoText"
 	return l
-
-func _on_delete(id: int) -> void:
-	_api(HTTPClient.METHOD_DELETE, "/api/projects/%d" % id, null, func(_code, _json): _api(HTTPClient.METHOD_GET, "/api/projects", null, _on_projects))
 
 func _on_connect() -> void:
 	var url := NetworkManager.SERVER_HTTP_URL + "/hackatime/connect?token=" + NetworkManager.session_token.uri_encode()
