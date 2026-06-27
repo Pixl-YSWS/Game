@@ -21,7 +21,7 @@ global="*uid://c53v2w31qfgbo"
 NetworkManager="*uid://brjjqf0223g1e"
 Loader="*res://scripts/loader.gd"
 PauseMenu="*res://scripts/pause_menu.gd"
-ProjectsHud="*res://scripts/projects_hud.gd"
+ProjectsHud="*res://scenes/projects_hud.tscn"
 
 [editor_plugins]
 

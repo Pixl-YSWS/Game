@@ -18,13 +18,11 @@ static func encode_outfit(body: int, hair: int, top: int, bottom: int) -> String
 static func is_preset(desc: String) -> bool:
 	return desc.begins_with("cvc:")
 
-## Pre-assembled character number (1..9), or 0 if `desc` is an outfit.
 static func preset_index(desc: String) -> int:
 	if is_preset(desc):
 		return clampi(int(desc.substr(4)), 1, NUM_PRESETS)
 	return 0
 
-## Parses an outfit descriptor into {body, hair, top, bottom}, with sane defaults.
 static func parse_outfit(desc: String) -> Dictionary:
 	var re := RegEx.new()
 	re.compile("^cv1:b([1-3])h([0-6])t([1-6])o([1-6])$")
@@ -51,8 +49,6 @@ static func random_outfit() -> String:
 		randi_range(1, NUM_BOTTOM),
 	)
 
-## Full character sprite sheet (160x576) for a descriptor. Presets load directly;
-## outfits are composited from their layers, back to front.
 static func resolve_sheet(desc: String) -> Texture2D:
 	if is_preset(desc):
 		return load(PRESET_DIR + "char%d.png" % preset_index(desc))
@@ -85,7 +81,6 @@ static func _bake_outfit(o: Dictionary) -> Texture2D:
 		result.blend_rect(img, Rect2i(Vector2i.ZERO, SHEET_SIZE), Vector2i.ZERO)
 	return ImageTexture.create_from_image(result)
 
-## A small portrait (front idle frame) of a descriptor, for menu buttons/preview.
 static func portrait(desc: String) -> AtlasTexture:
 	var at := AtlasTexture.new()
 	at.atlas = resolve_sheet(desc)

@@ -1,23 +1,21 @@
 extends CanvasLayer
-## Autoloaded projects/HackTime HUD. Press H in a gameplay scene to open it,
-## connect HackTime, and create/list projects. Pauses the tree while open (so
-## the player doesn't walk around); NetworkManager keeps polling via ALWAYS.
 
-const THEME := preload("res://themes/main_theme.tres")
 const GAMEPLAY_SCENES := ["village", "open_world", "house_interior"]
 
-var _root: Control
-var _status: Label
-var _connect_button: Button
-var _list: VBoxContainer
-var _name_input: LineEdit
+@onready var _root: Control = %Root
+@onready var _status: Label = %Status
+@onready var _connect_button: Button = %ConnectButton
+@onready var _list: VBoxContainer = %List
+@onready var _name_input: LineEdit = %NameInput
 var _open := false
 
 func _ready() -> void:
-	layer = 105
-	process_mode = Node.PROCESS_MODE_ALWAYS
-	_build_ui()
 	_root.visible = false
+	%RefreshButton.pressed.connect(refresh)
+	_connect_button.pressed.connect(_on_connect)
+	%CreateButton.pressed.connect(_on_create)
+	%CloseButton.pressed.connect(close)
+	_name_input.text_submitted.connect(func(_t): _on_create())
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_H:
@@ -44,83 +42,6 @@ func close() -> void:
 	_open = false
 	get_tree().paused = false
 	_root.visible = false
-
-func _build_ui() -> void:
-	_root = Control.new()
-	_root.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_root.theme = THEME
-	add_child(_root)
-
-	var backdrop := ColorRect.new()
-	backdrop.color = Color(0.039216, 0.031373, 0.019608, 0.9)
-	backdrop.set_anchors_preset(Control.PRESET_FULL_RECT)
-	backdrop.mouse_filter = Control.MOUSE_FILTER_STOP
-	_root.add_child(backdrop)
-
-	var center := CenterContainer.new()
-	center.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_root.add_child(center)
-
-	var panel := VBoxContainer.new()
-	panel.custom_minimum_size = Vector2(440, 0)
-	panel.add_theme_constant_override("separation", 12)
-	center.add_child(panel)
-
-	var title := Label.new()
-	title.text = "Projects"
-	title.theme_type_variation = &"TitleText"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	panel.add_child(title)
-
-	# HackTime status + connect/refresh.
-	var ht_row := HBoxContainer.new()
-	ht_row.add_theme_constant_override("separation", 10)
-	panel.add_child(ht_row)
-	_status = Label.new()
-	_status.text = "HackTime: …"
-	_status.theme_type_variation = &"StatusText"
-	_status.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	ht_row.add_child(_status)
-	var refresh_button := Button.new()
-	refresh_button.text = "Refresh"
-	refresh_button.pressed.connect(refresh)
-	ht_row.add_child(refresh_button)
-	_connect_button = Button.new()
-	_connect_button.text = "Connect"
-	_connect_button.pressed.connect(_on_connect)
-	ht_row.add_child(_connect_button)
-
-	# Project list (scrollable).
-	var scroll := ScrollContainer.new()
-	scroll.custom_minimum_size = Vector2(0, 220)
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	panel.add_child(scroll)
-	_list = VBoxContainer.new()
-	_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_list.add_theme_constant_override("separation", 6)
-	scroll.add_child(_list)
-
-	# Create form.
-	var form := HBoxContainer.new()
-	form.add_theme_constant_override("separation", 8)
-	panel.add_child(form)
-	_name_input = LineEdit.new()
-	_name_input.placeholder_text = "New project name"
-	_name_input.max_length = 120
-	_name_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_name_input.text_submitted.connect(func(_t): _on_create())
-	form.add_child(_name_input)
-	var create_button := Button.new()
-	create_button.text = "Create"
-	create_button.pressed.connect(_on_create)
-	form.add_child(create_button)
-
-	var close_button := Button.new()
-	close_button.text = "Close"
-	close_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	close_button.pressed.connect(close)
-	panel.add_child(close_button)
 
 # --- networking ------------------------------------------------------------
 

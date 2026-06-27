@@ -5,15 +5,14 @@ var is_on_stairs = false
 @export var is_local: bool = true
 ## Display name for a remote player; set by the spawner before add_child().
 var player_name: String = ""
-## Appearance descriptor (see SkinUtil); set by the spawner before add_child().
+
 var skin: String = "cvc:1"
 
 var _last_sent_pos: Vector2 = Vector2.INF
 var _last_sent_dir: String = ""
-## Latest position received from the network for a remote player. We interpolate
-## toward this every frame so movement is smooth between (throttled) packets.
+
 var _target_pos: Vector2 = Vector2.INF
-## Pristine SpriteFrames from the scene; supplies the frame regions we re-skin.
+
 var _base_frames: SpriteFrames
 
 func _ready() -> void:
@@ -27,9 +26,6 @@ func _ready() -> void:
 	set_skin(skin)
 	$AnimatedSprite2D.play("front_idle")
 
-## Re-skin to the given descriptor. The SpriteFrames is deep-duplicated so this
-## instance gets its own atlas copy and doesn't re-skin every other player
-## sharing the scene's resource.
 func set_skin(desc: String) -> void:
 	skin = desc
 	var tex := SkinUtil.resolve_sheet(desc)
@@ -112,14 +108,10 @@ func play_anim(movement: int) -> void:
 		elif movement == 0:
 			anim.play("back_idle")
 
-## Called when a movement packet arrives; just records the latest target.
 func remote_update(pos: Vector2, direction: String) -> void:
 	_target_pos = pos
 	current_dir = direction
 
-## Smoothly chase the last known network position every frame, so remote
-## players glide instead of teleporting on each packet. Plays the walk
-## animation while moving and idles once we've caught up.
 func remote_movement(delta: float) -> void:
 	if _target_pos == Vector2.INF:
 		return

@@ -13,7 +13,7 @@ const DEV_WS_URL = "ws://localhost:4728/ws"
 const PROD_SERVER_URL = "https://server.pixl.rsvp"
 const PROD_WS_URL = "wss://server.pixl.rsvp/ws"
 
-const USE_PROD: bool = true  # flip this one flag to switch environments
+const USE_PROD: bool = true 
 
 const SERVER_HTTP_URL = PROD_SERVER_URL if USE_PROD else DEV_SERVER_URL
 const SERVER_WS_URL = PROD_WS_URL if USE_PROD else DEV_WS_URL
@@ -32,8 +32,6 @@ var _listening: bool = false
 var _http: HTTPRequest
 
 func _ready() -> void:
-	# Keep polling the socket even while the tree is paused (pause menu), so the
-	# connection isn't dropped for the server's ping timeout.
 	process_mode = Node.PROCESS_MODE_ALWAYS
 
 	_http = HTTPRequest.new()
@@ -54,9 +52,6 @@ func _try_auto_login() -> void:
 
 func _save_session() -> void:
 	if OS.has_feature("web"):
-		# Browser tabs don't reliably persist user:// the same way desktop does
-		# across sessions depending on export settings, but this still works
-		# for same-tab/session persistence via Godot's virtual FS -> IndexedDB.
 		pass
 	var file = FileAccess.open(TOKEN_SAVE_PATH, FileAccess.WRITE)
 	if file:
@@ -103,7 +98,6 @@ func _process(_delta: float) -> void:
 		_connected = false
 		emit_signal("disconnected_from_server")
 
-# --- LOGIN ENTRY POINT ---
 func start_login() -> void:
 	if OS.has_feature("web"):
 		_start_login_web()
@@ -125,7 +119,6 @@ func _start_login_web() -> void:
 	var redirect_target = SERVER_HTTP_URL + "/auth/hackclub?web_redirect=" + String(current_url).uri_encode()
 	JavaScriptBridge.eval("window.location.href = '%s';" % redirect_target, true)
 
-# --- WEB CALLBACK HANDLING ---
 func _check_web_login_callback() -> void:
 	var query = JavaScriptBridge.eval("window.location.search", true)
 	if query == null or String(query) == "":
@@ -212,8 +205,7 @@ func _handle_message(raw: String) -> void:
 			display_name = json["you"]["displayName"]
 			local_skin = String(json["you"].get("skin", local_skin))
 			var my_pos = Vector2(json["you"]["posX"], json["you"]["posY"])
-			# When the server has no saved position for this scene yet, it asks the
-			# client to spawn at the scene's own default marker instead.
+
 			var spawn_at_default = json.get("spawnAtDefault", false)
 			emit_signal("scene_init", user_id, my_pos, json.get("players", []), spawn_at_default)
 			emit_signal("connected_to_server")
