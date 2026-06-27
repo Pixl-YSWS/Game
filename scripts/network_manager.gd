@@ -8,6 +8,8 @@ signal player_left(user_id: String)
 signal scene_init(your_user_id: String, your_pos: Vector2, other_players: Array, spawn_at_default: bool)
 signal player_skin_changed(user_id: String, skin: String)
 signal chat_message(user_id: String, display_name: String, text: String)
+signal emote_received(user_id: String, key: String)
+signal voice_received(user_id: String, payload: PackedByteArray)
 
 const DEV_SERVER_URL = "http://localhost:4728"
 const DEV_WS_URL = "ws://localhost:4728/ws"
@@ -97,8 +99,11 @@ func _process(_delta: float) -> void:
 			_pending_scene_change = ""
 			_socket.send_text(JSON.stringify({ "type": "change_scene", "scene": sc }))
 		while _socket.get_available_packet_count() > 0:
-			var packet = _socket.get_packet().get_string_from_utf8()
-			_handle_message(packet)
+			var pkt := _socket.get_packet()
+			if _socket.was_string_packet():
+				_handle_message(pkt.get_string_from_utf8())
+			else:
+				_handle_voice_packet(pkt)
 	elif state == WebSocketPeer.STATE_CLOSED:
 		if _connected:
 			var code = _socket.get_close_code()
@@ -244,6 +249,27 @@ func _handle_message(raw: String) -> void:
 			emit_signal("player_skin_changed", uid, sk)
 		"chat":
 			emit_signal("chat_message", json["userId"], String(json.get("displayName", "")), String(json.get("text", "")))
+		"emote":
+			emit_signal("emote_received", json["userId"], String(json.get("key", "")))
+
+func send_emote(key: String) -> void:
+	if not _is_socket_open():
+		return
+	_socket.send_text(JSON.stringify({"type": "emote", "key": key}))
+
+func send_voice(payload: PackedByteArray) -> void:
+	if not _is_socket_open():
+		return
+	_socket.send(payload, WebSocketPeer.WRITE_MODE_BINARY)
+
+func _handle_voice_packet(pkt: PackedByteArray) -> void:
+	if pkt.size() < 2:
+		return
+	var ulen := int(pkt.decode_u16(0))
+	if pkt.size() < 2 + ulen:
+		return
+	var uid := pkt.slice(2, 2 + ulen).get_string_from_utf8()
+	emit_signal("voice_received", uid, pkt.slice(2 + ulen))
 
 func send_move(pos: Vector2, direction: String) -> void:
 	if not _is_socket_open():

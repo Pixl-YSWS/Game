@@ -1,0 +1,23 @@
+[gd_scene format=3 uid="uid://bnpcpixl00001"]
+
+[ext_resource type="Script" path="res://scripts/npc.gd" id="1_npc"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_npc"]
+radius = 26.0
+
+[node name="Npc" type="Node2D"]
+z_index = 10
+script = ExtResource("1_npc")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+texture_filter = 1
+offset = Vector2(0, -10)
+
+[node name="NameLabel" type="Label" parent="."]
+z_index = 21
+
+[node name="InteractArea" type="Area2D" parent="."]
+collision_mask = 1
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="InteractArea"]
+shape = SubResource("CircleShape2D_npc")

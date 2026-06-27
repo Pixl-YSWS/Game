@@ -159,6 +159,23 @@ func _on_stair_trigger_body_exited(body: Node2D) -> void:
 func player():
 	pass
 
+func show_emote(key: String) -> void:
+	var tex := EmoteHud.texture_for(key)
+	if tex == null:
+		return
+	var s := Sprite2D.new()
+	s.texture = tex
+	s.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	s.z_index = 23
+	s.position = Vector2(0, -52)
+	var h := float(maxi(tex.get_height(), 1))
+	s.scale = Vector2.ONE * (16.0 / h)
+	add_child(s)
+	var tw := create_tween()
+	tw.tween_property(s, "position:y", -66.0, 1.6).set_ease(Tween.EASE_OUT)
+	tw.parallel().tween_property(s, "modulate:a", 0.0, 1.6).from(1.0)
+	tw.tween_callback(s.queue_free)
+
 func _bubble_zoom() -> float:
 	if has_node("Camera2d"):
 		return maxf($Camera2d.zoom.x, 0.01)

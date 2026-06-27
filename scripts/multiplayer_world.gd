@@ -22,6 +22,7 @@ func setup_multiplayer() -> void:
 	NetworkManager.player_left.connect(_on_player_left)
 	NetworkManager.player_skin_changed.connect(_on_player_skin_changed)
 	NetworkManager.chat_message.connect(_on_chat)
+	NetworkManager.emote_received.connect(_on_emote)
 	NetworkManager.send_scene_change(_network_scene_name())
 	await get_tree().create_timer(5.0).timeout
 	if not is_instance_valid(_local_player):
@@ -97,6 +98,11 @@ func _on_chat(user_id: String, _display_name: String, text: String) -> void:
 	var node = _local_player if user_id == NetworkManager.user_id else remote_players.get(user_id)
 	if is_instance_valid(node):
 		node.show_chat_bubble(text)
+
+func _on_emote(user_id: String, key: String) -> void:
+	var node = _local_player if user_id == NetworkManager.user_id else remote_players.get(user_id)
+	if is_instance_valid(node):
+		node.show_emote(key)
 
 func _despawn_remote(user_id: String) -> void:
 	if remote_players.has(user_id):
