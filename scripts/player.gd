@@ -13,6 +13,8 @@ var _last_sent_dir: String = ""
 
 var _target_pos: Vector2 = Vector2.INF
 
+var _prev_pos: Vector2 = Vector2.INF
+
 var _base_frames: SpriteFrames
 
 func _ready() -> void:
@@ -50,6 +52,7 @@ func player_movement(delta: float)-> void:
 		velocity = Vector2.ZERO
 		move_and_slide()
 		return
+	var before := global_position
 	if Input.is_action_pressed("move_right"):
 		current_dir = "right"
 		play_anim(1)
@@ -80,6 +83,12 @@ func player_movement(delta: float)-> void:
 		if !is_on_stairs:
 			speed = 150
 	move_and_slide()
+
+	var max_step: float = speed * delta * 4.0
+	if _prev_pos != Vector2.INF and global_position.distance_to(before) > maxf(max_step, 16.0):
+		global_position = before
+		velocity = Vector2.ZERO
+	_prev_pos = global_position
 
 	if global_position.distance_squared_to(_last_sent_pos) > 1.0 or current_dir != _last_sent_dir:
 		_last_sent_pos = global_position
