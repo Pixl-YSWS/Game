@@ -1,0 +1,301 @@
+[gd_scene format=3 uid="uid://clriuxt7p6d21"]
+
+[ext_resource type="Script" uid="uid://bmdrawmhbvmnc" path="res://scripts/character_editor.gd" id="1_script"]
+[ext_resource type="Theme" uid="uid://bv3yjmmciab5v" path="res://themes/main_theme.tres" id="1_theme"]
+[ext_resource type="Texture2D" uid="uid://cwgi3alflksx" path="res://assets/cozy-towns/CozyValley_Premium_1.3/Characters/-- Pre-assembled Characters/char1.png" id="char1"]
+[ext_resource type="Texture2D" uid="uid://bhal7m0ab53om" path="res://assets/cozy-towns/CozyValley_Premium_1.3/Characters/-- Pre-assembled Characters/char2.png" id="char2"]
+[ext_resource type="Texture2D" uid="uid://dsihnfav7nutc" path="res://assets/cozy-towns/CozyValley_Premium_1.3/Characters/-- Pre-assembled Characters/char3.png" id="char3"]
+[ext_resource type="Texture2D" uid="uid://cle7mv4rvpofp" path="res://assets/cozy-towns/CozyValley_Premium_1.3/Characters/-- Pre-assembled Characters/char4.png" id="char4"]
+[ext_resource type="Texture2D" uid="uid://cfcrdbq2lu20e" path="res://assets/cozy-towns/CozyValley_Premium_1.3/Characters/-- Pre-assembled Characters/char5.png" id="char5"]
+[ext_resource type="Texture2D" uid="uid://hhoo2e0l2fey" path="res://assets/cozy-towns/CozyValley_Premium_1.3/Characters/-- Pre-assembled Characters/char6.png" id="char6"]
+[ext_resource type="Texture2D" uid="uid://cjfjr1wknh5nj" path="res://assets/cozy-towns/CozyValley_Premium_1.3/Characters/-- Pre-assembled Characters/char7.png" id="char7"]
+[ext_resource type="Texture2D" uid="uid://ciunvepvydfd2" path="res://assets/cozy-towns/CozyValley_Premium_1.3/Characters/-- Pre-assembled Characters/char8.png" id="char8"]
+[ext_resource type="Texture2D" uid="uid://cvujhn68dvtat" path="res://assets/cozy-towns/CozyValley_Premium_1.3/Characters/-- Pre-assembled Characters/char9.png" id="char9"]
+
+[sub_resource type="AtlasTexture" id="atlas1"]
+atlas = ExtResource("char1")
+region = Rect2(0, 32, 32, 32)
+
+[sub_resource type="AtlasTexture" id="atlas2"]
+atlas = ExtResource("char2")
+region = Rect2(0, 32, 32, 32)
+
+[sub_resource type="AtlasTexture" id="atlas3"]
+atlas = ExtResource("char3")
+region = Rect2(0, 32, 32, 32)
+
+[sub_resource type="AtlasTexture" id="atlas4"]
+atlas = ExtResource("char4")
+region = Rect2(0, 32, 32, 32)
+
+[sub_resource type="AtlasTexture" id="atlas5"]
+atlas = ExtResource("char5")
+region = Rect2(0, 32, 32, 32)
+
+[sub_resource type="AtlasTexture" id="atlas6"]
+atlas = ExtResource("char6")
+region = Rect2(0, 32, 32, 32)
+
+[sub_resource type="AtlasTexture" id="atlas7"]
+atlas = ExtResource("char7")
+region = Rect2(0, 32, 32, 32)
+
+[sub_resource type="AtlasTexture" id="atlas8"]
+atlas = ExtResource("char8")
+region = Rect2(0, 32, 32, 32)
+
+[sub_resource type="AtlasTexture" id="atlas9"]
+atlas = ExtResource("char9")
+region = Rect2(0, 32, 32, 32)
+
+[node name="CharacterEditor" type="Control" unique_id=1808379231]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme = ExtResource("1_theme")
+script = ExtResource("1_script")
+
+[node name="Backdrop" type="ColorRect" parent="." unique_id=75780033]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.078431, 0.062745, 0.039216, 1)
+
+[node name="CenterContainer" type="CenterContainer" parent="." unique_id=2059689505]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="VBox" type="VBoxContainer" parent="CenterContainer" unique_id=1796112233]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="TitleLabel" type="Label" parent="CenterContainer/VBox" unique_id=396793996]
+layout_mode = 2
+size_flags_horizontal = 4
+theme_type_variation = &"TitleText"
+theme_override_font_sizes/font_size = 25
+text = "Customise your look"
+horizontal_alignment = 1
+
+[node name="TopRow" type="HBoxContainer" parent="CenterContainer/VBox" unique_id=1242443251]
+layout_mode = 2
+theme_override_constants/separation = 20
+alignment = 1
+
+[node name="Preview" type="TextureRect" parent="CenterContainer/VBox/TopRow" unique_id=624606188]
+unique_name_in_owner = true
+texture_filter = 1
+custom_minimum_size = Vector2(96, 96)
+layout_mode = 2
+texture = SubResource("atlas1")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Steppers" type="VBoxContainer" parent="CenterContainer/VBox/TopRow" unique_id=1040105014]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="SkinStepper" type="HBoxContainer" parent="CenterContainer/VBox/TopRow/Steppers" unique_id=457824823]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="NameLabel" type="Label" parent="CenterContainer/VBox/TopRow/Steppers/SkinStepper" unique_id=353052219]
+custom_minimum_size = Vector2(70, 0)
+layout_mode = 2
+text = "Skin"
+
+[node name="Dec" type="Button" parent="CenterContainer/VBox/TopRow/Steppers/SkinStepper" unique_id=169111075]
+layout_mode = 2
+text = "<"
+
+[node name="Value" type="Label" parent="CenterContainer/VBox/TopRow/Steppers/SkinStepper" unique_id=93489507]
+custom_minimum_size = Vector2(56, 0)
+layout_mode = 2
+text = "1 / 3"
+horizontal_alignment = 1
+
+[node name="Inc" type="Button" parent="CenterContainer/VBox/TopRow/Steppers/SkinStepper" unique_id=1392667920]
+layout_mode = 2
+text = ">"
+
+[node name="HairStepper" type="HBoxContainer" parent="CenterContainer/VBox/TopRow/Steppers" unique_id=458245742]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="NameLabel" type="Label" parent="CenterContainer/VBox/TopRow/Steppers/HairStepper" unique_id=1887219996]
+custom_minimum_size = Vector2(70, 0)
+layout_mode = 2
+text = "Hair"
+
+[node name="Dec" type="Button" parent="CenterContainer/VBox/TopRow/Steppers/HairStepper" unique_id=736541720]
+layout_mode = 2
+text = "<"
+
+[node name="Value" type="Label" parent="CenterContainer/VBox/TopRow/Steppers/HairStepper" unique_id=722732667]
+custom_minimum_size = Vector2(56, 0)
+layout_mode = 2
+text = "1 / 6"
+horizontal_alignment = 1
+
+[node name="Inc" type="Button" parent="CenterContainer/VBox/TopRow/Steppers/HairStepper" unique_id=1031989976]
+layout_mode = 2
+text = ">"
+
+[node name="TopStepper" type="HBoxContainer" parent="CenterContainer/VBox/TopRow/Steppers" unique_id=2133321713]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="NameLabel" type="Label" parent="CenterContainer/VBox/TopRow/Steppers/TopStepper" unique_id=191904746]
+custom_minimum_size = Vector2(70, 0)
+layout_mode = 2
+text = "Top"
+
+[node name="Dec" type="Button" parent="CenterContainer/VBox/TopRow/Steppers/TopStepper" unique_id=1627849324]
+layout_mode = 2
+text = "<"
+
+[node name="Value" type="Label" parent="CenterContainer/VBox/TopRow/Steppers/TopStepper" unique_id=61781517]
+custom_minimum_size = Vector2(56, 0)
+layout_mode = 2
+text = "1 / 6"
+horizontal_alignment = 1
+
+[node name="Inc" type="Button" parent="CenterContainer/VBox/TopRow/Steppers/TopStepper" unique_id=1963741495]
+layout_mode = 2
+text = ">"
+
+[node name="BottomStepper" type="HBoxContainer" parent="CenterContainer/VBox/TopRow/Steppers" unique_id=1683764438]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="NameLabel" type="Label" parent="CenterContainer/VBox/TopRow/Steppers/BottomStepper" unique_id=1292700388]
+custom_minimum_size = Vector2(70, 0)
+layout_mode = 2
+text = "Bottom"
+
+[node name="Dec" type="Button" parent="CenterContainer/VBox/TopRow/Steppers/BottomStepper" unique_id=1623650841]
+layout_mode = 2
+text = "<"
+
+[node name="Value" type="Label" parent="CenterContainer/VBox/TopRow/Steppers/BottomStepper" unique_id=148353322]
+custom_minimum_size = Vector2(56, 0)
+layout_mode = 2
+text = "1 / 6"
+horizontal_alignment = 1
+
+[node name="Inc" type="Button" parent="CenterContainer/VBox/TopRow/Steppers/BottomStepper" unique_id=900313382]
+layout_mode = 2
+text = ">"
+
+[node name="RandomButton" type="Button" parent="CenterContainer/VBox" unique_id=385043071]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 4
+text = "Random"
+
+[node name="HintLabel" type="Label" parent="CenterContainer/VBox" unique_id=1177321342]
+layout_mode = 2
+size_flags_horizontal = 4
+theme_type_variation = &"StatusText"
+text = "— or pick a character —"
+horizontal_alignment = 1
+
+[node name="PresetGrid" type="GridContainer" parent="CenterContainer/VBox" unique_id=410056399]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_constants/h_separation = 8
+theme_override_constants/v_separation = 8
+columns = 5
+
+[node name="Preset1" type="TextureButton" parent="CenterContainer/VBox/PresetGrid" unique_id=60305148]
+texture_filter = 1
+custom_minimum_size = Vector2(52, 52)
+layout_mode = 2
+texture_normal = SubResource("atlas1")
+ignore_texture_size = true
+stretch_mode = 5
+
+[node name="Preset2" type="TextureButton" parent="CenterContainer/VBox/PresetGrid" unique_id=179020198]
+texture_filter = 1
+custom_minimum_size = Vector2(52, 52)
+layout_mode = 2
+texture_normal = SubResource("atlas2")
+ignore_texture_size = true
+stretch_mode = 5
+
+[node name="Preset3" type="TextureButton" parent="CenterContainer/VBox/PresetGrid" unique_id=415063952]
+texture_filter = 1
+custom_minimum_size = Vector2(52, 52)
+layout_mode = 2
+texture_normal = SubResource("atlas3")
+ignore_texture_size = true
+stretch_mode = 5
+
+[node name="Preset4" type="TextureButton" parent="CenterContainer/VBox/PresetGrid" unique_id=1781627975]
+texture_filter = 1
+custom_minimum_size = Vector2(52, 52)
+layout_mode = 2
+texture_normal = SubResource("atlas4")
+ignore_texture_size = true
+stretch_mode = 5
+
+[node name="Preset5" type="TextureButton" parent="CenterContainer/VBox/PresetGrid" unique_id=2132404042]
+texture_filter = 1
+custom_minimum_size = Vector2(52, 52)
+layout_mode = 2
+texture_normal = SubResource("atlas5")
+ignore_texture_size = true
+stretch_mode = 5
+
+[node name="Preset6" type="TextureButton" parent="CenterContainer/VBox/PresetGrid" unique_id=1226081939]
+texture_filter = 1
+custom_minimum_size = Vector2(52, 52)
+layout_mode = 2
+texture_normal = SubResource("atlas6")
+ignore_texture_size = true
+stretch_mode = 5
+
+[node name="Preset7" type="TextureButton" parent="CenterContainer/VBox/PresetGrid" unique_id=352341609]
+texture_filter = 1
+custom_minimum_size = Vector2(52, 52)
+layout_mode = 2
+texture_normal = SubResource("atlas7")
+ignore_texture_size = true
+stretch_mode = 5
+
+[node name="Preset8" type="TextureButton" parent="CenterContainer/VBox/PresetGrid" unique_id=245467797]
+texture_filter = 1
+custom_minimum_size = Vector2(52, 52)
+layout_mode = 2
+texture_normal = SubResource("atlas8")
+ignore_texture_size = true
+stretch_mode = 5
+
+[node name="Preset9" type="TextureButton" parent="CenterContainer/VBox/PresetGrid" unique_id=2034740942]
+texture_filter = 1
+custom_minimum_size = Vector2(52, 52)
+layout_mode = 2
+texture_normal = SubResource("atlas9")
+ignore_texture_size = true
+stretch_mode = 5
+
+[node name="DoneButton" type="Button" parent="CenterContainer/VBox" unique_id=1271838781]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 4
+text = "Done"

@@ -1,0 +1,68 @@
+extends CanvasLayer
+## Fullscreen loading overlay. Autoloaded so it survives `change_scene_to_file`,
+## covering the gap between leaving the menu and the new scene spawning the
+## player (which waits on a `scene_init` round-trip from the server).
+
+const MONOCRAFT := preload("res://assets/fonts/Monocraft.ttf")
+## Safety net: hide even if the new scene never reports ready (e.g. the server
+## never sends scene_init), so the player is never stuck on the loading screen.
+const TIMEOUT_SEC := 8.0
+
+var _label: Label
+var _base := "Loading"
+var _dots := 0
+var _accum := 0.0
+var _timeout := 0.0
+var _active := false
+
+func _ready() -> void:
+	layer = 128
+	process_mode = Node.PROCESS_MODE_ALWAYS
+	visible = false
+
+	var backdrop := ColorRect.new()
+	backdrop.color = Color(0.078431, 0.062745, 0.039216, 1.0)
+	backdrop.set_anchors_preset(Control.PRESET_FULL_RECT)
+	backdrop.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(backdrop)
+
+	_label = Label.new()
+	_label.add_theme_font_override("font", MONOCRAFT)
+	_label.add_theme_font_size_override("font_size", 28)
+	_label.add_theme_color_override("font_color", Color(1, 0.819608, 0.4, 1))
+	_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_label.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(_label)
+
+## Show the overlay and switch scenes. The scene change is deferred to the end
+## of the frame, so the overlay is already drawn before the swap happens.
+func change_scene(path: String, message: String = "Loading") -> void:
+	show_loading(message)
+	get_tree().change_scene_to_file(path)
+
+func show_loading(message: String = "Loading") -> void:
+	_base = message
+	_dots = 0
+	_accum = 0.0
+	_timeout = 0.0
+	_active = true
+	_label.text = _base
+	visible = true
+
+func hide_loading() -> void:
+	_active = false
+	visible = false
+
+func _process(delta: float) -> void:
+	if not _active:
+		return
+	_timeout += delta
+	if _timeout >= TIMEOUT_SEC:
+		hide_loading()
+		return
+	_accum += delta
+	if _accum >= 0.4:
+		_accum = 0.0
+		_dots = (_dots + 1) % 4
+		_label.text = _base + ".".repeat(_dots)

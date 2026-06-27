@@ -1,0 +1,103 @@
+[gd_scene format=3 uid="uid://ccdf1nbvsm7yh"]
+
+[ext_resource type="Script" uid="uid://yd4vfoj2htv3" path="res://scripts/projects_hud.gd" id="1_script"]
+[ext_resource type="Theme" uid="uid://bv3yjmmciab5v" path="res://themes/main_theme.tres" id="1_theme"]
+
+[node name="ProjectsHud" type="CanvasLayer" unique_id=1811336188]
+process_mode = 3
+layer = 105
+script = ExtResource("1_script")
+
+[node name="Root" type="Control" parent="." unique_id=2057306559]
+unique_name_in_owner = true
+visible = false
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme = ExtResource("1_theme")
+
+[node name="Backdrop" type="ColorRect" parent="Root" unique_id=39797779]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.039216, 0.031373, 0.019608, 0.9)
+
+[node name="CenterContainer" type="CenterContainer" parent="Root" unique_id=549279024]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Panel" type="VBoxContainer" parent="Root/CenterContainer" unique_id=944772778]
+custom_minimum_size = Vector2(440, 0)
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="TitleLabel" type="Label" parent="Root/CenterContainer/Panel" unique_id=1056506889]
+layout_mode = 2
+size_flags_horizontal = 4
+theme_type_variation = &"TitleText"
+text = "Projects"
+horizontal_alignment = 1
+
+[node name="HtRow" type="HBoxContainer" parent="Root/CenterContainer/Panel" unique_id=1998540043]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Status" type="Label" parent="Root/CenterContainer/Panel/HtRow" unique_id=1072284923]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"StatusText"
+text = "HackTime: …"
+
+[node name="RefreshButton" type="Button" parent="Root/CenterContainer/Panel/HtRow" unique_id=896841816]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Refresh"
+
+[node name="ConnectButton" type="Button" parent="Root/CenterContainer/Panel/HtRow" unique_id=841637922]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Connect"
+
+[node name="Scroll" type="ScrollContainer" parent="Root/CenterContainer/Panel" unique_id=280301056]
+custom_minimum_size = Vector2(0, 220)
+layout_mode = 2
+horizontal_scroll_mode = 0
+
+[node name="List" type="VBoxContainer" parent="Root/CenterContainer/Panel/Scroll" unique_id=1512968732]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 6
+
+[node name="Form" type="HBoxContainer" parent="Root/CenterContainer/Panel" unique_id=1530934382]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="NameInput" type="LineEdit" parent="Root/CenterContainer/Panel/Form" unique_id=386954363]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "New project name"
+max_length = 120
+
+[node name="CreateButton" type="Button" parent="Root/CenterContainer/Panel/Form" unique_id=194552235]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Create"
+
+[node name="CloseButton" type="Button" parent="Root/CenterContainer/Panel" unique_id=1329924910]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 4
+text = "Close"
