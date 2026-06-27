@@ -31,6 +31,17 @@ func _ready() -> void:
 		$CollisionShape2D.disabled = true
 	set_skin(skin)
 	$AnimatedSprite2D.play("front_idle")
+	_layout_name_label()
+
+func _layout_name_label() -> void:
+	var nl: Label = $NameLabel
+	nl.scale = Vector2.ONE / _bubble_zoom()
+	nl.add_theme_font_size_override("font_size", 24)
+	nl.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	nl.custom_minimum_size = Vector2.ZERO
+	await get_tree().process_frame
+	nl.reset_size()
+	nl.position = Vector2(-nl.size.x * nl.scale.x / 2.0, -36.0 - nl.size.y * nl.scale.y)
 
 func set_skin(desc: String) -> void:
 	skin = desc
@@ -148,34 +159,39 @@ func _on_stair_trigger_body_exited(body: Node2D) -> void:
 func player():
 	pass
 
+func _bubble_zoom() -> float:
+	if has_node("Camera2d"):
+		return maxf($Camera2d.zoom.x, 0.01)
+	return 3.5
+
 func show_chat_bubble(text: String) -> void:
 	if _bubble == null:
 		_bubble = Label.new()
 		_bubble.z_index = 22
-		_bubble.custom_minimum_size = Vector2(120, 0)
-		_bubble.position = Vector2(-60, -56)
-		_bubble.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		_bubble.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
-		_bubble.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_bubble.scale = Vector2.ONE / _bubble_zoom()
 		_bubble.add_theme_font_override("font", BUBBLE_FONT)
-		_bubble.add_theme_font_size_override("font_size", 7)
+		_bubble.add_theme_font_size_override("font_size", 24)
 		_bubble.add_theme_color_override("font_color", Color(1, 1, 1))
 		var bg := StyleBoxFlat.new()
 		bg.bg_color = Color(0.05, 0.04, 0.03, 0.88)
-		bg.content_margin_left = 6
-		bg.content_margin_right = 6
-		bg.content_margin_top = 3
-		bg.content_margin_bottom = 3
-		bg.corner_radius_top_left = 4
-		bg.corner_radius_top_right = 4
-		bg.corner_radius_bottom_left = 4
-		bg.corner_radius_bottom_right = 4
+		bg.content_margin_left = 10
+		bg.content_margin_right = 10
+		bg.content_margin_top = 6
+		bg.content_margin_bottom = 6
+		bg.corner_radius_top_left = 8
+		bg.corner_radius_top_right = 8
+		bg.corner_radius_bottom_left = 8
+		bg.corner_radius_bottom_right = 8
 		_bubble.add_theme_stylebox_override("normal", bg)
 		add_child(_bubble)
 	_bubble.text = text
 	_bubble.visible = true
 	_bubble_token += 1
 	var token := _bubble_token
+	await get_tree().process_frame
+	if token == _bubble_token and is_instance_valid(_bubble):
+		var s := _bubble.scale
+		_bubble.position = Vector2(-_bubble.size.x * s.x / 2.0, -44.0 - _bubble.size.y * s.y)
 	await get_tree().create_timer(5.0).timeout
 	if token == _bubble_token and is_instance_valid(_bubble):
 		_bubble.visible = false
