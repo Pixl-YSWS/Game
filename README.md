@@ -20,7 +20,7 @@
 **Pixl** Pixl is a pixel-themed [YSWS](https://hackclub.com) where you evolve in a retro 2D open world and level up by building real projects. By exploring the map, you will discover different regions such as a cyberpunk city, an underwater region or even a gambling one. Each region will have sidequests like making apps, websites, or hardware for in-game characters that will pay you. You can also make regular software and hardware projects in your main village and sell them to merchants. Earn pixels, the in-game currency to buy nice items in the shop, or unlock funding. The more pixels you get, the best regions you can unlock and the more pixels you will get from the merchants.
 
 - **Shared open world** - explore with other Hack Clubbers in real time
-- **Private village** - your own procedurally generated space, seeded from your account
+- **Private village** - your own personal space
 - **Shop & economy** - spend Pixels on a shop to get prizes (mainly grants as we know you love that)
 - **Custom skins** - draw your own 16×16 pixel avatar --- WILL BE ADDED LATER
 - **Chat & voice** - communicate with nearby players
@@ -62,7 +62,7 @@
 ## Features
 
 ### Multiplayer World
-A real-time top-down world. The shared **open world** uses a fixed seed (`0xC0FFEE`) so everyone sees the same landscape. Your **private village** is procedurally generated from your own account ID, unique to you, but visitable by others by inviting them.
+A real-time top-down world. Explore the shared **open world** with other players in real time, or head to your own **village**.
 
 ### Consistency system (for the future ysws, not implemented yet)
 The more project you ship, the best merchants you unlock in your village, meaning that they will pay you more !
@@ -91,7 +91,7 @@ Client
 ```
 
 - Accounts and tokens are stored in the SQLite `accounts` table with a 30-day sliding session expiry.
-- Game state (seed, position, pixels) is keyed by Hack Club account ID.
+- Game state (position, pixels) is keyed by Hack Club account ID.
 - **One active session per account** — a new login kicks the previous session.
 
 ---
@@ -100,33 +100,13 @@ Client
 
 Players exist in exactly one world at a time, identified by a `WorldRef`:
 
-| Kind | Description | Seed |
-|---|---|---|
-| `openworld` | Shared world for all players | `0xC0FFEE` (fixed) |
-| `village` | Private per-player world | Hash of owner's account ID |
-| `house` | Single shared multiplayer interior | — |
+| Kind | Description |
+|---|---|
+| `openworld` | Shared world for all players |
+| `village` | Your own village |
+| `house` | Single shared multiplayer interior |
 
-World switches are requested via the `world:enter` socket event. The server validates access and emits `world:state` with the new seed and player list. Walking onto a door tile triggers building entry; a portal tile switches between the open world and your village.
-
----
-
-## Admin CLI
-
-An offline moderation tool that directly edits the SQLite database. Requires `ADMIN_SECRET` to be set.
-
-```bash
-bun server/admin-cli.ts <password> <command> [args]
-
-# Examples
-bun server/admin-cli.ts mysecret accounts           # List all accounts
-bun server/admin-cli.ts mysecret whois <id>         # Look up a player
-bun server/admin-cli.ts mysecret give <id> 50       # Give 50 Pixels
-bun server/admin-cli.ts mysecret setpixels <id> 100 # Set pixel balance
-bun server/admin-cli.ts mysecret mute <id>          # Mute a player
-bun server/admin-cli.ts mysecret add-admin <id>     # Promote to admin
-```
-
-Full command list: `accounts`, `whois`, `admins`, `mutes`, `add-admin`, `add-subadmin`, `remove-role`, `mute`, `unmute`, `give`, `setpixels`.
+World switches are requested via the `world:enter` socket event. The server validates access and emits `world:state` with the new player list. Walking onto a door tile triggers building entry; a portal tile switches between the open world and your village.
 
 ---
 
