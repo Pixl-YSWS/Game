@@ -1,0 +1,111 @@
+[gd_scene format=3 uid="uid://cs3jrxlwullsq"]
+
+[ext_resource type="Theme" uid="uid://bv3yjmmciab5v" path="res://themes/main_theme.tres" id="1_theme"]
+[ext_resource type="Script" path="res://scripts/project_create.gd" id="2_script"]
+
+[node name="ProjectCreate" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme = ExtResource("1_theme")
+script = ExtResource("2_script")
+
+[node name="Backdrop" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.039216, 0.031373, 0.019608, 1)
+
+[node name="Center" type="CenterContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Card" type="PanelContainer" parent="Center"]
+layout_mode = 2
+
+[node name="Margin" type="MarginContainer" parent="Center/Card"]
+layout_mode = 2
+theme_override_constants/margin_left = 22
+theme_override_constants/margin_top = 18
+theme_override_constants/margin_right = 22
+theme_override_constants/margin_bottom = 18
+
+[node name="Panel" type="VBoxContainer" parent="Center/Card/Margin"]
+custom_minimum_size = Vector2(620, 0)
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="Title" type="Label" parent="Center/Card/Margin/Panel"]
+layout_mode = 2
+theme_type_variation = &"TitleText"
+text = "New Project"
+horizontal_alignment = 1
+
+[node name="Name" type="LineEdit" parent="Center/Card/Margin/Panel"]
+unique_name_in_owner = true
+layout_mode = 2
+placeholder_text = "Project name"
+max_length = 120
+
+[node name="Description" type="TextEdit" parent="Center/Card/Margin/Panel"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 150)
+layout_mode = 2
+placeholder_text = "Description"
+wrap_mode = 1
+
+[node name="Repo" type="LineEdit" parent="Center/Card/Margin/Panel"]
+unique_name_in_owner = true
+layout_mode = 2
+placeholder_text = "GitHub repo link (optional)"
+max_length = 500
+
+[node name="Demo" type="LineEdit" parent="Center/Card/Margin/Panel"]
+unique_name_in_owner = true
+layout_mode = 2
+placeholder_text = "Demo link (optional)"
+max_length = 500
+
+[node name="HtLabel" type="Label" parent="Center/Card/Margin/Panel"]
+layout_mode = 2
+theme_type_variation = &"InfoText"
+text = "Link HackTime projects"
+
+[node name="Scroll" type="ScrollContainer" parent="Center/Card/Margin/Panel"]
+custom_minimum_size = Vector2(0, 180)
+layout_mode = 2
+horizontal_scroll_mode = 0
+
+[node name="HtGrid" type="GridContainer" parent="Center/Card/Margin/Panel/Scroll"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/h_separation = 8
+theme_override_constants/v_separation = 8
+columns = 3
+
+[node name="Buttons" type="HBoxContainer" parent="Center/Card/Margin/Panel"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="CancelButton" type="Button" parent="Center/Card/Margin/Panel/Buttons"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Cancel"
+
+[node name="CreateButton" type="Button" parent="Center/Card/Margin/Panel/Buttons"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Create"

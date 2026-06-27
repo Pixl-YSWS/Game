@@ -1,6 +1,7 @@
 extends CanvasLayer
 
 const GAMEPLAY_SCENES := ["village", "open_world", "house_interior"]
+const PROJECT_CREATE := preload("res://scenes/project_create.tscn")
 
 @onready var _root: Control = %Root
 @onready var _status: Label = %Status
@@ -8,14 +9,23 @@ const GAMEPLAY_SCENES := ["village", "open_world", "house_interior"]
 @onready var _list: VBoxContainer = %List
 @onready var _name_input: LineEdit = %NameInput
 var _open := false
+var _ht_projects: Array = []
+var _create_screen: Control
 
 func _ready() -> void:
 	_root.visible = false
 	%RefreshButton.pressed.connect(refresh)
 	_connect_button.pressed.connect(_on_connect)
-	%CreateButton.pressed.connect(_on_create)
 	%CloseButton.pressed.connect(close)
-	_name_input.text_submitted.connect(func(_t): _on_create())
+	_name_input.visible = false
+	var create_button: Button = %CreateButton
+	create_button.text = "+ New Project"
+	create_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	create_button.pressed.connect(_open_create)
+	_create_screen = PROJECT_CREATE.instantiate()
+	_root.add_child(_create_screen)
+	_create_screen.submitted.connect(_on_create_submitted)
+	_create_screen.cancelled.connect(func(): _create_screen.visible = false)
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_H:
@@ -41,7 +51,17 @@ func open() -> void:
 func close() -> void:
 	_open = false
 	get_tree().paused = false
+	_create_screen.visible = false
 	_root.visible = false
+
+func _open_create() -> void:
+	_create_screen.open(_ht_projects)
+
+func _on_create_submitted(data: Dictionary) -> void:
+	_api(HTTPClient.METHOD_POST, "/api/projects", data, func(_code, _json):
+		_create_screen.visible = false
+		_api(HTTPClient.METHOD_GET, "/api/projects", null, _on_projects)
+	)
 
 # --- networking ------------------------------------------------------------
 
@@ -70,6 +90,7 @@ func _on_stats(code: int, json: Variant) -> void:
 		_status.text = "HackTime: unknown"
 		return
 	var stats: Dictionary = json.get("stats", {})
+	_ht_projects = stats.get("projects", [])
 	if stats.get("connected", false):
 		var hours := int(stats.get("totalSeconds", 0)) / 3600.0
 		_status.text = "HackTime: connected (%.1fh)" % hours
@@ -109,13 +130,6 @@ func _muted(text: String) -> Label:
 	l.text = text
 	l.theme_type_variation = &"InfoText"
 	return l
-
-func _on_create() -> void:
-	var name := _name_input.text.strip_edges()
-	if name == "":
-		return
-	_name_input.clear()
-	_api(HTTPClient.METHOD_POST, "/api/projects", {"name": name}, func(_code, _json): _api(HTTPClient.METHOD_GET, "/api/projects", null, _on_projects))
 
 func _on_delete(id: int) -> void:
 	_api(HTTPClient.METHOD_DELETE, "/api/projects/%d" % id, null, func(_code, _json): _api(HTTPClient.METHOD_GET, "/api/projects", null, _on_projects))
