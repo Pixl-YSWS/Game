@@ -31,6 +31,10 @@ const LOCAL_CALLBACK_PORT = 7777
 var _tcp_server: TCPServer = TCPServer.new()
 var _listening: bool = false
 var _http: HTTPRequest
+var _pending_scene_change: String = ""
+
+func _is_socket_open() -> bool:
+	return _socket.get_ready_state() == WebSocketPeer.STATE_OPEN
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -88,6 +92,10 @@ func _process(_delta: float) -> void:
 	_socket.poll()
 	var state = _socket.get_ready_state()
 	if state == WebSocketPeer.STATE_OPEN:
+		if _pending_scene_change != "":
+			var sc := _pending_scene_change
+			_pending_scene_change = ""
+			_socket.send_text(JSON.stringify({ "type": "change_scene", "scene": sc }))
 		while _socket.get_available_packet_count() > 0:
 			var packet = _socket.get_packet().get_string_from_utf8()
 			_handle_message(packet)
@@ -238,7 +246,7 @@ func _handle_message(raw: String) -> void:
 			emit_signal("chat_message", json["userId"], String(json.get("displayName", "")), String(json.get("text", "")))
 
 func send_move(pos: Vector2, direction: String) -> void:
-	if not _connected:
+	if not _is_socket_open():
 		return
 	var msg = {
 		"type": "move",
@@ -250,7 +258,7 @@ func send_move(pos: Vector2, direction: String) -> void:
 
 func send_set_skin(skin: String) -> void:
 	local_skin = skin
-	if not _connected:
+	if not _is_socket_open():
 		return
 	_socket.send_text(JSON.stringify({
 		"type": "set_skin",
@@ -258,19 +266,16 @@ func send_set_skin(skin: String) -> void:
 	}))
 	
 func send_chat(text: String) -> void:
-	if not _connected:
+	if not _is_socket_open():
 		return
 	_socket.send_text(JSON.stringify({"type": "chat", "text": text}))
 
 func send_scene_change(scene_name: String) -> void:
-	if not _connected:
-		return
 	current_scene_name = scene_name
-	var msg = {
-		"type": "change_scene",
-		"scene": scene_name
-	}
-	_socket.send_text(JSON.stringify(msg))
+	if _is_socket_open():
+		_socket.send_text(JSON.stringify({ "type": "change_scene", "scene": scene_name }))
+	else:
+		_pending_scene_change = scene_name
 
 func is_connected_to_server() -> bool:
 	return _connected

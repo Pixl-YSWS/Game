@@ -17,6 +17,10 @@ var _prev_pos: Vector2 = Vector2.INF
 
 var _base_frames: SpriteFrames
 
+const BUBBLE_FONT := preload("res://assets/fonts/Monocraft.ttf")
+var _bubble: Label
+var _bubble_token: int = 0
+
 func _ready() -> void:
 	_base_frames = $AnimatedSprite2D.sprite_frames
 	if is_local:
@@ -143,3 +147,26 @@ func _on_stair_trigger_body_exited(body: Node2D) -> void:
 	speed = 100
 func player():
 	pass
+
+func show_chat_bubble(text: String) -> void:
+	if _bubble == null:
+		_bubble = Label.new()
+		_bubble.z_index = 22
+		_bubble.custom_minimum_size = Vector2(120, 0)
+		_bubble.position = Vector2(-60, -54)
+		_bubble.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_bubble.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
+		_bubble.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_bubble.add_theme_font_override("font", BUBBLE_FONT)
+		_bubble.add_theme_font_size_override("font_size", 7)
+		_bubble.add_theme_color_override("font_color", Color(1, 1, 1))
+		_bubble.add_theme_color_override("font_outline_color", Color(0, 0, 0))
+		_bubble.add_theme_constant_override("outline_size", 6)
+		add_child(_bubble)
+	_bubble.text = text
+	_bubble.visible = true
+	_bubble_token += 1
+	var token := _bubble_token
+	await get_tree().create_timer(5.0).timeout
+	if token == _bubble_token and is_instance_valid(_bubble):
+		_bubble.visible = false
