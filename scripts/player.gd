@@ -46,6 +46,10 @@ func _physics_process(delta: float) -> void:
 		remote_movement(delta)
 
 func player_movement(delta: float)-> void:
+	if ChatHud.is_typing():
+		velocity = Vector2.ZERO
+		move_and_slide()
+		return
 	if Input.is_action_pressed("move_right"):
 		current_dir = "right"
 		play_anim(1)

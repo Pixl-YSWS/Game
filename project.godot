@@ -22,6 +22,7 @@ NetworkManager="*uid://brjjqf0223g1e"
 Loader="*res://scripts/loader.gd"
 PauseMenu="*res://scripts/pause_menu.gd"
 ProjectsHud="*res://scenes/projects_hud.tscn"
+ChatHud="*uid://d13chpcees7ql"
 
 [editor_plugins]
 

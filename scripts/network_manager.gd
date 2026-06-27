@@ -7,6 +7,7 @@ signal player_moved(user_id: String, pos: Vector2, direction: String)
 signal player_left(user_id: String)
 signal scene_init(your_user_id: String, your_pos: Vector2, other_players: Array, spawn_at_default: bool)
 signal player_skin_changed(user_id: String, skin: String)
+signal chat_message(user_id: String, display_name: String, text: String)
 
 const DEV_SERVER_URL = "http://localhost:4728"
 const DEV_WS_URL = "ws://localhost:4728/ws"
@@ -233,6 +234,8 @@ func _handle_message(raw: String) -> void:
 			if uid == user_id:
 				local_skin = sk
 			emit_signal("player_skin_changed", uid, sk)
+		"chat":
+			emit_signal("chat_message", json["userId"], String(json.get("displayName", "")), String(json.get("text", "")))
 
 func send_move(pos: Vector2, direction: String) -> void:
 	if not _connected:
@@ -253,6 +256,11 @@ func send_set_skin(skin: String) -> void:
 		"type": "set_skin",
 		"skin": skin
 	}))
+	
+func send_chat(text: String) -> void:
+	if not _connected:
+		return
+	_socket.send_text(JSON.stringify({"type": "chat", "text": text}))
 
 func send_scene_change(scene_name: String) -> void:
 	if not _connected:
