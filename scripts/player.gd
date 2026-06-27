@@ -153,15 +153,24 @@ func show_chat_bubble(text: String) -> void:
 		_bubble = Label.new()
 		_bubble.z_index = 22
 		_bubble.custom_minimum_size = Vector2(120, 0)
-		_bubble.position = Vector2(-60, -54)
+		_bubble.position = Vector2(-60, -56)
 		_bubble.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		_bubble.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
 		_bubble.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		_bubble.add_theme_font_override("font", BUBBLE_FONT)
 		_bubble.add_theme_font_size_override("font_size", 7)
 		_bubble.add_theme_color_override("font_color", Color(1, 1, 1))
-		_bubble.add_theme_color_override("font_outline_color", Color(0, 0, 0))
-		_bubble.add_theme_constant_override("outline_size", 6)
+		var bg := StyleBoxFlat.new()
+		bg.bg_color = Color(0.05, 0.04, 0.03, 0.88)
+		bg.content_margin_left = 6
+		bg.content_margin_right = 6
+		bg.content_margin_top = 3
+		bg.content_margin_bottom = 3
+		bg.corner_radius_top_left = 4
+		bg.corner_radius_top_right = 4
+		bg.corner_radius_bottom_left = 4
+		bg.corner_radius_bottom_right = 4
+		_bubble.add_theme_stylebox_override("normal", bg)
 		add_child(_bubble)
 	_bubble.text = text
 	_bubble.visible = true

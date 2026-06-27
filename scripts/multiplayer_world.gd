@@ -6,6 +6,7 @@ var remote_players: Dictionary = {}
 var _local_player = null
 
 func _ready() -> void:
+	global.player_in_range = false
 	setup_multiplayer()
 
 func _network_scene_name() -> String:
