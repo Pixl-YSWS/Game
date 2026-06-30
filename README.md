@@ -17,7 +17,7 @@
 
 ## About
 
-**Pixl** Pixl is a pixel-themed [YSWS](https://hackclub.com) where you evolve in a retro 2D open world and level up by building real projects. By exploring the map, you will discover different regions such as a cyberpunk city, an underwater region or even a gambling one. Each region will have sidequests like making apps, websites, or hardware for in-game characters that will pay you. You can also make regular software and hardware projects in your main village and sell them to merchants. Earn pixels, the in-game currency to buy nice items in the shop, or unlock funding. The more pixels you get, the best regions you can unlock and the more pixels you will get from the merchants.
+**Pixl** Pixl is a pixel-themed [YSWS](https://hackclub.com) where you evolve in a retro 2D open world and level up by building real projects. By exploring the map, you will discover different regions such as a cyberpunk city, an underwater region or even a gambling one (regions comming soon, not in game yet). Each region will have sidequests like making apps, websites, or hardware for in-game characters that will pay you with a base prize (or base funding for hardware) and give you some pixels, the in-game currency, for you to spend in the shop. The more pixels you get, the best regions you can unlock and the more pixels you will get from the merchants.
 
 - **Shared open world** - explore with other Hack Clubbers in real time
 - **Private village** - your own personal space
@@ -31,7 +31,7 @@
 
 ## Screenshots
 
-> _Screenshots coming soon, add yours by opening a PR!_
+> _More screenshots coming soon, add yours by opening a PR!_
 
 <table>
   <tr>
