@@ -2551,20 +2551,20 @@ script = ExtResource("1_ci1yp")
 
 [node name="Cow" parent="." unique_id=2018040645 instance=ExtResource("45_v06ig")]
 z_index = 10
-position = Vector2(153, -31)
+position = Vector2(153, -15)
 
 [node name="Cow4" parent="." unique_id=1318070801 instance=ExtResource("45_v06ig")]
 z_index = 10
-position = Vector2(193, -101)
+position = Vector2(193, -85)
 collision_mask = 1
 
 [node name="Cow5" parent="." unique_id=386999861 instance=ExtResource("45_v06ig")]
 z_index = 10
-position = Vector2(-496, -15)
+position = Vector2(-496, 1)
 
 [node name="Cow6" parent="." unique_id=1670322001 instance=ExtResource("45_v06ig")]
 z_index = 10
-position = Vector2(-441, -226)
+position = Vector2(-441, -210)
 
 [node name="StairTrigger" type="Area2D" parent="." unique_id=610429191]
 visible = false
@@ -2725,23 +2725,23 @@ polygon = PackedVector2Array(-98, -155, -55, -153, 507, -236, 657, -570, 384, -9
 
 [node name="Chicken2" parent="." unique_id=1323213323 instance=ExtResource("46_beyr0")]
 z_index = 10
-position = Vector2(-362, -56)
+position = Vector2(-362, -48)
 
 [node name="Chicken4" parent="." unique_id=577153515 instance=ExtResource("46_beyr0")]
 z_index = 10
-position = Vector2(135, -219)
+position = Vector2(135, -211)
 
 [node name="Sheep" parent="." unique_id=1304585382 instance=ExtResource("47_1baa2")]
 z_index = 10
-position = Vector2(33, -52)
+position = Vector2(33, -36)
 
 [node name="Sheep2" parent="." unique_id=785591062 instance=ExtResource("47_1baa2")]
 z_index = 10
-position = Vector2(-486, -467)
+position = Vector2(-486, -451)
 
 [node name="Sheep3" parent="." unique_id=1092226927 instance=ExtResource("47_1baa2")]
 z_index = 10
-position = Vector2(-481, -90)
+position = Vector2(-481, -74)
 
 [connection signal="body_entered" from="DoorTrigger" to="DoorTrigger" method="_on_body_entered"]
 [connection signal="body_exited" from="DoorTrigger" to="DoorTrigger" method="_on_body_exited"]

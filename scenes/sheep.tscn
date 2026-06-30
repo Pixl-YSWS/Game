@@ -151,6 +151,7 @@ collision_mask = 4
 script = ExtResource("1_gw4f6")
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="." unique_id=708371989]
+offset = Vector2(0, -16)
 sprite_frames = SubResource("SpriteFrames_6qn06")
 animation = &"walk"
 

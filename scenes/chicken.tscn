@@ -108,6 +108,7 @@ radius = 4.0
 script = ExtResource("1_1yv3s")
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="." unique_id=1274005982]
+offset = Vector2(0, -8)
 sprite_frames = SubResource("SpriteFrames_rsu6n")
 animation = &"walk"
 frame_progress = 0.16127062

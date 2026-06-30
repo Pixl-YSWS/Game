@@ -1,20 +1,37 @@
 extends CharacterBody2D
 
+const MONOCRAFT := preload("res://assets/fonts/Monocraft.ttf")
+
 @export var speed: float = 40.0
 @export var wander_radius: float = 80.0
 @export var min_wait: float = 1.0
 @export var max_wait: float = 3.0
-@export var sit_chance: float = 0.3   # chance to sit instead of just idling
-@export var eat_chance: float = 0.2   # chance to eat instead of just idling
+@export var sit_chance: float = 0.3
+@export var eat_chance: float = 0.2
 
 var _spawn_pos: Vector2
 var _target_pos: Vector2
-var _state: String = "idle"  # "idle" | "walk" | "sit" | "eat"
+var _state: String = "idle"
+
+var _player_in_range := false
+var _prompt: Label
+var _prompt_y: float = -38.0
 
 func _ready() -> void:
 	_spawn_pos = global_position
+	_setup_pet_area()
+	_setup_prompt()
 	_play_idle()
 	_wait_then_move()
+
+func _process(_delta: float) -> void:
+	if _prompt == null:
+		return
+	var show := _player_in_range and not Dialogue.is_open and not ChatHud.is_typing()
+	_prompt.visible = show
+	if show:
+		var bob := sin(Time.get_ticks_msec() / 150.0) * 2.0
+		_prompt.position = Vector2(round(-_prompt.size.x * _prompt.scale.x / 2.0), round(_prompt_y + bob))
 
 func _physics_process(delta: float) -> void:
 	if _state == "walk":
@@ -60,3 +77,92 @@ func _pick_new_target() -> void:
 	)
 	_target_pos = _spawn_pos + offset
 	_state = "walk"
+
+func _setup_pet_area() -> void:
+	var area := Area2D.new()
+	area.collision_mask = 1
+	var shape := CollisionShape2D.new()
+	var circle := CircleShape2D.new()
+	circle.radius = 26.0
+	shape.shape = circle
+	shape.position = Vector2(0, -8)
+	area.add_child(shape)
+	add_child(area)
+	area.body_entered.connect(_on_pet_body_entered)
+	area.body_exited.connect(_on_pet_body_exited)
+
+func _setup_prompt() -> void:
+	var th := 32.0
+	var fr: SpriteFrames = $AnimatedSprite2D.sprite_frames
+	if fr and fr.get_animation_names().size() > 0:
+		var t0: Texture2D = fr.get_frame_texture(fr.get_animation_names()[0], 0)
+		if t0:
+			th = float(t0.get_height())
+	_prompt_y = -th - 6.0
+	_prompt = Label.new()
+	_prompt.z_index = 30
+	_prompt.text = "[%s] Pet" % _interact_key_label()
+	_prompt.add_theme_font_override("font", MONOCRAFT)
+	_prompt.add_theme_font_size_override("font_size", 24)
+	_prompt.add_theme_color_override("font_color", Color(1, 0.819608, 0.4))
+	_prompt.add_theme_color_override("font_outline_color", Color(0, 0, 0))
+	_prompt.add_theme_constant_override("outline_size", 6)
+	_prompt.scale = Vector2.ONE / 3.5
+	_prompt.visible = false
+	add_child(_prompt)
+	_prompt.reset_size()
+
+func _interact_key_label() -> String:
+	for e in InputMap.action_get_events("interact"):
+		if e is InputEventKey:
+			var kc: int = e.physical_keycode if e.physical_keycode != 0 else e.keycode
+			return OS.get_keycode_string(kc)
+	return "E"
+
+func _on_pet_body_entered(body: Node2D) -> void:
+	if body.has_method("player") and body.is_local:
+		_player_in_range = true
+
+func _on_pet_body_exited(body: Node2D) -> void:
+	if body.has_method("player") and body.is_local:
+		_player_in_range = false
+
+func _unhandled_input(event: InputEvent) -> void:
+	if not _player_in_range or Dialogue.is_open or ChatHud.is_typing():
+		return
+	if event.is_action_pressed("interact"):
+		get_viewport().set_input_as_handled()
+		pet()
+
+func pet() -> void:
+	_pop_heart()
+	_wiggle()
+
+func _pop_heart() -> void:
+	var tex := EmoteHud.texture_for("heart")
+	if tex == null:
+		return
+	var s := Sprite2D.new()
+	s.texture = tex
+	s.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	s.z_index = 31
+	var start_y := _prompt_y + 2.0
+	s.position = Vector2(0, start_y)
+	var h := float(maxi(tex.get_height(), 1))
+	var target_scale := Vector2.ONE * (12.0 / h)
+	s.scale = target_scale * 0.6
+	add_child(s)
+	var tw := create_tween()
+	tw.tween_property(s, "position:y", start_y - 14.0, 0.75).set_ease(Tween.EASE_OUT)
+	tw.parallel().tween_property(s, "modulate:a", 0.0, 0.75).from(1.0)
+	tw.parallel().tween_property(s, "scale", target_scale, 0.75)
+	tw.tween_callback(s.queue_free)
+
+func _wiggle() -> void:
+	var spr := $AnimatedSprite2D
+	spr.rotation = 0.0
+	var tw := create_tween()
+	tw.tween_property(spr, "rotation", deg_to_rad(7), 0.09).set_trans(Tween.TRANS_SINE)
+	tw.tween_property(spr, "rotation", deg_to_rad(-7), 0.18).set_trans(Tween.TRANS_SINE)
+	tw.tween_property(spr, "rotation", deg_to_rad(5), 0.18).set_trans(Tween.TRANS_SINE)
+	tw.tween_property(spr, "rotation", 0.0, 0.12).set_trans(Tween.TRANS_SINE)
