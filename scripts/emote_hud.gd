@@ -19,14 +19,23 @@ const EMOTES := [
 	{"key": "exclaim", "file": "emote_exclamation.png"},
 	{"key": "dizzy", "file": "emote_swirl.png"},
 ]
+const QUICK := ["heart", "laugh", "happy", "sad", "star", "music"]
 
 var _root: Control
+var _quick: Control
 var _open := false
 
 func _ready() -> void:
 	layer = 106
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_build_ui()
+	_build_quick_bar()
+
+func _process(_delta: float) -> void:
+	if _quick == null:
+		return
+	_quick.visible = _in_gameplay() and not _open and not get_tree().paused \
+		and not ChatHud.is_typing() and not Dialogue.is_open
 
 func texture_for(key: String) -> Texture2D:
 	for e in EMOTES:
@@ -81,6 +90,35 @@ func _build_ui() -> void:
 		b.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		b.pressed.connect(_pick.bind(String(e["key"])))
 		grid.add_child(b)
+
+func _build_quick_bar() -> void:
+	_quick = Control.new()
+	_quick.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_quick.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_quick)
+
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 6)
+	row.anchor_left = 1.0
+	row.anchor_top = 1.0
+	row.anchor_right = 1.0
+	row.anchor_bottom = 1.0
+	row.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	row.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	row.offset_right = -12
+	row.offset_bottom = -12
+	_quick.add_child(row)
+
+	for key in QUICK:
+		var b := TextureButton.new()
+		b.texture_normal = texture_for(key)
+		b.ignore_texture_size = true
+		b.stretch_mode = TextureButton.STRETCH_KEEP_ASPECT_CENTERED
+		b.custom_minimum_size = Vector2(40, 40)
+		b.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		b.modulate.a = 0.85
+		b.pressed.connect(func(): NetworkManager.send_emote(key))
+		row.add_child(b)
 
 func _pick(key: String) -> void:
 	_close()
