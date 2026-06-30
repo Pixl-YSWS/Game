@@ -9,6 +9,7 @@ func _ready() -> void:
 	_spawn_npcs()
 	await get_tree().create_timer(0.3).timeout
 	can_transition = true
+	GuideHud.maybe_show_intro()
 
 func _spawn_npcs() -> void:
 	var defs := [
