@@ -23,6 +23,7 @@ const QUICK := ["heart", "laugh", "happy", "sad", "star", "music"]
 
 var _root: Control
 var _quick: Control
+var _mic_btn: TextureButton
 var _open := false
 
 func _ready() -> void:
@@ -109,6 +110,17 @@ func _build_quick_bar() -> void:
 	row.offset_bottom = -12
 	_quick.add_child(row)
 
+	_mic_btn = TextureButton.new()
+	_mic_btn.ignore_texture_size = true
+	_mic_btn.stretch_mode = TextureButton.STRETCH_KEEP_ASPECT_CENTERED
+	_mic_btn.custom_minimum_size = Vector2(40, 40)
+	_mic_btn.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_mic_btn.modulate.a = 0.85
+	_mic_btn.tooltip_text = "Toggle voice (hold V to talk)"
+	_mic_btn.pressed.connect(_toggle_mic)
+	row.add_child(_mic_btn)
+	_update_mic()
+
 	for key in QUICK:
 		var b := TextureButton.new()
 		b.texture_normal = texture_for(key)
@@ -119,6 +131,44 @@ func _build_quick_bar() -> void:
 		b.modulate.a = 0.85
 		b.pressed.connect(func(): NetworkManager.send_emote(key))
 		row.add_child(b)
+
+func _toggle_mic() -> void:
+	Settings.set_voice_enabled(not Settings.voice_enabled)
+	_update_mic()
+
+func _update_mic() -> void:
+	if _mic_btn:
+		_mic_btn.texture_normal = _mic_texture(not Settings.voice_enabled)
+
+func _mic_texture(muted: bool) -> ImageTexture:
+	var img := Image.create(16, 16, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0, 0, 0, 0))
+	var col := Color(0.55, 0.55, 0.55) if muted else Color(0.96, 0.96, 0.96)
+	for y in range(3, 10):
+		for x in range(6, 10):
+			img.set_pixelv(Vector2i(x, y), col)
+	img.set_pixelv(Vector2i(6, 3), Color(0, 0, 0, 0))
+	img.set_pixelv(Vector2i(9, 3), Color(0, 0, 0, 0))
+	img.set_pixelv(Vector2i(6, 9), Color(0, 0, 0, 0))
+	img.set_pixelv(Vector2i(9, 9), Color(0, 0, 0, 0))
+	for y in range(8, 11):
+		img.set_pixelv(Vector2i(4, y), col)
+		img.set_pixelv(Vector2i(11, y), col)
+	for x in range(5, 11):
+		img.set_pixelv(Vector2i(x, 11), col)
+	img.set_pixelv(Vector2i(7, 12), col)
+	img.set_pixelv(Vector2i(8, 12), col)
+	img.set_pixelv(Vector2i(7, 13), col)
+	img.set_pixelv(Vector2i(8, 13), col)
+	for x in range(5, 11):
+		img.set_pixelv(Vector2i(x, 14), col)
+	if muted:
+		var red := Color(0.92, 0.23, 0.23)
+		for i in range(16):
+			img.set_pixelv(Vector2i(i, i), red)
+			if i + 1 < 16:
+				img.set_pixelv(Vector2i(i + 1, i), red)
+	return ImageTexture.create_from_image(img)
 
 func _pick(key: String) -> void:
 	_close()
