@@ -43,6 +43,14 @@ func _ready() -> void:
 	if wanders:
 		_wait_then_move()
 
+func npc_id() -> String:
+	return npc_name
+
+func apply_saved_position(p: Vector2) -> void:
+	position = p
+	_target = p
+	_state = "idle"
+
 func set_skin(desc: String) -> void:
 	skin = desc
 	var tex := SkinUtil.resolve_sheet(desc)

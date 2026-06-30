@@ -10,6 +10,7 @@ signal player_skin_changed(user_id: String, skin: String)
 signal chat_message(user_id: String, display_name: String, text: String)
 signal emote_received(user_id: String, key: String)
 signal voice_received(user_id: String, payload: PackedByteArray)
+signal npc_init(scene: String, npcs: Array)
 
 const DEV_SERVER_URL = "http://localhost:4728"
 const DEV_WS_URL = "ws://localhost:4728/ws"
@@ -251,6 +252,14 @@ func _handle_message(raw: String) -> void:
 			emit_signal("chat_message", json["userId"], String(json.get("displayName", "")), String(json.get("text", "")))
 		"emote":
 			emit_signal("emote_received", json["userId"], String(json.get("key", "")))
+		"npc_init":
+			var npcs: Array = []
+			for n in json.get("npcs", []):
+				npcs.append({
+					"id": String(n.get("id", "")),
+					"pos": Vector2(n.get("posX", 0), n.get("posY", 0))
+				})
+			emit_signal("npc_init", String(json.get("scene", "")), npcs)
 
 func send_emote(key: String) -> void:
 	if not _is_socket_open():
@@ -261,6 +270,11 @@ func send_voice(payload: PackedByteArray) -> void:
 	if not _is_socket_open():
 		return
 	_socket.send(payload, WebSocketPeer.WRITE_MODE_BINARY)
+
+func send_save_npcs(scene_name: String, npcs: Array) -> void:
+	if not _is_socket_open() or npcs.is_empty():
+		return
+	_socket.send_text(JSON.stringify({"type": "save_npcs", "scene": scene_name, "npcs": npcs}))
 
 func _handle_voice_packet(pkt: PackedByteArray) -> void:
 	if pkt.size() < 2:
