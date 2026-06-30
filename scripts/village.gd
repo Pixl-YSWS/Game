@@ -25,7 +25,7 @@ func _spawn_npcs() -> void:
 			"dialogue": "Built something? Talk to me to log your project."},
 		{"pos": Vector2(0, -120), "name": "Ridit", "skin": "cvc:3",
 			"dialogue": "Hey, I'm Ridit — welcome to the village!\nNice day for a stroll across the bridges, huh?"},
-		{"pos": Vector2(-70, -50), "name": "Mangoman", "skin": "cvc:7",
+		{"pos": Vector2(40, 30), "name": "Mangoman", "skin": "cvc:7",
 			"dialogue": "Mango? Mango. The bridges link the whole village together."},
 		{"pos": Vector2(60, -40), "name": "Imu", "skin": "cvc:6",
 			"dialogue": "I watch over the village from the shadows."},

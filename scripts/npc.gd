@@ -47,8 +47,11 @@ func npc_id() -> String:
 	return npc_name
 
 func apply_saved_position(p: Vector2) -> void:
-	position = p
-	_target = p
+	var dest := p
+	if _home.distance_to(p) > wander_radius:
+		dest = _home + (p - _home).normalized() * wander_radius
+	position = dest
+	_target = dest
 	_state = "idle"
 
 func set_skin(desc: String) -> void:
