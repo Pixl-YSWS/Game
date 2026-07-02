@@ -1,0 +1,113 @@
+[gd_scene load_steps=3 format=3 uid="uid://dlobbymenu42"]
+
+[ext_resource type="Theme" uid="uid://bv3yjmmciab5v" path="res://themes/main_theme.tres" id="1_theme"]
+[ext_resource type="Script" path="res://scripts/lobby_menu.gd" id="2_script"]
+
+[node name="LobbyMenu" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme = ExtResource("1_theme")
+script = ExtResource("2_script")
+
+[node name="Backdrop" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.078431, 0.062745, 0.039216, 1)
+
+[node name="CenterContainer" type="CenterContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="VBoxContainer" type="VBoxContainer" parent="CenterContainer"]
+custom_minimum_size = Vector2(640, 0)
+layout_mode = 2
+
+[node name="TitleLabel" type="Label" parent="CenterContainer/VBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 4
+theme_type_variation = &"TitleText"
+text = "Lobbies"
+horizontal_alignment = 1
+
+[node name="StatusLabel" type="Label" parent="CenterContainer/VBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 4
+theme_type_variation = &"StatusText"
+horizontal_alignment = 1
+
+[node name="ActionsRow" type="HBoxContainer" parent="CenterContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="QuickJoinButton" type="Button" parent="CenterContainer/VBoxContainer/ActionsRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Quick Join"
+
+[node name="RefreshButton" type="Button" parent="CenterContainer/VBoxContainer/ActionsRow"]
+layout_mode = 2
+text = "Refresh"
+
+[node name="CreateRow" type="HBoxContainer" parent="CenterContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="NameEdit" type="LineEdit" parent="CenterContainer/VBoxContainer/CreateRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "Lobby name (optional)"
+max_length = 30
+
+[node name="CreatePublicButton" type="Button" parent="CenterContainer/VBoxContainer/CreateRow"]
+layout_mode = 2
+text = "Create Public"
+
+[node name="CreatePrivateButton" type="Button" parent="CenterContainer/VBoxContainer/CreateRow"]
+layout_mode = 2
+text = "Create Private"
+
+[node name="CodeRow" type="HBoxContainer" parent="CenterContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="CodeEdit" type="LineEdit" parent="CenterContainer/VBoxContainer/CodeRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "Lobby code"
+max_length = 8
+
+[node name="PasswordEdit" type="LineEdit" parent="CenterContainer/VBoxContainer/CodeRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "Password (private only)"
+max_length = 4
+
+[node name="JoinCodeButton" type="Button" parent="CenterContainer/VBoxContainer/CodeRow"]
+layout_mode = 2
+text = "Join by Code"
+
+[node name="ListScroll" type="ScrollContainer" parent="CenterContainer/VBoxContainer"]
+custom_minimum_size = Vector2(0, 260)
+layout_mode = 2
+horizontal_scroll_mode = 0
+
+[node name="ListBox" type="VBoxContainer" parent="CenterContainer/VBoxContainer/ListScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="BackButton" type="Button" parent="CenterContainer/VBoxContainer"]
+layout_mode = 2
+text = "Back"

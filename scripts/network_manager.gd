@@ -11,6 +11,9 @@ signal chat_message(user_id: String, display_name: String, text: String)
 signal emote_received(user_id: String, key: String)
 signal voice_received(user_id: String, payload: PackedByteArray)
 signal npc_init(scene: String, npcs: Array)
+signal lobby_list_received(lobbies: Array)
+signal lobby_joined(lobby: Dictionary)
+signal lobby_denied(reason: String)
 
 const DEV_SERVER_URL = "http://localhost:4728"
 const DEV_WS_URL = "ws://localhost:4728/ws"
@@ -27,6 +30,7 @@ var user_id: String = ""
 var display_name: String = ""
 var local_skin: String = "cvc:1"
 var current_scene_name: String = "village"
+var current_lobby_id: String = ""
 var _socket: WebSocketPeer = WebSocketPeer.new()
 var _connected: bool = false
 const TOKEN_SAVE_PATH = "user://session.dat"
@@ -216,6 +220,11 @@ func _handle_message(raw: String) -> void:
 		return
 	match json.get("type"):
 		"init":
+			var room := String(json.get("scene", ""))
+			if room.begins_with("lobby:"):
+				current_lobby_id = room.substr(6)
+			elif room != "":
+				current_lobby_id = ""
 			user_id = json["you"]["userId"]
 			display_name = json["you"]["displayName"]
 			local_skin = String(json["you"].get("skin", local_skin))
@@ -260,6 +269,19 @@ func _handle_message(raw: String) -> void:
 					"pos": Vector2(n.get("posX", 0), n.get("posY", 0))
 				})
 			emit_signal("npc_init", String(json.get("scene", "")), npcs)
+		"lobby_list":
+			emit_signal("lobby_list_received", json.get("lobbies", []))
+		"lobby_joined":
+			var lobby: Dictionary = json.get("lobby", {})
+			current_lobby_id = String(lobby.get("id", ""))
+			emit_signal("lobby_joined", lobby)
+		"lobby_denied":
+			emit_signal("lobby_denied", String(json.get("reason", "")))
+		"lobby_closed":
+			current_lobby_id = ""
+			var cs = get_tree().current_scene
+			if cs and cs.scene_file_path == "res://scenes/open_world.tscn":
+				Loader.change_scene("res://scenes/village.tscn", "Lobby closed, heading home")
 
 func send_emote(key: String) -> void:
 	if not _is_socket_open():
@@ -311,11 +333,51 @@ func send_chat(text: String) -> void:
 	_socket.send_text(JSON.stringify({"type": "chat", "text": text}))
 
 func send_scene_change(scene_name: String) -> void:
-	current_scene_name = scene_name
+	var actual := scene_name
+	if scene_name == "open_world" and current_lobby_id != "":
+		actual = "lobby:" + current_lobby_id
+	elif scene_name != "open_world":
+		current_lobby_id = ""
+	current_scene_name = actual
 	if _is_socket_open():
-		_socket.send_text(JSON.stringify({ "type": "change_scene", "scene": scene_name }))
+		_socket.send_text(JSON.stringify({ "type": "change_scene", "scene": actual }))
 	else:
-		_pending_scene_change = scene_name
+		_pending_scene_change = actual
+
+func request_lobby_list() -> void:
+	if not _is_socket_open():
+		return
+	_socket.send_text(JSON.stringify({"type": "lobby_list"}))
+
+func send_lobby_create(is_public: bool, lobby_name: String = "") -> void:
+	if not _is_socket_open():
+		return
+	_socket.send_text(JSON.stringify({"type": "lobby_create", "isPublic": is_public, "name": lobby_name}))
+
+func send_lobby_join(id: String, password: String = "") -> void:
+	if not _is_socket_open():
+		return
+	_socket.send_text(JSON.stringify({"type": "lobby_join", "id": id, "password": password}))
+
+func send_lobby_quick_join() -> void:
+	if not _is_socket_open():
+		return
+	_socket.send_text(JSON.stringify({"type": "lobby_quick_join"}))
+
+func send_lobby_rename(id: String, new_name: String) -> void:
+	if not _is_socket_open():
+		return
+	_socket.send_text(JSON.stringify({"type": "lobby_manage", "id": id, "action": "rename", "name": new_name}))
+
+func send_lobby_visibility(id: String, is_public: bool) -> void:
+	if not _is_socket_open():
+		return
+	_socket.send_text(JSON.stringify({"type": "lobby_manage", "id": id, "action": "visibility", "isPublic": is_public}))
+
+func send_lobby_delete(id: String) -> void:
+	if not _is_socket_open():
+		return
+	_socket.send_text(JSON.stringify({"type": "lobby_manage", "id": id, "action": "delete"}))
 
 func is_connected_to_server() -> bool:
 	return _connected
