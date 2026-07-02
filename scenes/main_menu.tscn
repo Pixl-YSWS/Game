@@ -52,10 +52,6 @@ horizontal_alignment = 1
 layout_mode = 2
 text = "Enter Village"
 
-[node name="OpenworldButton" type="Button" parent="CenterContainer/VBoxContainer" unique_id=643420737]
-layout_mode = 2
-text = "Join Open-world"
-
 [node name="LobbiesButton" type="Button" parent="CenterContainer/VBoxContainer" unique_id=643420739]
 layout_mode = 2
 text = "Lobbies"
