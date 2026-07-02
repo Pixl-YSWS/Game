@@ -11,6 +11,7 @@ const MONOCRAFT := preload("res://assets/fonts/Monocraft.ttf")
 @export var wander_radius: float = 56.0
 @export var min_wait: float = 1.2
 @export var max_wait: float = 4.5
+@export var route_path: NodePath
 
 var _in_range := false
 var _base_frames: SpriteFrames
@@ -19,12 +20,21 @@ var _target: Vector2
 var _state: String = "idle"
 var _dir: String = "bottom"
 var _walk_timeout: float = 0.0
+var _route: Path2D
+var _route_offset: float = 0.0
+var _stuck_time: float = 0.0
+var _last_pos: Vector2
 
 func _ready() -> void:
 	_base_frames = $AnimatedSprite2D.sprite_frames
 	set_skin(skin)
 	_home = position
 	_target = position
+	_route = get_node_or_null(route_path) as Path2D
+	if _route and (_route.curve == null or _route.curve.point_count < 2):
+		_route = null
+	if _route:
+		_route_offset = _route.curve.get_closest_offset(_route.to_local(global_position))
 	_play_anim(false)
 	var nl: Label = $NameLabel
 	nl.text = npc_name
@@ -48,7 +58,10 @@ func npc_id() -> String:
 
 func apply_saved_position(p: Vector2) -> void:
 	var dest := p
-	if _home.distance_to(p) > wander_radius:
+	if _route:
+		_route_offset = _route.curve.get_closest_offset(_route.to_local(p))
+		dest = _route.to_global(_route.curve.sample_baked(_route_offset))
+	elif _home.distance_to(p) > wander_radius:
 		dest = _home + (p - _home).normalized() * wander_radius
 	position = dest
 	_target = dest
@@ -87,15 +100,34 @@ func _physics_process(delta: float) -> void:
 	_dir = _dir_from_vec(move)
 	_play_anim(true)
 	move_and_slide()
+	if global_position.distance_to(_last_pos) < speed * delta * 0.3:
+		_stuck_time += delta
+		if _stuck_time >= 0.5:
+			velocity = Vector2.ZERO
+			_state = "idle"
+			_play_anim(false)
+			_wait_then_move()
+			return
+	else:
+		_stuck_time = 0.0
+	_last_pos = global_position
 
 func _wait_then_move() -> void:
 	await get_tree().create_timer(randf_range(min_wait, max_wait)).timeout
 	if not is_inside_tree():
 		return
-	var ang := randf() * TAU
-	var r := wander_radius * sqrt(randf())
-	_target = _home + Vector2(cos(ang), sin(ang)) * r
+	if _route:
+		var length := _route.curve.get_baked_length()
+		var step := randf_range(20.0, 60.0) * (1.0 if randf() < 0.7 else -1.0)
+		_route_offset = fposmod(_route_offset + step, length)
+		_target = _route.to_global(_route.curve.sample_baked(_route_offset))
+	else:
+		var ang := randf() * TAU
+		var r := wander_radius * sqrt(randf())
+		_target = _home + Vector2(cos(ang), sin(ang)) * r
 	_walk_timeout = position.distance_to(_target) / speed + 1.5
+	_stuck_time = 0.0
+	_last_pos = global_position
 	_state = "walk"
 
 func _dir_from_vec(v: Vector2) -> String:

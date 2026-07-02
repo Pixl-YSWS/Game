@@ -8,10 +8,16 @@ const MONOCRAFT := preload("res://assets/fonts/Monocraft.ttf")
 @export var max_wait: float = 3.0
 @export var sit_chance: float = 0.3
 @export var eat_chance: float = 0.2
+@export var route_path: NodePath
 
 var _spawn_pos: Vector2
 var _target_pos: Vector2
 var _state: String = "idle"
+var _route: Path2D
+var _route_offset: float = 0.0
+var _walk_timeout: float = 0.0
+var _stuck_time: float = 0.0
+var _last_pos: Vector2
 
 var _player_in_range := false
 var _prompt: Label
@@ -19,6 +25,11 @@ var _prompt_y: float = -38.0
 
 func _ready() -> void:
 	_spawn_pos = global_position
+	_route = get_node_or_null(route_path) as Path2D
+	if _route and (_route.curve == null or _route.curve.point_count < 2):
+		_route = null
+	if _route:
+		_route_offset = _route.curve.get_closest_offset(_route.to_local(global_position))
 	_setup_pet_area()
 	_setup_prompt()
 	_play_idle()
@@ -36,7 +47,8 @@ func _process(_delta: float) -> void:
 func _physics_process(delta: float) -> void:
 	if _state == "walk":
 		var direction = (_target_pos - global_position)
-		if direction.length() < 2.0:
+		_walk_timeout -= delta
+		if direction.length() < 2.0 or _walk_timeout <= 0.0:
 			velocity = Vector2.ZERO
 			_enter_rest_state()
 		else:
@@ -47,6 +59,15 @@ func _physics_process(delta: float) -> void:
 	else:
 		velocity = Vector2.ZERO
 	move_and_slide()
+	if _state == "walk":
+		if global_position.distance_to(_last_pos) < speed * delta * 0.3:
+			_stuck_time += delta
+			if _stuck_time >= 0.5:
+				velocity = Vector2.ZERO
+				_enter_rest_state()
+		else:
+			_stuck_time = 0.0
+		_last_pos = global_position
 
 func _enter_rest_state() -> void:
 	var roll = randf()
@@ -71,11 +92,20 @@ func _wait_then_move() -> void:
 	_pick_new_target()
 
 func _pick_new_target() -> void:
-	var offset = Vector2(
-		randf_range(-wander_radius, wander_radius),
-		randf_range(-wander_radius, wander_radius)
-	)
-	_target_pos = _spawn_pos + offset
+	if _route:
+		var length := _route.curve.get_baked_length()
+		var step := randf_range(20.0, 60.0) * (1.0 if randf() < 0.7 else -1.0)
+		_route_offset = fposmod(_route_offset + step, length)
+		_target_pos = _route.to_global(_route.curve.sample_baked(_route_offset))
+	else:
+		var offset = Vector2(
+			randf_range(-wander_radius, wander_radius),
+			randf_range(-wander_radius, wander_radius)
+		)
+		_target_pos = _spawn_pos + offset
+	_walk_timeout = global_position.distance_to(_target_pos) / speed + 1.5
+	_stuck_time = 0.0
+	_last_pos = global_position
 	_state = "walk"
 
 func _setup_pet_area() -> void:

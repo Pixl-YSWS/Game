@@ -2545,26 +2545,78 @@ texture = ExtResource("4_1baa2")
 physics_layer_0/collision_layer = 1
 sources/0 = SubResource("TileSetAtlasSource_v06ig")
 
+[sub_resource type="Curve2D" id="Curve2D_graze_big"]
+_data = {
+"points": PackedVector2Array(0, 15, 0, -15, 45, 0, 25, 0, -25, 0, 0, -28, 0, -15, 0, 15, -45, 0, -25, 0, 25, 0, 0, 28, 0, 15, 0, -15, 45, 0)
+}
+point_count = 5
+
+[sub_resource type="Curve2D" id="Curve2D_graze_small"]
+_data = {
+"points": PackedVector2Array(0, 10, 0, -10, 30, 0, 17, 0, -17, 0, 0, -18, 0, -10, 0, 10, -30, 0, -17, 0, 17, 0, 0, 18, 0, 10, 0, -10, 30, 0)
+}
+point_count = 5
+
 [node name="Game" type="Node2D" unique_id=1814781088]
 y_sort_enabled = true
 script = ExtResource("1_ci1yp")
 
+[node name="CowRoute" type="Path2D" parent="."]
+position = Vector2(153, -15)
+curve = SubResource("Curve2D_graze_big")
+
+[node name="Cow4Route" type="Path2D" parent="."]
+position = Vector2(193, -85)
+curve = SubResource("Curve2D_graze_big")
+
+[node name="Cow5Route" type="Path2D" parent="."]
+position = Vector2(-496, 1)
+curve = SubResource("Curve2D_graze_big")
+
+[node name="Cow6Route" type="Path2D" parent="."]
+position = Vector2(-441, -210)
+curve = SubResource("Curve2D_graze_big")
+
+[node name="Chicken2Route" type="Path2D" parent="."]
+position = Vector2(-362, -48)
+curve = SubResource("Curve2D_graze_small")
+
+[node name="Chicken4Route" type="Path2D" parent="."]
+position = Vector2(135, -211)
+curve = SubResource("Curve2D_graze_small")
+
+[node name="SheepRoute" type="Path2D" parent="."]
+position = Vector2(33, -36)
+curve = SubResource("Curve2D_graze_big")
+
+[node name="Sheep2Route" type="Path2D" parent="."]
+position = Vector2(-486, -451)
+curve = SubResource("Curve2D_graze_big")
+
+[node name="Sheep3Route" type="Path2D" parent="."]
+position = Vector2(-481, -74)
+curve = SubResource("Curve2D_graze_big")
+
 [node name="Cow" parent="." unique_id=2018040645 instance=ExtResource("45_v06ig")]
 z_index = 10
 position = Vector2(153, -15)
+route_path = NodePath("../CowRoute")
 
 [node name="Cow4" parent="." unique_id=1318070801 instance=ExtResource("45_v06ig")]
 z_index = 10
 position = Vector2(193, -85)
 collision_mask = 1
+route_path = NodePath("../Cow4Route")
 
 [node name="Cow5" parent="." unique_id=386999861 instance=ExtResource("45_v06ig")]
 z_index = 10
 position = Vector2(-496, 1)
+route_path = NodePath("../Cow5Route")
 
 [node name="Cow6" parent="." unique_id=1670322001 instance=ExtResource("45_v06ig")]
 z_index = 10
 position = Vector2(-441, -210)
+route_path = NodePath("../Cow6Route")
 
 [node name="StairTrigger" type="Area2D" parent="." unique_id=610429191]
 visible = false
@@ -2726,22 +2778,27 @@ polygon = PackedVector2Array(-98, -155, -55, -153, 507, -236, 657, -570, 384, -9
 [node name="Chicken2" parent="." unique_id=1323213323 instance=ExtResource("46_beyr0")]
 z_index = 10
 position = Vector2(-362, -48)
+route_path = NodePath("../Chicken2Route")
 
 [node name="Chicken4" parent="." unique_id=577153515 instance=ExtResource("46_beyr0")]
 z_index = 10
 position = Vector2(135, -211)
+route_path = NodePath("../Chicken4Route")
 
 [node name="Sheep" parent="." unique_id=1304585382 instance=ExtResource("47_1baa2")]
 z_index = 10
 position = Vector2(33, -36)
+route_path = NodePath("../SheepRoute")
 
 [node name="Sheep2" parent="." unique_id=785591062 instance=ExtResource("47_1baa2")]
 z_index = 10
 position = Vector2(-486, -451)
+route_path = NodePath("../Sheep2Route")
 
 [node name="Sheep3" parent="." unique_id=1092226927 instance=ExtResource("47_1baa2")]
 z_index = 10
 position = Vector2(-481, -74)
+route_path = NodePath("../Sheep3Route")
 
 [connection signal="body_entered" from="DoorTrigger" to="DoorTrigger" method="_on_body_entered"]
 [connection signal="body_exited" from="DoorTrigger" to="DoorTrigger" method="_on_body_exited"]

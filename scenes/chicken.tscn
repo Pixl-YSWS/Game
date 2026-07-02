@@ -115,7 +115,7 @@ animation = &"walk"
 frame_progress = 0.16127062
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1963527407]
-position = Vector2(1, 2)
+position = Vector2(0, -4)
 shape = SubResource("CircleShape2D_1yv3s")
 
 [node name="Shadow" type="Node2D" parent="."]
