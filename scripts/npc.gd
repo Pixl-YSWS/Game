@@ -63,8 +63,6 @@ func _ready() -> void:
 	await get_tree().process_frame
 	nl.reset_size()
 	nl.position = Vector2(-nl.size.x * nl.scale.x / 2.0, -42.0 - nl.size.y * nl.scale.y)
-	_prompt.reset_size()
-	_prompt.position = Vector2(-_prompt.size.x * _prompt.scale.x / 2.0, -41.0)
 	if wanders:
 		_wait_then_move()
 
@@ -182,10 +180,14 @@ func _update_prompt() -> void:
 		return
 	_prompt.visible = show
 	if show:
-		_prompt.pivot_offset = _prompt.size / 2.0
-		_prompt.scale = Vector2.ONE / 3.5 * 0.6
+		var ms := _prompt.get_minimum_size()
+		_prompt.size = ms
+		var target_scale := Vector2.ONE / 3.5
+		_prompt.pivot_offset = ms / 2.0
+		_prompt.position = Vector2(-ms.x / 2.0, -41.0 - ms.y * 0.5 * (1.0 - target_scale.y))
+		_prompt.scale = target_scale * 0.6
 		var tw := create_tween().set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-		tw.tween_property(_prompt, "scale", Vector2.ONE / 3.5, 0.2)
+		tw.tween_property(_prompt, "scale", target_scale, 0.2)
 
 func _unhandled_input(event: InputEvent) -> void:
 	if not _in_range or Dialogue.is_open:

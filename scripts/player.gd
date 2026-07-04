@@ -208,11 +208,12 @@ func show_chat_bubble(text: String) -> void:
 	_bubble.visible = true
 	_bubble_token += 1
 	var token := _bubble_token
-	await get_tree().process_frame
 	if token == _bubble_token and is_instance_valid(_bubble):
 		var s := Vector2.ONE / _bubble_zoom()
-		_bubble.position = Vector2(-_bubble.size.x * s.x / 2.0, -44.0 - _bubble.size.y * s.y)
-		_bubble.pivot_offset = Vector2(_bubble.size.x / 2.0, _bubble.size.y)
+		var ms := _bubble.get_minimum_size()
+		_bubble.size = ms
+		_bubble.pivot_offset = Vector2(ms.x / 2.0, ms.y)
+		_bubble.position = Vector2(-ms.x / 2.0, -44.0 - ms.y)
 		_bubble.scale = s * 0.6
 		var pop := create_tween().set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 		pop.tween_property(_bubble, "scale", s, 0.25)

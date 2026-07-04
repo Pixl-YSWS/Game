@@ -190,36 +190,32 @@ func _toggle_mic() -> void:
 func _update_mic() -> void:
 	if _mic_btn:
 		_mic_btn.texture_normal = _mic_texture(not Settings.voice_enabled)
-	if _mic_circle:
-		_mic_circle.bg_color = Color(0.478431, 0.168627, 0.168627) if Settings.voice_enabled else Color(0.168627, 0.113725, 0.070588)
 
 func _mic_texture(muted: bool) -> ImageTexture:
-	var img := Image.create(16, 16, false, Image.FORMAT_RGBA8)
+	var img := Image.create(15, 15, false, Image.FORMAT_RGBA8)
 	img.fill(Color(0, 0, 0, 0))
 	var col := Color(0.55, 0.55, 0.55) if muted else Color(0.96, 0.96, 0.96)
-	for y in range(3, 10):
-		for x in range(6, 10):
+	for y in range(2, 9):
+		for x in range(5, 10):
 			img.set_pixelv(Vector2i(x, y), col)
-	img.set_pixelv(Vector2i(6, 3), Color(0, 0, 0, 0))
-	img.set_pixelv(Vector2i(9, 3), Color(0, 0, 0, 0))
-	img.set_pixelv(Vector2i(6, 9), Color(0, 0, 0, 0))
-	img.set_pixelv(Vector2i(9, 9), Color(0, 0, 0, 0))
-	for y in range(8, 11):
-		img.set_pixelv(Vector2i(4, y), col)
+	img.set_pixelv(Vector2i(5, 2), Color(0, 0, 0, 0))
+	img.set_pixelv(Vector2i(9, 2), Color(0, 0, 0, 0))
+	img.set_pixelv(Vector2i(5, 8), Color(0, 0, 0, 0))
+	img.set_pixelv(Vector2i(9, 8), Color(0, 0, 0, 0))
+	for y in range(7, 10):
+		img.set_pixelv(Vector2i(3, y), col)
 		img.set_pixelv(Vector2i(11, y), col)
-	for x in range(5, 11):
-		img.set_pixelv(Vector2i(x, 11), col)
+	for x in range(4, 11):
+		img.set_pixelv(Vector2i(x, 10), col)
+	img.set_pixelv(Vector2i(7, 11), col)
 	img.set_pixelv(Vector2i(7, 12), col)
-	img.set_pixelv(Vector2i(8, 12), col)
-	img.set_pixelv(Vector2i(7, 13), col)
-	img.set_pixelv(Vector2i(8, 13), col)
-	for x in range(5, 11):
-		img.set_pixelv(Vector2i(x, 14), col)
+	for x in range(4, 11):
+		img.set_pixelv(Vector2i(x, 13), col)
 	if muted:
 		var red := Color(0.92, 0.23, 0.23)
-		for i in range(16):
+		for i in range(15):
 			img.set_pixelv(Vector2i(i, i), red)
-			if i + 1 < 16:
+			if i + 1 < 15:
 				img.set_pixelv(Vector2i(i + 1, i), red)
 	return ImageTexture.create_from_image(img)
 
