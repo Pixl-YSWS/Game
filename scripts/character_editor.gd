@@ -38,17 +38,21 @@ func _ready() -> void:
 
 	# Preset thumbnails are assigned in the scene; here we just wire them up.
 	var n := 1
-	for child in %PresetGrid.get_children():
-		if child is TextureButton:
-			child.pressed.connect(_on_pick_preset.bind(n))
-			_preset_buttons.append(child)
-			n += 1
+	for child in %PresetGrid.find_children("", "TextureButton", true, false):
+		child.pressed.connect(_on_pick_preset.bind(n))
+		_preset_buttons.append(child)
+		n += 1
 
 	%RandomButton.pressed.connect(_on_random)
 	%DoneButton.pressed.connect(_on_done)
 
 	_load_from(NetworkManager.local_skin)
 	_refresh()
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed("ui_cancel"):
+		get_viewport().set_input_as_handled()
+		_on_done()
 
 func _load_from(desc: String) -> void:
 	var o := SkinUtil.parse_outfit(desc)

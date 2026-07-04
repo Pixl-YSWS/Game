@@ -169,8 +169,11 @@ func show_emote(key: String) -> void:
 	s.z_index = 23
 	s.position = Vector2(0, -52)
 	var h := float(maxi(tex.get_height(), 1))
-	s.scale = Vector2.ONE * (16.0 / h)
+	var target := Vector2.ONE * (16.0 / h)
+	s.scale = target * 0.3
 	add_child(s)
+	var pop := create_tween().set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	pop.tween_property(s, "scale", target, 0.35)
 	var tw := create_tween()
 	tw.tween_property(s, "position:y", -66.0, 1.6).set_ease(Tween.EASE_OUT)
 	tw.parallel().tween_property(s, "modulate:a", 0.0, 1.6).from(1.0)
@@ -207,8 +210,12 @@ func show_chat_bubble(text: String) -> void:
 	var token := _bubble_token
 	await get_tree().process_frame
 	if token == _bubble_token and is_instance_valid(_bubble):
-		var s := _bubble.scale
+		var s := Vector2.ONE / _bubble_zoom()
 		_bubble.position = Vector2(-_bubble.size.x * s.x / 2.0, -44.0 - _bubble.size.y * s.y)
+		_bubble.pivot_offset = Vector2(_bubble.size.x / 2.0, _bubble.size.y)
+		_bubble.scale = s * 0.6
+		var pop := create_tween().set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		pop.tween_property(_bubble, "scale", s, 0.25)
 	await get_tree().create_timer(5.0).timeout
 	if token == _bubble_token and is_instance_valid(_bubble):
 		_bubble.visible = false

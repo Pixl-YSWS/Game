@@ -90,7 +90,20 @@ func _build_ui() -> void:
 		b.custom_minimum_size = Vector2(48, 48)
 		b.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		b.pressed.connect(_pick.bind(String(e["key"])))
+		_hoverify(b, 1.0)
 		grid.add_child(b)
+
+func _hoverify(b: Control, rest_alpha: float) -> void:
+	b.modulate.a = rest_alpha
+	b.pivot_offset = b.custom_minimum_size / 2.0
+	b.mouse_entered.connect(func():
+		var tw := create_tween().set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		tw.tween_property(b, "scale", Vector2(1.25, 1.25), 0.12)
+		b.modulate.a = 1.0)
+	b.mouse_exited.connect(func():
+		var tw := create_tween().set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		tw.tween_property(b, "scale", Vector2.ONE, 0.1)
+		b.modulate.a = rest_alpha)
 
 func _build_quick_bar() -> void:
 	_quick = Control.new()
@@ -98,26 +111,31 @@ func _build_quick_bar() -> void:
 	_quick.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_quick)
 
+	var panel := PanelContainer.new()
+	panel.theme = preload("res://themes/main_theme.tres")
+	panel.theme_type_variation = &"HudPanel"
+	panel.anchor_left = 1.0
+	panel.anchor_top = 1.0
+	panel.anchor_right = 1.0
+	panel.anchor_bottom = 1.0
+	panel.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	panel.offset_right = -12
+	panel.offset_bottom = -12
+	_quick.add_child(panel)
+
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 6)
-	row.anchor_left = 1.0
-	row.anchor_top = 1.0
-	row.anchor_right = 1.0
-	row.anchor_bottom = 1.0
-	row.grow_horizontal = Control.GROW_DIRECTION_BEGIN
-	row.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	row.offset_right = -12
-	row.offset_bottom = -12
-	_quick.add_child(row)
+	panel.add_child(row)
 
 	_mic_btn = TextureButton.new()
 	_mic_btn.ignore_texture_size = true
 	_mic_btn.stretch_mode = TextureButton.STRETCH_KEEP_ASPECT_CENTERED
 	_mic_btn.custom_minimum_size = Vector2(40, 40)
 	_mic_btn.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	_mic_btn.modulate.a = 0.85
 	_mic_btn.tooltip_text = "Toggle voice (hold V to talk)"
 	_mic_btn.pressed.connect(_toggle_mic)
+	_hoverify(_mic_btn, 0.85)
 	row.add_child(_mic_btn)
 	_update_mic()
 
@@ -128,8 +146,8 @@ func _build_quick_bar() -> void:
 		b.stretch_mode = TextureButton.STRETCH_KEEP_ASPECT_CENTERED
 		b.custom_minimum_size = Vector2(40, 40)
 		b.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-		b.modulate.a = 0.85
 		b.pressed.connect(func(): NetworkManager.send_emote(key))
+		_hoverify(b, 0.85)
 		row.add_child(b)
 
 func _toggle_mic() -> void:

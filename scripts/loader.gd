@@ -14,6 +14,7 @@ var _dots := 0
 var _accum := 0.0
 var _timeout := 0.0
 var _active := false
+var _pending_path := ""
 
 func _ready() -> void:
 	layer = 128
@@ -35,11 +36,12 @@ func _ready() -> void:
 	_label.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(_label)
 
-## Show the overlay and switch scenes. The scene change is deferred to the end
-## of the frame, so the overlay is already drawn before the swap happens.
+## Show the overlay and switch scenes. The scene loads on a background thread
+## so the overlay keeps animating instead of freezing on the swap.
 func change_scene(path: String, message: String = "Loading") -> void:
 	show_loading(message)
-	get_tree().change_scene_to_file(path)
+	_pending_path = path
+	ResourceLoader.load_threaded_request(path)
 
 func show_loading(message: String = "Loading") -> void:
 	_base = message
@@ -55,6 +57,16 @@ func hide_loading() -> void:
 	visible = false
 
 func _process(delta: float) -> void:
+	if _pending_path != "":
+		var status := ResourceLoader.load_threaded_get_status(_pending_path)
+		if status == ResourceLoader.THREAD_LOAD_LOADED:
+			var packed: PackedScene = ResourceLoader.load_threaded_get(_pending_path)
+			_pending_path = ""
+			get_tree().change_scene_to_packed(packed)
+		elif status != ResourceLoader.THREAD_LOAD_IN_PROGRESS:
+			var failed := _pending_path
+			_pending_path = ""
+			get_tree().change_scene_to_file(failed)
 	if not _active:
 		return
 	_timeout += delta

@@ -258,7 +258,8 @@ func _handle_message(raw: String) -> void:
 				local_skin = sk
 			emit_signal("player_skin_changed", uid, sk)
 		"chat":
-			emit_signal("chat_message", json["userId"], String(json.get("displayName", "")), String(json.get("text", "")))
+			if String(json["userId"]) != user_id:
+				emit_signal("chat_message", json["userId"], String(json.get("displayName", "")), String(json.get("text", "")))
 		"emote":
 			emit_signal("emote_received", json["userId"], String(json.get("key", "")))
 		"npc_init":
@@ -331,6 +332,7 @@ func send_chat(text: String) -> void:
 	if not _is_socket_open():
 		return
 	_socket.send_text(JSON.stringify({"type": "chat", "text": text}))
+	emit_signal("chat_message", user_id, display_name, text)
 
 func send_scene_change(scene_name: String) -> void:
 	var actual := scene_name

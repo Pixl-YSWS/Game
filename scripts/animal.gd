@@ -166,7 +166,6 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func pet() -> void:
 	_pop_heart()
-	_wiggle()
 
 func _pop_heart() -> void:
 	var tex := EmoteHud.texture_for("heart")
@@ -187,12 +186,3 @@ func _pop_heart() -> void:
 	tw.parallel().tween_property(s, "modulate:a", 0.0, 0.75).from(1.0)
 	tw.parallel().tween_property(s, "scale", target_scale, 0.75)
 	tw.tween_callback(s.queue_free)
-
-func _wiggle() -> void:
-	var spr := $AnimatedSprite2D
-	spr.rotation = 0.0
-	var tw := create_tween()
-	tw.tween_property(spr, "rotation", deg_to_rad(7), 0.09).set_trans(Tween.TRANS_SINE)
-	tw.tween_property(spr, "rotation", deg_to_rad(-7), 0.18).set_trans(Tween.TRANS_SINE)
-	tw.tween_property(spr, "rotation", deg_to_rad(5), 0.18).set_trans(Tween.TRANS_SINE)
-	tw.tween_property(spr, "rotation", 0.0, 0.12).set_trans(Tween.TRANS_SINE)

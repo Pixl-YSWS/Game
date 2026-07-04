@@ -49,6 +49,18 @@
 [ext_resource type="PackedScene" uid="uid://cr5ql2lricsg4" path="res://scenes/chicken.tscn" id="46_beyr0"]
 [ext_resource type="PackedScene" uid="uid://qsa6uqsdg76b" path="res://scenes/sheep.tscn" id="47_1baa2"]
 
+[sub_resource type="Curve2D" id="Curve2D_graze_big"]
+_data = {
+"points": PackedVector2Array(0, 15, 0, -15, 45, 0, 25, 0, -25, 0, 0, -28, 0, -15, 0, 15, -45, 0, -25, 0, 25, 0, 0, 28, 0, 15, 0, -15, 45, 0)
+}
+point_count = 5
+
+[sub_resource type="Curve2D" id="Curve2D_graze_small"]
+_data = {
+"points": PackedVector2Array(0, 10, 0, -10, 30, 0, 17, 0, -17, 0, 0, -18, 0, -10, 0, 10, -30, 0, -17, 0, 17, 0, 0, 18, 0, 10, 0, -10, 30, 0)
+}
+point_count = 5
+
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_qouja"]
 size = Vector2(35, 8)
 
@@ -1829,11 +1841,11 @@ texture = ExtResource("33_tcbek")
 0:0/size_in_atlas = Vector2i(4, 4)
 0:0/0 = 0
 0:0/0/y_sort_origin = 26
-0:0/0/physics_layer_0/polygon_0/points = PackedVector2Array(-24.156824, -2.6115494, 21.327646, -1.7410336, 25.087715, 32.471394, 21.983215, 31.96796, 18.962622, 29.786419, 9.565216, 30.122042, 6.4607167, 30.45766, 6.2929053, 28.443932, -5.7055674, 28.86346, -6.376811, 30.793283, -19.214336, 30.205946, -20.724636, 32.30358, -24.752094, 32.051865)
+0:0/0/physics_layer_0/polygon_0/points = PackedVector2Array(-24.894245, -2.635046, 0.38554382, -12.722927, 24.446337, -2.0883799, 25.183414, 31.694246, 21.866573, 32.062786, 19.532501, 29.360176, 9.704828, 29.48302, 9.090597, 30.71148, 6.387989, 30.465788, 5.960086, 30.48813, 6.387989, 28.623098, -5.9027777, 28.883492, -6.0173945, 31.061216, -9.090599, 30.71148, -9.827675, 29.728712, -18.918272, 29.851559, -21.006653, 32.79986, -24.753132, 31.336414)
 0:4/size_in_atlas = Vector2i(4, 4)
 0:4/0 = 0
 0:4/0/y_sort_origin = 13
-0:4/0/physics_layer_0/polygon_0/points = PackedVector2Array(-24.156824, -2.6115494, 21.327646, -1.7410336, 25.087715, 32.471394, 21.983215, 31.96796, 18.962622, 29.786419, 9.565216, 30.122042, 6.4607167, 30.45766, 6.2929053, 28.443932, -5.7055674, 28.86346, -6.376811, 30.793283, -19.214336, 30.205946, -20.724636, 32.30358, -24.752094, 32.051865)
+0:4/0/physics_layer_0/polygon_0/points = PackedVector2Array(-24.894245, -2.635046, 0.38554382, -12.722927, 24.446337, -2.0883799, 25.183414, 31.694246, 21.866573, 32.062786, 19.532501, 29.360176, 9.704828, 29.48302, 9.090597, 30.71148, 6.387989, 30.465788, 5.960086, 30.48813, 6.387989, 28.623098, -5.9027777, 28.883492, -6.0173945, 31.061216, -9.090599, 30.71148, -9.827675, 29.728712, -18.918272, 29.851559, -21.006653, 32.79986, -24.753132, 31.336414)
 
 [sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_twgab"]
 texture = ExtResource("34_06u0e")
@@ -2545,55 +2557,44 @@ texture = ExtResource("4_1baa2")
 physics_layer_0/collision_layer = 1
 sources/0 = SubResource("TileSetAtlasSource_v06ig")
 
-[sub_resource type="Curve2D" id="Curve2D_graze_big"]
-_data = {
-"points": PackedVector2Array(0, 15, 0, -15, 45, 0, 25, 0, -25, 0, 0, -28, 0, -15, 0, 15, -45, 0, -25, 0, 25, 0, 0, 28, 0, 15, 0, -15, 45, 0)
-}
-point_count = 5
-
-[sub_resource type="Curve2D" id="Curve2D_graze_small"]
-_data = {
-"points": PackedVector2Array(0, 10, 0, -10, 30, 0, 17, 0, -17, 0, 0, -18, 0, -10, 0, 10, -30, 0, -17, 0, 17, 0, 0, 18, 0, 10, 0, -10, 30, 0)
-}
-point_count = 5
-
 [node name="Game" type="Node2D" unique_id=1814781088]
 y_sort_enabled = true
+position = Vector2(0, 1)
 script = ExtResource("1_ci1yp")
 
-[node name="CowRoute" type="Path2D" parent="."]
+[node name="CowRoute" type="Path2D" parent="." unique_id=1128551408]
 position = Vector2(153, -15)
 curve = SubResource("Curve2D_graze_big")
 
-[node name="Cow4Route" type="Path2D" parent="."]
+[node name="Cow4Route" type="Path2D" parent="." unique_id=921941339]
 position = Vector2(193, -85)
 curve = SubResource("Curve2D_graze_big")
 
-[node name="Cow5Route" type="Path2D" parent="."]
+[node name="Cow5Route" type="Path2D" parent="." unique_id=1681760657]
 position = Vector2(-496, 1)
 curve = SubResource("Curve2D_graze_big")
 
-[node name="Cow6Route" type="Path2D" parent="."]
+[node name="Cow6Route" type="Path2D" parent="." unique_id=1498197929]
 position = Vector2(-441, -210)
 curve = SubResource("Curve2D_graze_big")
 
-[node name="Chicken2Route" type="Path2D" parent="."]
+[node name="Chicken2Route" type="Path2D" parent="." unique_id=170245529]
 position = Vector2(-362, -48)
 curve = SubResource("Curve2D_graze_small")
 
-[node name="Chicken4Route" type="Path2D" parent="."]
+[node name="Chicken4Route" type="Path2D" parent="." unique_id=247834979]
 position = Vector2(135, -211)
 curve = SubResource("Curve2D_graze_small")
 
-[node name="SheepRoute" type="Path2D" parent="."]
+[node name="SheepRoute" type="Path2D" parent="." unique_id=847372197]
 position = Vector2(33, -36)
 curve = SubResource("Curve2D_graze_big")
 
-[node name="Sheep2Route" type="Path2D" parent="."]
+[node name="Sheep2Route" type="Path2D" parent="." unique_id=166986844]
 position = Vector2(-486, -451)
 curve = SubResource("Curve2D_graze_big")
 
-[node name="Sheep3Route" type="Path2D" parent="."]
+[node name="Sheep3Route" type="Path2D" parent="." unique_id=718224895]
 position = Vector2(-481, -74)
 curve = SubResource("Curve2D_graze_big")
 
@@ -2605,7 +2606,6 @@ route_path = NodePath("../CowRoute")
 [node name="Cow4" parent="." unique_id=1318070801 instance=ExtResource("45_v06ig")]
 z_index = 10
 position = Vector2(193, -85)
-collision_mask = 1
 route_path = NodePath("../Cow4Route")
 
 [node name="Cow5" parent="." unique_id=386999861 instance=ExtResource("45_v06ig")]

@@ -3,6 +3,7 @@ extends CanvasLayer
 const THEME := preload("res://themes/main_theme.tres")
 
 const GAMEPLAY_SCENES := ["village", "open_world", "house_interior"]
+const ACCENT_GOLD := Color(0.85098, 0.643137, 0.25098)
 
 var _root: Control
 var _resume_button: Button
@@ -16,6 +17,56 @@ func _ready() -> void:
 	_build_settings_ui()
 	_root.visible = false
 
+func _make_modal(title: String, width: float) -> Dictionary:
+	var wrap := VBoxContainer.new()
+	wrap.add_theme_constant_override("separation", -22)
+
+	var plate := PanelContainer.new()
+	plate.theme_type_variation = &"TitlePlate"
+	plate.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	plate.z_index = 1
+	var plate_label := Label.new()
+	plate_label.theme_type_variation = &"TitlePlateText"
+	plate_label.text = title
+	plate.add_child(plate_label)
+	wrap.add_child(plate)
+
+	var panel := PanelContainer.new()
+	panel.custom_minimum_size = Vector2(width, 0)
+	wrap.add_child(panel)
+
+	var accents := Control.new()
+	accents.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.add_child(accents)
+	for i in 4:
+		var dot := ColorRect.new()
+		dot.color = ACCENT_GOLD
+		dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var right := i % 2 == 1
+		var bottom := i >= 2
+		dot.anchor_left = 1.0 if right else 0.0
+		dot.anchor_right = dot.anchor_left
+		dot.anchor_top = 1.0 if bottom else 0.0
+		dot.anchor_bottom = dot.anchor_top
+		dot.offset_left = -17.0 if right else 9.0
+		dot.offset_right = dot.offset_left + 8.0
+		dot.offset_top = -17.0 if bottom else 9.0
+		dot.offset_bottom = dot.offset_top + 8.0
+		accents.add_child(dot)
+
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 30)
+	margin.add_theme_constant_override("margin_right", 30)
+	margin.add_theme_constant_override("margin_top", 34)
+	margin.add_theme_constant_override("margin_bottom", 24)
+	panel.add_child(margin)
+
+	var body := VBoxContainer.new()
+	body.add_theme_constant_override("separation", 8)
+	margin.add_child(body)
+
+	return {"root": wrap, "body": body}
+
 func _build_ui() -> void:
 	_root = Control.new()
 	_root.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -23,7 +74,7 @@ func _build_ui() -> void:
 	add_child(_root)
 
 	var backdrop := ColorRect.new()
-	backdrop.color = Color(0.039216, 0.031373, 0.019608, 0.85)
+	backdrop.color = Color(0.039216, 0.023529, 0.007843, 0.66)
 	backdrop.set_anchors_preset(Control.PRESET_FULL_RECT)
 	backdrop.mouse_filter = Control.MOUSE_FILTER_STOP
 	_root.add_child(backdrop)
@@ -32,46 +83,40 @@ func _build_ui() -> void:
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_root.add_child(center)
 
-	var vbox := VBoxContainer.new()
-	vbox.custom_minimum_size = Vector2(320, 0)
-	vbox.add_theme_constant_override("separation", 12)
-	center.add_child(vbox)
-
-	var title := Label.new()
-	title.text = "Paused"
-	title.theme_type_variation = &"TitleText"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	vbox.add_child(title)
+	var modal := _make_modal("PAUSED", 400)
+	center.add_child(modal["root"])
+	var body: VBoxContainer = modal["body"]
 
 	_resume_button = Button.new()
 	_resume_button.text = "Resume"
 	_resume_button.pressed.connect(resume_game)
-	vbox.add_child(_resume_button)
+	body.add_child(_resume_button)
+
+	var settings_button := Button.new()
+	settings_button.text = "Settings"
+	settings_button.pressed.connect(open_settings)
+	body.add_child(settings_button)
 
 	var character_button := Button.new()
 	character_button.text = "Customise Look"
 	character_button.pressed.connect(_on_character)
-	vbox.add_child(character_button)
-
-	var settings_button := Button.new()
-	settings_button.text = "Settings"
-	settings_button.pressed.connect(_open_settings)
-	vbox.add_child(settings_button)
+	body.add_child(character_button)
 
 	var menu_button := Button.new()
-	menu_button.text = "Main Menu"
+	menu_button.text = "Quit to Main Menu"
+	menu_button.theme_type_variation = &"GreyButton"
 	menu_button.pressed.connect(_quit_to_menu)
-	vbox.add_child(menu_button)
+	body.add_child(menu_button)
 
 func _build_settings_ui() -> void:
 	_settings_root = Control.new()
 	_settings_root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_settings_root.theme = THEME
 	_settings_root.visible = false
-	_root.add_child(_settings_root)
+	add_child(_settings_root)
 
 	var backdrop := ColorRect.new()
-	backdrop.color = Color(0.039216, 0.031373, 0.019608, 1.0)
+	backdrop.color = Color(0.039216, 0.023529, 0.007843, 0.9)
 	backdrop.set_anchors_preset(Control.PRESET_FULL_RECT)
 	backdrop.mouse_filter = Control.MOUSE_FILTER_STOP
 	_settings_root.add_child(backdrop)
@@ -80,58 +125,59 @@ func _build_settings_ui() -> void:
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_settings_root.add_child(center)
 
-	var vbox := VBoxContainer.new()
-	vbox.custom_minimum_size = Vector2(360, 0)
-	vbox.add_theme_constant_override("separation", 14)
-	center.add_child(vbox)
-
-	var title := Label.new()
-	title.text = "Settings"
-	title.theme_type_variation = &"TitleText"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(title)
+	var modal := _make_modal("SETTINGS", 400)
+	center.add_child(modal["root"])
+	var body: VBoxContainer = modal["body"]
 
 	var music_check := CheckButton.new()
 	music_check.text = "Music"
 	music_check.button_pressed = Settings.music_enabled
 	music_check.toggled.connect(Settings.set_music_enabled)
-	vbox.add_child(music_check)
+	body.add_child(music_check)
 
 	var vol_label := Label.new()
 	vol_label.text = "Music volume"
 	vol_label.theme_type_variation = &"InfoText"
-	vbox.add_child(vol_label)
+	body.add_child(vol_label)
 	var vol := HSlider.new()
 	vol.min_value = 0.0
 	vol.max_value = 1.0
 	vol.step = 0.05
 	vol.value = Settings.music_volume
 	vol.value_changed.connect(Settings.set_music_volume)
-	vbox.add_child(vol)
+	body.add_child(vol)
 
 	var voice_check := CheckButton.new()
 	voice_check.text = "Voice chat"
 	voice_check.button_pressed = Settings.voice_enabled
 	voice_check.toggled.connect(Settings.set_voice_enabled)
-	vbox.add_child(voice_check)
+	body.add_child(voice_check)
+
+	var spacer := Control.new()
+	spacer.custom_minimum_size = Vector2(0, 6)
+	body.add_child(spacer)
 
 	var back := Button.new()
 	back.text = "Back"
+	back.theme_type_variation = &"GreyButton"
 	back.pressed.connect(_close_settings)
-	vbox.add_child(back)
+	body.add_child(back)
 
-func _open_settings() -> void:
+func open_settings() -> void:
+	_root.visible = false
 	_settings_root.visible = true
 
 func _close_settings() -> void:
 	_settings_root.visible = false
+	_root.visible = _is_paused
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):
 		if _settings_root.visible:
 			_close_settings()
-		else:
-			_toggle()
+			get_viewport().set_input_as_handled()
+			return
+		_toggle()
 		get_viewport().set_input_as_handled()
 
 func _toggle() -> void:
@@ -158,7 +204,6 @@ func resume_game() -> void:
 	_root.visible = false
 
 func _on_character() -> void:
-	# Return to the world we paused over once the player is done customising.
 	var current := get_tree().current_scene
 	if current and current.scene_file_path != "":
 		global.editor_return_scene = current.scene_file_path
