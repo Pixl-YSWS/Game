@@ -14,6 +14,7 @@ const MONOCRAFT := preload("res://assets/fonts/Monocraft.ttf")
 @export var route_path: NodePath
 
 var _in_range := false
+var _prompt: Label
 var _base_frames: SpriteFrames
 var _home: Vector2
 var _target: Vector2
@@ -47,9 +48,23 @@ func _ready() -> void:
 	nl.scale = Vector2.ONE / 3.5
 	$InteractArea.body_entered.connect(_on_body_entered)
 	$InteractArea.body_exited.connect(_on_body_exited)
+	Dialogue.closed.connect(_update_prompt)
+	_prompt = Label.new()
+	_prompt.text = "[E] talk"
+	_prompt.add_theme_font_override("font", MONOCRAFT)
+	_prompt.add_theme_font_size_override("font_size", 20)
+	_prompt.add_theme_color_override("font_color", Color(0.956863, 0.890196, 0.760784))
+	_prompt.add_theme_color_override("font_outline_color", Color(0, 0, 0))
+	_prompt.add_theme_constant_override("outline_size", 6)
+	_prompt.scale = Vector2.ONE / 3.5
+	_prompt.z_index = 21
+	_prompt.visible = false
+	add_child(_prompt)
 	await get_tree().process_frame
 	nl.reset_size()
 	nl.position = Vector2(-nl.size.x * nl.scale.x / 2.0, -42.0 - nl.size.y * nl.scale.y)
+	_prompt.reset_size()
+	_prompt.position = Vector2(-_prompt.size.x * _prompt.scale.x / 2.0, -41.0)
 	if wanders:
 		_wait_then_move()
 
@@ -152,10 +167,25 @@ func _play_anim(moving: bool) -> void:
 func _on_body_entered(body: Node2D) -> void:
 	if body.has_method("player") and body.is_local:
 		_in_range = true
+		_update_prompt()
 
 func _on_body_exited(body: Node2D) -> void:
 	if body.has_method("player") and body.is_local:
 		_in_range = false
+		_update_prompt()
+
+func _update_prompt() -> void:
+	if _prompt == null:
+		return
+	var show := _in_range and not Dialogue.is_open
+	if show == _prompt.visible:
+		return
+	_prompt.visible = show
+	if show:
+		_prompt.pivot_offset = _prompt.size / 2.0
+		_prompt.scale = Vector2.ONE / 3.5 * 0.6
+		var tw := create_tween().set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		tw.tween_property(_prompt, "scale", Vector2.ONE / 3.5, 0.2)
 
 func _unhandled_input(event: InputEvent) -> void:
 	if not _in_range or Dialogue.is_open:
@@ -166,3 +196,4 @@ func _unhandled_input(event: InputEvent) -> void:
 			ProjectsHud.open()
 		else:
 			Dialogue.open(npc_name, dialogue.split("\n"))
+		_update_prompt()

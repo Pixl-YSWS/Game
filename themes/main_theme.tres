@@ -2,6 +2,7 @@
 
 [ext_resource type="FontFile" uid="uid://oex4cc8vn0hy" path="res://assets/fonts/Monocraft.ttf" id="1_font"]
 [ext_resource type="FontFile" uid="uid://bk1tc0pxe787r" path="res://assets/fonts/PixelifySans.ttf" id="2_pixelify"]
+[ext_resource type="Texture2D" uid="uid://g2df08lgx6r0" path="res://assets/ui/hud_panel.png" id="3_hudtex"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_btn_disabled"]
 content_margin_left = 24.0
@@ -153,6 +154,17 @@ border_width_bottom = 2
 border_color = Color(0.090196, 0.062745, 0.039216, 1)
 corner_detail = 1
 anti_aliasing = false
+
+[sub_resource type="StyleBoxTexture" id="StyleBoxTexture_hud_panel"]
+content_margin_left = 8.0
+content_margin_top = 8.0
+content_margin_right = 8.0
+content_margin_bottom = 8.0
+texture = ExtResource("3_hudtex")
+texture_margin_left = 5.0
+texture_margin_top = 5.0
+texture_margin_right = 5.0
+texture_margin_bottom = 5.0
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hud_panel"]
 content_margin_left = 7.0
@@ -406,7 +418,7 @@ HSlider/styles/grabber_area = SubResource("StyleBoxFlat_slider_fill")
 HSlider/styles/grabber_area_highlight = SubResource("StyleBoxFlat_slider_fill")
 HSlider/styles/slider = SubResource("StyleBoxFlat_slider_track")
 HudPanel/base_type = &"PanelContainer"
-HudPanel/styles/panel = SubResource("StyleBoxFlat_hud_panel")
+HudPanel/styles/panel = SubResource("StyleBoxTexture_hud_panel")
 InfoText/base_type = &"Label"
 InfoText/colors/font_color = Color(0.788235, 0.694118, 0.54902, 1)
 InfoText/font_sizes/font_size = 13
@@ -446,6 +458,14 @@ SubText/base_type = &"Label"
 SubText/colors/font_color = Color(1, 0.819608, 0.4, 1)
 SubText/font_sizes/font_size = 19
 SubText/fonts/font = ExtResource("2_pixelify")
+TextEdit/colors/caret_color = Color(1, 0.819608, 0.4, 1)
+TextEdit/colors/font_color = Color(0.956863, 0.890196, 0.760784, 1)
+TextEdit/colors/font_placeholder_color = Color(0.603922, 0.513725, 0.372549, 1)
+TextEdit/colors/font_selected_color = Color(0.168627, 0.113725, 0.070588, 1)
+TextEdit/colors/selection_color = Color(1, 0.819608, 0.4, 0.65)
+TextEdit/font_sizes/font_size = 15
+TextEdit/styles/focus = SubResource("StyleBoxFlat_input_focus")
+TextEdit/styles/normal = SubResource("StyleBoxFlat_input_normal")
 TitlePlate/base_type = &"PanelContainer"
 TitlePlate/styles/panel = SubResource("StyleBoxFlat_plate")
 TitlePlateText/base_type = &"Label"

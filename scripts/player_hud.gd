@@ -54,6 +54,7 @@ func _build_ui() -> void:
 
 	var card := PanelContainer.new()
 	card.theme_type_variation = &"HudPanel"
+	card.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	card.custom_minimum_size = Vector2(200, 0)
 	card.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	column.add_child(card)
@@ -74,6 +75,7 @@ func _build_ui() -> void:
 
 	var chip := PanelContainer.new()
 	chip.theme_type_variation = &"HudPanel"
+	chip.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	chip.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	column.add_child(chip)

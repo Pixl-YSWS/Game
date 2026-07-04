@@ -1,5 +1,7 @@
 extends CanvasLayer
 
+signal closed
+
 const THEME := preload("res://themes/main_theme.tres")
 
 var is_open := false
@@ -89,6 +91,7 @@ func advance() -> void:
 func close() -> void:
 	is_open = false
 	_wrap.visible = false
+	closed.emit()
 
 func _unhandled_input(event: InputEvent) -> void:
 	if not is_open:

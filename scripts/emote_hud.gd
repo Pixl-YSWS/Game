@@ -114,6 +114,7 @@ func _build_quick_bar() -> void:
 	var panel := PanelContainer.new()
 	panel.theme = preload("res://themes/main_theme.tres")
 	panel.theme_type_variation = &"HudPanel"
+	panel.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	panel.anchor_left = 1.0
 	panel.anchor_top = 1.0
 	panel.anchor_right = 1.0

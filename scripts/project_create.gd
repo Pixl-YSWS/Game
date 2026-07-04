@@ -8,7 +8,7 @@ signal cancelled
 @onready var _repo: LineEdit = %Repo
 @onready var _demo: LineEdit = %Demo
 @onready var _grid: GridContainer = %HtGrid
-@onready var _title: Label = $Center/Card/Margin/Panel/Title
+@onready var _title: Label = %Title
 @onready var _create_button: Button = %CreateButton
 @onready var _cancel_button: Button = %CancelButton
 
@@ -22,13 +22,13 @@ func _ready() -> void:
 
 func open(ht_projects: Array) -> void:
 	_edit_id = 0
-	_title.text = "New Project"
+	_title.text = "NEW PROJECT"
 	_fill({}, ht_projects)
 	_show()
 
 func open_edit(project: Dictionary, ht_projects: Array) -> void:
 	_edit_id = int(project.get("id", 0))
-	_title.text = "Edit Project"
+	_title.text = "EDIT PROJECT"
 	_fill(project, ht_projects)
 	_show()
 
