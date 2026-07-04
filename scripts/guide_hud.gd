@@ -3,26 +3,18 @@ extends CanvasLayer
 const THEME := preload("res://themes/main_theme.tres")
 const GAMEPLAY_SCENES := ["village", "open_world", "house_interior"]
 const SEEN_PATH := "user://guide_seen.dat"
-
-const CONTROLS := [
-	["WASD / Arrows", "Move around"],
-	["Shift", "Hold to run"],
-	["E", "Talk to villagers, pet animals, enter buildings"],
-	["Enter", "Open chat"],
-	["T  then  1-5", "Send an emote"],
-	["V", "Hold to talk (voice chat)"],
-	["N", "Open your inbox"],
-	["H", "Open Projects / Hackatime"],
-	["Esc", "Pause menu"],
-	["F1", "Open this guide again"],
-]
-
-const PEOPLE := [
-	["Pip", "Built something? Talk to Pip to log a project."],
-	["Ridit & Mara", "Villagers — say hi and have a chat."],
-]
+const ACCENT_GOLD := Color(0.85098, 0.643137, 0.25098)
+const COLOR_ACCENT := Color(1, 0.819608, 0.4)
+const COLOR_DIM := Color(0.788235, 0.694118, 0.54902)
 
 var _root: Control
+var _plate_label: Label
+var _page_holder: Control
+var _pages: Array[Control] = []
+var _dots: Array[ColorRect] = []
+var _back_button: Button
+var _next_button: Button
+var _page := 0
 var _open := false
 
 func _ready() -> void:
@@ -32,10 +24,21 @@ func _ready() -> void:
 	_root.visible = false
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_F1:
+	if not (event is InputEventKey and event.pressed and not event.echo):
+		return
+	if event.keycode == KEY_F1:
 		if ChatHud.is_typing() or Dialogue.is_open:
 			return
 		_toggle()
+		get_viewport().set_input_as_handled()
+	elif _open and event.keycode == KEY_ESCAPE:
+		close()
+		get_viewport().set_input_as_handled()
+	elif _open and (event.keycode == KEY_RIGHT or event.keycode == KEY_D):
+		_step(1)
+		get_viewport().set_input_as_handled()
+	elif _open and (event.keycode == KEY_LEFT or event.keycode == KEY_A):
+		_step(-1)
 		get_viewport().set_input_as_handled()
 
 func maybe_show_intro() -> void:
@@ -59,6 +62,7 @@ func open() -> void:
 	_open = true
 	get_tree().paused = true
 	_root.visible = true
+	_show_page(0)
 
 func close() -> void:
 	_open = false
@@ -72,7 +76,7 @@ func _build_ui() -> void:
 	add_child(_root)
 
 	var backdrop := ColorRect.new()
-	backdrop.color = Color(0.039216, 0.031373, 0.019608, 0.9)
+	backdrop.color = Color(0.039216, 0.023529, 0.007843, 0.78)
 	backdrop.set_anchors_preset(Control.PRESET_FULL_RECT)
 	backdrop.mouse_filter = Control.MOUSE_FILTER_STOP
 	_root.add_child(backdrop)
@@ -81,58 +85,187 @@ func _build_ui() -> void:
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_root.add_child(center)
 
-	var panel := VBoxContainer.new()
-	panel.custom_minimum_size = Vector2(520, 0)
-	panel.add_theme_constant_override("separation", 14)
-	center.add_child(panel)
+	var wrap := VBoxContainer.new()
+	wrap.add_theme_constant_override("separation", -22)
+	center.add_child(wrap)
 
-	var title := Label.new()
-	title.text = "Welcome to Pixl"
-	title.theme_type_variation = &"TitleText"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	panel.add_child(title)
+	var plate := PanelContainer.new()
+	plate.theme_type_variation = &"TitlePlate"
+	plate.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	plate.z_index = 1
+	_plate_label = Label.new()
+	_plate_label.theme_type_variation = &"TitlePlateText"
+	_plate_label.text = "WELCOME TO PIXL"
+	plate.add_child(_plate_label)
+	wrap.add_child(plate)
 
-	var intro := Label.new()
-	intro.text = "A cozy village where your real coding time comes to life. Walk around, meet people, and log what you build."
-	intro.theme_type_variation = &"InfoText"
-	intro.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	intro.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	panel.add_child(intro)
+	var panel := PanelContainer.new()
+	panel.custom_minimum_size = Vector2(560, 340)
+	wrap.add_child(panel)
 
-	panel.add_child(_section("Controls"))
-	for c in CONTROLS:
-		panel.add_child(_control_row(c[0], c[1]))
+	var accents := Control.new()
+	accents.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.add_child(accents)
+	for i in 4:
+		var dot := ColorRect.new()
+		dot.color = ACCENT_GOLD
+		dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var right := i % 2 == 1
+		var bottom := i >= 2
+		dot.anchor_left = 1.0 if right else 0.0
+		dot.anchor_right = dot.anchor_left
+		dot.anchor_top = 1.0 if bottom else 0.0
+		dot.anchor_bottom = dot.anchor_top
+		dot.offset_left = -17.0 if right else 9.0
+		dot.offset_right = dot.offset_left + 8.0
+		dot.offset_top = -17.0 if bottom else 9.0
+		dot.offset_bottom = dot.offset_top + 8.0
+		accents.add_child(dot)
 
-	panel.add_child(_section("People to meet"))
-	for p in PEOPLE:
-		panel.add_child(_control_row(p[0], p[1]))
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 30)
+	margin.add_theme_constant_override("margin_top", 34)
+	margin.add_theme_constant_override("margin_right", 30)
+	margin.add_theme_constant_override("margin_bottom", 22)
+	panel.add_child(margin)
 
-	panel.add_child(_section("Logging your time"))
-	var ht := Label.new()
-	ht.text = "Press H or talk to Pip to open Projects. Create a project and link your Hackatime projects — the hours you code there show up here."
-	ht.theme_type_variation = &"InfoText"
-	ht.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	panel.add_child(ht)
+	var body := VBoxContainer.new()
+	body.add_theme_constant_override("separation", 10)
+	margin.add_child(body)
 
-	var close_button := Button.new()
-	close_button.text = "Let's go"
-	close_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	close_button.pressed.connect(close)
-	panel.add_child(close_button)
+	_page_holder = Control.new()
+	_page_holder.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	body.add_child(_page_holder)
 
-func _section(text: String) -> Label:
+	_build_pages()
+
+	var footer := HBoxContainer.new()
+	footer.add_theme_constant_override("separation", 12)
+	body.add_child(footer)
+
+	_back_button = Button.new()
+	_back_button.theme_type_variation = &"GreyButton"
+	_back_button.text = "Back"
+	_back_button.custom_minimum_size = Vector2(130, 0)
+	_back_button.pressed.connect(_step.bind(-1))
+	footer.add_child(_back_button)
+
+	var dots_row := HBoxContainer.new()
+	dots_row.add_theme_constant_override("separation", 8)
+	dots_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	dots_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	footer.add_child(dots_row)
+	for i in _pages.size():
+		var d := ColorRect.new()
+		d.custom_minimum_size = Vector2(10, 10)
+		d.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		dots_row.add_child(d)
+		_dots.append(d)
+
+	_next_button = Button.new()
+	_next_button.text = "Next"
+	_next_button.custom_minimum_size = Vector2(130, 0)
+	_next_button.pressed.connect(_step.bind(1))
+	footer.add_child(_next_button)
+
+func _step(dir: int) -> void:
+	if dir > 0 and _page == _pages.size() - 1:
+		close()
+		return
+	_show_page(clampi(_page + dir, 0, _pages.size() - 1))
+
+func _show_page(n: int) -> void:
+	_page = n
+	for i in _pages.size():
+		_pages[i].visible = i == n
+	for i in _dots.size():
+		_dots[i].color = COLOR_ACCENT if i == n else Color(COLOR_DIM, 0.35)
+	var titles := ["WELCOME TO PIXL", "GETTING AROUND", "HANG OUT", "SIDEQUESTS", "HANDY KEYS"]
+	_plate_label.text = titles[n]
+	_back_button.visible = n > 0
+	_next_button.text = "Let's go!" if n == _pages.size() - 1 else "Next"
+	_next_button.grab_focus()
+
+	var page := _pages[n]
+	page.pivot_offset = page.size / 2.0
+	page.scale = Vector2(0.94, 0.94)
+	page.modulate.a = 0.0
+	var tw := create_tween().set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(page, "scale", Vector2.ONE, 0.18)
+	tw.parallel().tween_property(page, "modulate:a", 1.0, 0.12)
+
+func _build_pages() -> void:
+	_pages.append(_page_body([
+		_para("Pixl is a tiny multiplayer world where you build real projects to level up and unlock real-world rewards."),
+		_para("Walk around the village, meet other hack clubbers, and turn the hours you spend coding into pixels."),
+		_spacer(),
+		_hint("Use Next (or the arrow keys) to flip through this guide. Press F1 any time to open it again.")
+	]))
+	_pages.append(_page_body([
+		_row("WASD / Arrows", "Move around"),
+		_row("Shift", "Hold to run"),
+		_row("E", "Talk to villagers, pet animals, enter houses"),
+		_spacer(),
+		_hint("Look for the little [E] prompt above villagers and doors.")
+	]))
+	_pages.append(_page_body([
+		_row("Enter", "Chat with everyone in your world"),
+		_row("T  /  1-5", "Open reactions, or fire a quick one"),
+		_row("V", "Hold to talk with your voice"),
+		_row("Tab", "See who's online"),
+		_spacer(),
+		_hint("Lobbies from the main menu get you a private world with its own code.")
+	]))
+	_pages.append(_page_body([
+		_para("NPCs hand out sidequests — build apps, websites and hardware for them, and they reward you with pixels and real prizes."),
+		_spacer(),
+		_row("H  /  Pip", "Open Projects"),
+		_spacer(),
+		_hint("Create a project and link your Hackatime projects — the more hours you put in, the more you earn.")
+	]))
+	_pages.append(_page_body([
+		_row("N", "Inbox"),
+		_row("H", "Projects / Hackatime"),
+		_row("F1", "This guide"),
+		_row("Esc", "Pause"),
+		_spacer(),
+		_para("That's everything. Go say hi!")
+	]))
+
+func _page_body(children: Array) -> Control:
+	var page := VBoxContainer.new()
+	page.set_anchors_preset(Control.PRESET_FULL_RECT)
+	page.add_theme_constant_override("separation", 10)
+	page.visible = false
+	for c in children:
+		page.add_child(c)
+	_page_holder.add_child(page)
+	return page
+
+func _para(text: String) -> Label:
 	var l := Label.new()
 	l.text = text
-	l.theme_type_variation = &"StatusText"
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	return l
 
-func _control_row(key: String, desc: String) -> Control:
+func _hint(text: String) -> Label:
+	var l := _para(text)
+	l.theme_type_variation = &"InfoText"
+	return l
+
+func _spacer() -> Control:
+	var s := Control.new()
+	s.custom_minimum_size = Vector2(0, 4)
+	return s
+
+func _row(key: String, desc: String) -> Control:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 12)
 	var k := Label.new()
 	k.text = key
 	k.custom_minimum_size = Vector2(150, 0)
 	k.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	k.add_theme_color_override("font_color", COLOR_ACCENT)
 	row.add_child(k)
 	var d := Label.new()
 	d.text = desc

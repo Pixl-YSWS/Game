@@ -14,6 +14,7 @@ signal npc_init(scene: String, npcs: Array)
 signal lobby_list_received(lobbies: Array)
 signal lobby_joined(lobby: Dictionary)
 signal lobby_denied(reason: String)
+signal name_result(ok: bool, text: String)
 
 const DEV_SERVER_URL = "http://localhost:4728"
 const DEV_WS_URL = "ws://localhost:4728/ws"
@@ -28,6 +29,7 @@ const SERVER_WS_URL = PROD_WS_URL if USE_PROD else DEV_WS_URL
 var session_token: String = ""
 var user_id: String = ""
 var display_name: String = ""
+var is_new_account: bool = false
 var local_skin: String = "cvc:1"
 var current_scene_name: String = "village"
 var current_lobby_id: String = ""
@@ -148,6 +150,7 @@ func _check_web_login_callback() -> void:
 	if token != "":
 		session_token = token
 		display_name = name
+		is_new_account = _extract_query_param_from_string(query_str, "new") == "1"
 		_save_session()
 		emit_signal("logged_in", display_name)
 		_connect_to_server()
@@ -175,6 +178,7 @@ func _process_login_listener() -> void:
 	if token != "":
 		session_token = token
 		display_name = name
+		is_new_account = _extract_query_param(request, "new") == "1"
 		_save_session()
 		emit_signal("logged_in", display_name)
 		_connect_to_server()
@@ -328,6 +332,29 @@ func send_set_skin(skin: String) -> void:
 		"skin": skin
 	}))
 	
+func submit_display_name(name: String) -> void:
+	var req := HTTPRequest.new()
+	add_child(req)
+	req.request_completed.connect(func(_result, code, _headers, data):
+		req.queue_free()
+		var json = JSON.parse_string(data.get_string_from_utf8()) if data.size() > 0 else null
+		if code == 200 and typeof(json) == TYPE_DICTIONARY and json.get("ok", false):
+			display_name = String(json["name"])
+			if json.has("token"):
+				session_token = String(json["token"])
+			is_new_account = false
+			_save_session()
+			emit_signal("logged_in", display_name)
+			emit_signal("name_result", true, display_name)
+		else:
+			var reason := "Couldn't save that name — try again."
+			if typeof(json) == TYPE_DICTIONARY and json.has("reason"):
+				reason = String(json["reason"])
+			emit_signal("name_result", false, reason)
+	)
+	var url := SERVER_HTTP_URL + "/api/profile/name?token=" + session_token.uri_encode()
+	req.request(url, PackedStringArray(["Content-Type: application/json"]), HTTPClient.METHOD_POST, JSON.stringify({"name": name}))
+
 func send_chat(text: String) -> void:
 	if not _is_socket_open():
 		return

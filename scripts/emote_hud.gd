@@ -24,6 +24,7 @@ const QUICK := ["heart", "laugh", "happy", "sad", "star", "music"]
 var _root: Control
 var _quick: Control
 var _mic_btn: TextureButton
+var _mic_circle: StyleBoxFlat
 var _open := false
 
 func _ready() -> void:
@@ -111,34 +112,51 @@ func _build_quick_bar() -> void:
 	_quick.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_quick)
 
-	var panel := PanelContainer.new()
-	panel.theme = preload("res://themes/main_theme.tres")
-	panel.theme_type_variation = &"HudPanel"
-	panel.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	panel.anchor_left = 1.0
-	panel.anchor_top = 1.0
-	panel.anchor_right = 1.0
-	panel.anchor_bottom = 1.0
-	panel.grow_horizontal = Control.GROW_DIRECTION_BEGIN
-	panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	panel.offset_right = -12
-	panel.offset_bottom = -12
-	_quick.add_child(panel)
+	var bar := HBoxContainer.new()
+	bar.theme = preload("res://themes/main_theme.tres")
+	bar.add_theme_constant_override("separation", 8)
+	bar.alignment = BoxContainer.ALIGNMENT_END
+	bar.anchor_left = 1.0
+	bar.anchor_top = 1.0
+	bar.anchor_right = 1.0
+	bar.anchor_bottom = 1.0
+	bar.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	bar.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	bar.offset_right = -12
+	bar.offset_bottom = -12
+	_quick.add_child(bar)
 
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 6)
-	panel.add_child(row)
+	_mic_circle = StyleBoxFlat.new()
+	_mic_circle.bg_color = Color(0.168627, 0.113725, 0.070588)
+	_mic_circle.set_border_width_all(3)
+	_mic_circle.border_color = Color(0.090196, 0.062745, 0.039216)
+	_mic_circle.set_corner_radius_all(24)
+
+	var mic_panel := PanelContainer.new()
+	mic_panel.add_theme_stylebox_override("panel", _mic_circle)
+	mic_panel.custom_minimum_size = Vector2(48, 48)
+	mic_panel.size_flags_vertical = Control.SIZE_SHRINK_END
+	bar.add_child(mic_panel)
 
 	_mic_btn = TextureButton.new()
 	_mic_btn.ignore_texture_size = true
 	_mic_btn.stretch_mode = TextureButton.STRETCH_KEEP_ASPECT_CENTERED
-	_mic_btn.custom_minimum_size = Vector2(40, 40)
+	_mic_btn.custom_minimum_size = Vector2(30, 30)
 	_mic_btn.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_mic_btn.tooltip_text = "Toggle voice (hold V to talk)"
 	_mic_btn.pressed.connect(_toggle_mic)
 	_hoverify(_mic_btn, 0.85)
-	row.add_child(_mic_btn)
+	mic_panel.add_child(_mic_btn)
 	_update_mic()
+
+	var panel := PanelContainer.new()
+	panel.theme_type_variation = &"HudPanel"
+	panel.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	bar.add_child(panel)
+
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 6)
+	panel.add_child(row)
 
 	for key in QUICK:
 		var b := TextureButton.new()
@@ -151,6 +169,20 @@ func _build_quick_bar() -> void:
 		_hoverify(b, 0.85)
 		row.add_child(b)
 
+	var more := Button.new()
+	more.flat = true
+	more.text = "•••"
+	more.custom_minimum_size = Vector2(34, 40)
+	more.add_theme_font_size_override("font_size", 14)
+	more.add_theme_color_override("font_color", Color(0.956863, 0.890196, 0.760784))
+	more.add_theme_color_override("font_hover_color", Color(1, 0.905882, 0.639216))
+	more.tooltip_text = "All reactions (T)"
+	more.pressed.connect(func():
+		_open = true
+		_root.visible = true)
+	_hoverify(more, 0.85)
+	row.add_child(more)
+
 func _toggle_mic() -> void:
 	Settings.set_voice_enabled(not Settings.voice_enabled)
 	_update_mic()
@@ -158,6 +190,8 @@ func _toggle_mic() -> void:
 func _update_mic() -> void:
 	if _mic_btn:
 		_mic_btn.texture_normal = _mic_texture(not Settings.voice_enabled)
+	if _mic_circle:
+		_mic_circle.bg_color = Color(0.478431, 0.168627, 0.168627) if Settings.voice_enabled else Color(0.168627, 0.113725, 0.070588)
 
 func _mic_texture(muted: bool) -> ImageTexture:
 	var img := Image.create(16, 16, false, Image.FORMAT_RGBA8)

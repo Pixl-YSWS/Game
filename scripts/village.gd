@@ -66,5 +66,7 @@ func _process(delta: float) -> void:
 	if global.player_in_range and can_transition and not Dialogue.is_open and Input.is_action_just_pressed("interact"):
 		can_transition = false
 		_save_npcs()
+		var door := Vector2i(global.active_door_pos.round())
+		global.house_variant = absi(door.x * 928371 + door.y * 1237) % 4
 		global.request_transition("house_interior", "PlayerSpawn")
 		Loader.change_scene("res://scenes/house_interior.tscn", "Loading")
