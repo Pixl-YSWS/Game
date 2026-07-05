@@ -63,7 +63,7 @@ func _physics_process(delta: float) -> void:
 		remote_movement(delta)
 
 func player_movement(delta: float)-> void:
-	if ChatHud.is_typing():
+	if ChatHud.is_typing() or global.ui_blocked():
 		velocity = Vector2.ZERO
 		move_and_slide()
 		return

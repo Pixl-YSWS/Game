@@ -3,6 +3,7 @@ extends Control
 @onready var status_label: Label = $CenterContainer/VBoxContainer/StatusLabel
 @onready var play_button: Button = $CenterContainer/VBoxContainer/PlayButton
 @onready var lobbies_button: Button = $CenterContainer/VBoxContainer/LobbiesButton
+@onready var friends_button: Button = $CenterContainer/VBoxContainer/FriendsButton
 @onready var character_button: Button = $CenterContainer/VBoxContainer/CharacterButton
 @onready var settings_button: Button = $CenterContainer/VBoxContainer/SettingsButton
 @onready var logout_button: Button = $CenterContainer/VBoxContainer/LogoutButton
@@ -25,6 +26,7 @@ func _ready() -> void:
 
 	play_button.pressed.connect(_on_play_pressed)
 	lobbies_button.pressed.connect(_on_lobbies_pressed)
+	friends_button.pressed.connect(_on_friends_pressed)
 	character_button.pressed.connect(_on_character_pressed)
 	settings_button.pressed.connect(_on_settings_pressed)
 	logout_button.pressed.connect(_on_logout_pressed)
@@ -47,6 +49,9 @@ func _on_play_pressed() -> void:
 
 func _on_lobbies_pressed() -> void:
 	get_tree().change_scene_to_file("res://scenes/lobby_menu.tscn")
+
+func _on_friends_pressed() -> void:
+	FriendsHud.open()
 
 func _on_character_pressed() -> void:
 	global.editor_return_scene = "res://scenes/main_menu.tscn"

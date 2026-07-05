@@ -66,7 +66,7 @@ func setup_multiplayer() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if not (event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT):
 		return
-	if ChatHud.is_typing() or Dialogue.is_open or ProfileHud.is_open():
+	if ChatHud.is_typing() or Dialogue.is_open or global.ui_blocked():
 		return
 	var mp := get_global_mouse_position()
 	var best_id := ""

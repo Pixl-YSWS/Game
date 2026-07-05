@@ -53,15 +53,22 @@ func _toggle() -> void:
 	if GAMEPLAY_SCENES.has(current.scene_file_path.get_file().get_basename()):
 		open()
 
+func is_open() -> bool:
+	return _open
+
 func open() -> void:
+	if _open:
+		return
 	_open = true
-	get_tree().paused = true
+	global.push_ui_blocker()
 	_root.visible = true
 	refresh()
 
 func close() -> void:
+	if not _open:
+		return
 	_open = false
-	get_tree().paused = false
+	global.pop_ui_blocker()
 	_create_screen.visible = false
 	_confirm_root.visible = false
 	_modal.visible = true

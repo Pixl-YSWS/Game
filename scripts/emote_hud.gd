@@ -36,7 +36,7 @@ func _ready() -> void:
 func _process(_delta: float) -> void:
 	if _quick == null:
 		return
-	_quick.visible = _in_gameplay() and not _open and not get_tree().paused \
+	_quick.visible = _in_gameplay() and not _open and not global.ui_blocked() \
 		and not ChatHud.is_typing() and not Dialogue.is_open
 
 func texture_for(key: String) -> Texture2D:
@@ -237,6 +237,8 @@ func _unhandled_input(event: InputEvent) -> void:
 	if ChatHud.is_typing() or Dialogue.is_open:
 		return
 	if event.keycode == KEY_T and _in_gameplay():
+		if not _open and global.ui_blocked():
+			return
 		_open = not _open
 		_root.visible = _open
 		get_viewport().set_input_as_handled()

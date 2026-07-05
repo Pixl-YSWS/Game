@@ -83,7 +83,7 @@ func _build_ui() -> void:
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_root.add_child(center)
 
-	var modal := _make_modal("PAUSED", 400)
+	var modal := _make_modal("MENU", 400)
 	center.add_child(modal["root"])
 	var body: VBoxContainer = modal["body"]
 
@@ -191,15 +191,22 @@ func _toggle() -> void:
 	if GAMEPLAY_SCENES.has(scene_name):
 		pause_game()
 
+func is_open() -> bool:
+	return _is_paused or _settings_root.visible
+
 func pause_game() -> void:
+	if _is_paused:
+		return
 	_is_paused = true
-	get_tree().paused = true
+	global.push_ui_blocker()
 	_root.visible = true
 	_resume_button.grab_focus()
 
 func resume_game() -> void:
+	if not _is_paused:
+		return
 	_is_paused = false
-	get_tree().paused = false
+	global.pop_ui_blocker()
 	_settings_root.visible = false
 	_root.visible = false
 

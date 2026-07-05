@@ -15,7 +15,7 @@ func _ready() -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_N:
-		if ChatHud.is_typing() or Dialogue.is_open:
+		if ChatHud.is_typing() or Dialogue.is_open or (not _open and global.ui_blocked()):
 			return
 		_toggle()
 		get_viewport().set_input_as_handled()
@@ -28,15 +28,22 @@ func _toggle() -> void:
 	if current and GAMEPLAY_SCENES.has(current.scene_file_path.get_file().get_basename()):
 		open()
 
+func is_open() -> bool:
+	return _open
+
 func open() -> void:
+	if _open:
+		return
 	_open = true
-	get_tree().paused = true
+	global.push_ui_blocker()
 	_root.visible = true
 	refresh()
 
 func close() -> void:
+	if not _open:
+		return
 	_open = false
-	get_tree().paused = false
+	global.pop_ui_blocker()
 	_root.visible = false
 
 func _build_ui() -> void:

@@ -25,13 +25,13 @@ func _spawn_npcs() -> void:
 			"dialogue": "Built something? Talk to me to log your project."},
 		{"pos": Vector2(0, -120), "name": "Ridit", "skin": "cvc:3",
 			"dialogue": "Hey, I'm Ridit — welcome to the village!\nNice day for a stroll across the bridges, huh?"},
-		{"pos": Vector2(40, 30), "name": "Mangoman", "skin": "cvc:2",
+		{"pos": Vector2(-430, -50), "name": "Mangoman", "skin": "cvc:2",
 			"dialogue": "Mango? Mango. The bridges link the whole village together."},
-		{"pos": Vector2(60, -40), "name": "Imu", "skin": "cvc:6",
+		{"pos": Vector2(-410, -160), "name": "Imu", "skin": "cvc:6",
 			"dialogue": "I watch over the village from the shadows."},
-		{"pos": Vector2(100, -30), "name": "Gabin", "skin": "cvc:8",
+		{"pos": Vector2(-465, -440), "name": "Gabin", "skin": "cvc:8",
 			"dialogue": "Hi hi~ I'm Gabin! Cutest one in the village, obviously.\nDon't be shy, come hang out with me anytime!"},
-		{"pos": Vector2(15, -45), "name": "Ricky", "skin": "cvc:5",
+		{"pos": Vector2(-510, -465), "name": "Ricky", "skin": "cvc:5",
 			"dialogue": "Yo, I'm Ricky. Gabin dragged me here but honestly?\nThis village is pretty cool."},
 	]
 	for d in defs:
@@ -67,7 +67,7 @@ func _process(delta: float) -> void:
 	if _save_accum >= 5.0:
 		_save_accum = 0.0
 		_save_npcs()
-	if global.player_in_range and can_transition and not Dialogue.is_open and Input.is_action_just_pressed("interact"):
+	if global.player_in_range and can_transition and not Dialogue.is_open and not global.ui_blocked() and Input.is_action_just_pressed("interact"):
 		can_transition = false
 		_save_npcs()
 		var door := Vector2i(global.active_door_pos.round())

@@ -8,6 +8,8 @@ const COLOR_ACCENT := Color(1, 0.819608, 0.4)
 var _root: Control
 var _name_label: Label
 var _online_label: Label
+var _clock_dot: ColorRect
+var _clock_label: Label
 var _players := {}
 var _list_root: Control
 var _list_box: VBoxContainer
@@ -22,7 +24,7 @@ func _ready() -> void:
 	NetworkManager.player_left.connect(_on_player_left)
 
 func _process(_delta: float) -> void:
-	var in_game := _in_gameplay() and not get_tree().paused
+	var in_game := _in_gameplay() and not global.ui_blocked()
 	_root.visible = in_game
 	if not in_game:
 		_list_root.visible = false
@@ -31,7 +33,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	if not (event is InputEventKey and event.pressed and not event.echo):
 		return
 	if event.keycode == KEY_TAB:
-		if _in_gameplay() and not get_tree().paused and not ChatHud.is_typing() and not Dialogue.is_open:
+		if _in_gameplay() and not global.ui_blocked() and not ChatHud.is_typing() and not Dialogue.is_open:
 			_toggle_list()
 			get_viewport().set_input_as_handled()
 	elif event.keycode == KEY_ESCAPE and _list_root.visible:
@@ -95,6 +97,63 @@ func _build_ui() -> void:
 	_online_label.add_theme_font_size_override("font_size", 11)
 	_online_label.text = "1 online  [Tab]"
 	row.add_child(_online_label)
+
+	var friends_chip := PanelContainer.new()
+	friends_chip.theme_type_variation = &"HudPanel"
+	friends_chip.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	friends_chip.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	friends_chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	column.add_child(friends_chip)
+
+	var friends_row := HBoxContainer.new()
+	friends_row.add_theme_constant_override("separation", 7)
+	friends_chip.add_child(friends_row)
+
+	var friends_dot := ColorRect.new()
+	friends_dot.color = COLOR_ACCENT
+	friends_dot.custom_minimum_size = Vector2(8, 8)
+	friends_dot.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	friends_dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	friends_row.add_child(friends_dot)
+
+	var friends_label := Label.new()
+	friends_label.add_theme_font_size_override("font_size", 11)
+	friends_label.text = "Friends  [F]"
+	friends_row.add_child(friends_label)
+
+	var clock_chip := PanelContainer.new()
+	clock_chip.theme_type_variation = &"HudPanel"
+	clock_chip.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	clock_chip.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	clock_chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	column.add_child(clock_chip)
+
+	var clock_row := HBoxContainer.new()
+	clock_row.add_theme_constant_override("separation", 7)
+	clock_chip.add_child(clock_row)
+
+	_clock_dot = ColorRect.new()
+	_clock_dot.custom_minimum_size = Vector2(8, 8)
+	_clock_dot.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_clock_dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	clock_row.add_child(_clock_dot)
+
+	_clock_label = Label.new()
+	_clock_label.add_theme_font_size_override("font_size", 11)
+	clock_row.add_child(_clock_label)
+
+	_update_clock()
+	var clock_timer := Timer.new()
+	clock_timer.wait_time = 5.0
+	clock_timer.autostart = true
+	clock_timer.timeout.connect(_update_clock)
+	add_child(clock_timer)
+
+func _update_clock() -> void:
+	var phase := global.day_phase()
+	var td := Time.get_time_dict_from_system()
+	_clock_dot.color = phase["color"]
+	_clock_label.text = "%s %02d:%02d  •  %s" % [phase["name"], td.hour, td.minute, phase["next"]]
 
 func _build_list_ui() -> void:
 	_list_root = Control.new()

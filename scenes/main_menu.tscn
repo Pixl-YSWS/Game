@@ -69,6 +69,10 @@ text = "Enter Village"
 layout_mode = 2
 text = "Lobbies"
 
+[node name="FriendsButton" type="Button" parent="CenterContainer/VBoxContainer"]
+layout_mode = 2
+text = "Friends"
+
 [node name="CharacterButton" type="Button" parent="CenterContainer/VBoxContainer"]
 layout_mode = 2
 text = "Customise Look"

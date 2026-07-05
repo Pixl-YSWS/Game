@@ -1,12 +1,13 @@
 extends CanvasLayer
 
 const THEME := preload("res://themes/main_theme.tres")
+const ACCENT_GOLD := Color(0.85098, 0.643137, 0.25098)
+const COLOR_ONLINE := Color(0.290196, 0.870588, 0.501961)
 
 var _root: Control
 var _portrait: TextureRect
 var _name_label: Label
 var _info_label: Label
-var _status_label: Label
 var _action_button: Button
 var _open := false
 var _user_id := ""
@@ -27,22 +28,23 @@ func is_open() -> bool:
 	return _open
 
 func open(user_id: String) -> void:
-	if user_id == "" or user_id == NetworkManager.user_id:
+	if _open or user_id == "" or user_id == NetworkManager.user_id:
 		return
 	_user_id = user_id
 	_open = true
-	get_tree().paused = true
+	global.push_ui_blocker()
 	_root.visible = true
 	_portrait.texture = null
 	_name_label.text = "Loading"
 	_info_label.text = ""
-	_status_label.text = ""
 	_action_button.visible = false
 	_api(HTTPClient.METHOD_GET, "/api/players/profile", {"userId": user_id}, _on_profile)
 
 func close() -> void:
+	if not _open:
+		return
 	_open = false
-	get_tree().paused = false
+	global.pop_ui_blocker()
 	_root.visible = false
 
 func _build_ui() -> void:
@@ -52,7 +54,7 @@ func _build_ui() -> void:
 	add_child(_root)
 
 	var backdrop := ColorRect.new()
-	backdrop.color = Color(0.039216, 0.031373, 0.019608, 0.9)
+	backdrop.color = Color(0.039216, 0.023529, 0.007843, 0.66)
 	backdrop.set_anchors_preset(Control.PRESET_FULL_RECT)
 	backdrop.mouse_filter = Control.MOUSE_FILTER_STOP
 	_root.add_child(backdrop)
@@ -61,10 +63,53 @@ func _build_ui() -> void:
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_root.add_child(center)
 
-	var panel := VBoxContainer.new()
-	panel.custom_minimum_size = Vector2(360, 0)
-	panel.add_theme_constant_override("separation", 10)
-	center.add_child(panel)
+	var wrap := VBoxContainer.new()
+	wrap.add_theme_constant_override("separation", -22)
+	center.add_child(wrap)
+
+	var plate := PanelContainer.new()
+	plate.theme_type_variation = &"TitlePlate"
+	plate.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	plate.z_index = 1
+	var plate_label := Label.new()
+	plate_label.theme_type_variation = &"TitlePlateText"
+	plate_label.text = "PLAYER"
+	plate.add_child(plate_label)
+	wrap.add_child(plate)
+
+	var panel := PanelContainer.new()
+	panel.custom_minimum_size = Vector2(400, 0)
+	wrap.add_child(panel)
+
+	var accents := Control.new()
+	accents.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.add_child(accents)
+	for i in 4:
+		var corner := ColorRect.new()
+		corner.color = ACCENT_GOLD
+		corner.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var right := i % 2 == 1
+		var bottom := i >= 2
+		corner.anchor_left = 1.0 if right else 0.0
+		corner.anchor_right = corner.anchor_left
+		corner.anchor_top = 1.0 if bottom else 0.0
+		corner.anchor_bottom = corner.anchor_top
+		corner.offset_left = -17.0 if right else 9.0
+		corner.offset_right = corner.offset_left + 8.0
+		corner.offset_top = -17.0 if bottom else 9.0
+		corner.offset_bottom = corner.offset_top + 8.0
+		accents.add_child(corner)
+
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 30)
+	margin.add_theme_constant_override("margin_top", 34)
+	margin.add_theme_constant_override("margin_right", 30)
+	margin.add_theme_constant_override("margin_bottom", 24)
+	panel.add_child(margin)
+
+	var body := VBoxContainer.new()
+	body.add_theme_constant_override("separation", 10)
+	margin.add_child(body)
 
 	_portrait = TextureRect.new()
 	_portrait.custom_minimum_size = Vector2(96, 96)
@@ -72,33 +117,28 @@ func _build_ui() -> void:
 	_portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	_portrait.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	panel.add_child(_portrait)
+	body.add_child(_portrait)
 
 	_name_label = Label.new()
 	_name_label.theme_type_variation = &"TitleText"
 	_name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	panel.add_child(_name_label)
+	body.add_child(_name_label)
 
 	_info_label = Label.new()
 	_info_label.theme_type_variation = &"InfoText"
 	_info_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	panel.add_child(_info_label)
-
-	_status_label = Label.new()
-	_status_label.theme_type_variation = &"InfoText"
-	_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	panel.add_child(_status_label)
+	_info_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	body.add_child(_info_label)
 
 	_action_button = Button.new()
-	_action_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	_action_button.pressed.connect(_on_action)
-	panel.add_child(_action_button)
+	body.add_child(_action_button)
 
 	var close_button := Button.new()
+	close_button.theme_type_variation = &"GreyButton"
 	close_button.text = "Close"
-	close_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	close_button.pressed.connect(close)
-	panel.add_child(close_button)
+	body.add_child(close_button)
 
 func _on_profile(code: int, json: Variant) -> void:
 	if not _open:

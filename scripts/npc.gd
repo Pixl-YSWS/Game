@@ -190,7 +190,7 @@ func _update_prompt() -> void:
 		tw.tween_property(_prompt, "scale", target_scale, 0.2)
 
 func _unhandled_input(event: InputEvent) -> void:
-	if not _in_range or Dialogue.is_open:
+	if not _in_range or Dialogue.is_open or global.ui_blocked():
 		return
 	if event.is_action_pressed("interact"):
 		get_viewport().set_input_as_handled()
