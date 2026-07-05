@@ -9,6 +9,7 @@ const WRAP_WIDTH := 460.0
 const COLOR_TEXT := Color(0.956863, 0.890196, 0.760784)
 const COLOR_DIM := Color(0.788235, 0.694118, 0.54902)
 const COLOR_ACCENT := Color(1, 0.819608, 0.4)
+const COLOR_DM := Color(0.85, 0.72, 1)
 
 @onready var _lines_box: VBoxContainer = %Lines
 @onready var _hint: Label = %Hint
@@ -22,6 +23,8 @@ var _closing := false
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	NetworkManager.chat_message.connect(_on_chat)
+	NetworkManager.dm_received.connect(_on_dm)
+	NetworkManager.dm_error.connect(add_system)
 	_input.text_submitted.connect(_on_submit)
 	_input.focus_exited.connect(_on_focus_exited)
 
@@ -105,12 +108,23 @@ func _on_focus_exited() -> void:
 
 func _on_submit(text: String) -> void:
 	var t := text.strip_edges()
-	if t != "":
+	if t.begins_with("/w ") or t.begins_with("/msg "):
+		var rest := t.substr(t.find(" ") + 1).strip_edges()
+		var space := rest.find(" ")
+		if space <= 0:
+			add_system("Usage: /w <name> <message>")
+		else:
+			NetworkManager.send_dm(rest.substr(0, space), rest.substr(space + 1).strip_edges())
+	elif t != "":
 		NetworkManager.send_chat(t)
 	_close_input()
 
 func _on_chat(user_id: String, display_name: String, text: String) -> void:
 	_add_line("%s: %s" % [display_name, text], COLOR_TEXT, user_id == NetworkManager.user_id)
+
+func _on_dm(from_name: String, to_name: String, text: String, outgoing: bool) -> void:
+	var prefix := "to %s" % to_name if outgoing else "from %s" % from_name
+	_add_line("[%s] %s" % [prefix, text], COLOR_DM, outgoing)
 
 func _add_line(display: String, color: Color, own: bool) -> void:
 	var panel := PanelContainer.new()

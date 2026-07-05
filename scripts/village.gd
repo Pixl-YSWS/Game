@@ -29,6 +29,10 @@ func _spawn_npcs() -> void:
 			"dialogue": "Mango? Mango. The bridges link the whole village together."},
 		{"pos": Vector2(60, -40), "name": "Imu", "skin": "cvc:6",
 			"dialogue": "I watch over the village from the shadows."},
+		{"pos": Vector2(100, -30), "name": "Gabin", "skin": "cvc:8",
+			"dialogue": "Hi hi~ I'm Gabin! Cutest one in the village, obviously.\nDon't be shy, come hang out with me anytime!"},
+		{"pos": Vector2(15, -45), "name": "Ricky", "skin": "cvc:5",
+			"dialogue": "Yo, I'm Ricky. Gabin dragged me here but honestly?\nThis village is pretty cool."},
 	]
 	for d in defs:
 		var n := NPC.instantiate()

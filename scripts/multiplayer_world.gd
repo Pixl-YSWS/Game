@@ -2,12 +2,47 @@ extends Node2D
 
 const PLAYER_SCENE := preload("res://scenes/player.tscn")
 
+const DAY_NIGHT_SCENES := ["village", "open_world"]
+const COLOR_NIGHT := Color(0.45, 0.5, 0.72)
+const COLOR_DAY := Color(1, 1, 1)
+const COLOR_DUSK := Color(1.0, 0.82, 0.64)
+
 var remote_players: Dictionary = {}
 var _local_player = null
+var _day_night: CanvasModulate
 
 func _ready() -> void:
 	global.player_in_range = false
+	_setup_day_night()
 	setup_multiplayer()
+
+func _setup_day_night() -> void:
+	if not DAY_NIGHT_SCENES.has(_network_scene_name()):
+		return
+	_day_night = CanvasModulate.new()
+	add_child(_day_night)
+	_apply_day_night()
+	var timer := Timer.new()
+	timer.wait_time = 5.0
+	timer.autostart = true
+	timer.timeout.connect(_apply_day_night)
+	add_child(timer)
+
+func _apply_day_night() -> void:
+	var td := Time.get_time_dict_from_system()
+	var h := float(td.hour) + float(td.minute) / 60.0 + float(td.second) / 3600.0
+	_day_night.color = _day_night_color(h)
+
+func _day_night_color(h: float) -> Color:
+	if h < 5.0 or h >= 21.0:
+		return COLOR_NIGHT
+	if h < 7.0:
+		return COLOR_NIGHT.lerp(COLOR_DAY, (h - 5.0) / 2.0)
+	if h < 17.0:
+		return COLOR_DAY
+	if h < 19.0:
+		return COLOR_DAY.lerp(COLOR_DUSK, (h - 17.0) / 2.0)
+	return COLOR_DUSK.lerp(COLOR_NIGHT, (h - 19.0) / 2.0)
 
 func _network_scene_name() -> String:
 	return scene_file_path.get_file().get_basename()
@@ -27,6 +62,26 @@ func setup_multiplayer() -> void:
 	await get_tree().create_timer(5.0).timeout
 	if not is_instance_valid(_local_player):
 		_spawn_local(_default_spawn())
+
+func _unhandled_input(event: InputEvent) -> void:
+	if not (event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT):
+		return
+	if ChatHud.is_typing() or Dialogue.is_open or ProfileHud.is_open():
+		return
+	var mp := get_global_mouse_position()
+	var best_id := ""
+	var best_d := 22.0
+	for uid in remote_players:
+		var rp = remote_players[uid]
+		if not is_instance_valid(rp):
+			continue
+		var d: float = rp.global_position.distance_to(mp)
+		if d < best_d:
+			best_d = d
+			best_id = uid
+	if best_id != "":
+		ProfileHud.open(best_id)
+		get_viewport().set_input_as_handled()
 
 func _default_spawn() -> Vector2:
 	var marker = get_node_or_null(global.spawn_point)

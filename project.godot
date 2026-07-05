@@ -35,6 +35,8 @@ VoiceChat="*res://scripts/voice_chat.gd"
 InboxHud="*res://scripts/inbox_hud.gd"
 GuideHud="*res://scripts/guide_hud.gd"
 PlayerHud="*res://scripts/player_hud.gd"
+ProfileHud="*res://scripts/profile_hud.gd"
+FriendsHud="*res://scripts/friends_hud.gd"
 
 [editor_plugins]
 

@@ -8,6 +8,8 @@ signal player_left(user_id: String)
 signal scene_init(your_user_id: String, your_pos: Vector2, other_players: Array, spawn_at_default: bool)
 signal player_skin_changed(user_id: String, skin: String)
 signal chat_message(user_id: String, display_name: String, text: String)
+signal dm_received(from_name: String, to_name: String, text: String, outgoing: bool)
+signal dm_error(reason: String)
 signal emote_received(user_id: String, key: String)
 signal voice_received(user_id: String, payload: PackedByteArray)
 signal npc_init(scene: String, npcs: Array)
@@ -270,6 +272,16 @@ func _handle_message(raw: String) -> void:
 			emit_signal("player_skin_changed", uid, sk)
 		"chat":
 			emit_signal("chat_message", json["userId"], String(json.get("displayName", "")), String(json.get("text", "")))
+		"dm":
+			emit_signal(
+				"dm_received",
+				String(json.get("fromName", "")),
+				String(json.get("toName", "")),
+				String(json.get("text", "")),
+				String(json.get("fromId", "")) == user_id
+			)
+		"dm_error":
+			emit_signal("dm_error", String(json.get("reason", "")))
 		"emote":
 			emit_signal("emote_received", json["userId"], String(json.get("key", "")))
 		"npc_init":
@@ -365,6 +377,16 @@ func send_chat(text: String) -> void:
 	if not _is_socket_open():
 		return
 	_socket.send_text(JSON.stringify({"type": "chat", "text": text}))
+
+func send_dm(to_name: String, text: String) -> void:
+	if not _is_socket_open():
+		return
+	_socket.send_text(JSON.stringify({"type": "dm", "to": to_name, "text": text}))
+
+func send_join_friend(friend_user_id: String) -> void:
+	if not _is_socket_open():
+		return
+	_socket.send_text(JSON.stringify({"type": "lobby_join_friend", "userId": friend_user_id}))
 
 func send_scene_change(scene_name: String) -> void:
 	var actual := scene_name
