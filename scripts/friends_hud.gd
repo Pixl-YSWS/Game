@@ -157,18 +157,24 @@ func _build_ui() -> void:
 	how.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	body.add_child(how)
 
-	_search_results = VBoxContainer.new()
-	_search_results.add_theme_constant_override("separation", 6)
-	body.add_child(_search_results)
-
 	var scroll := ScrollContainer.new()
-	scroll.custom_minimum_size = Vector2(0, 280)
+	scroll.custom_minimum_size = Vector2(0, 320)
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	body.add_child(scroll)
+
+	var scroll_box := VBoxContainer.new()
+	scroll_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll_box.add_theme_constant_override("separation", 10)
+	scroll.add_child(scroll_box)
+
+	_search_results = VBoxContainer.new()
+	_search_results.add_theme_constant_override("separation", 6)
+	scroll_box.add_child(_search_results)
+
 	_list = VBoxContainer.new()
 	_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_list.add_theme_constant_override("separation", 6)
-	scroll.add_child(_list)
+	scroll_box.add_child(_list)
 
 	_status_label = Label.new()
 	_status_label.theme_type_variation = &"StatusText"
