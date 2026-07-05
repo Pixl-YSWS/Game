@@ -3,9 +3,9 @@ extends Node2D
 const PLAYER_SCENE := preload("res://scenes/player.tscn")
 
 const DAY_NIGHT_SCENES := ["village", "open_world"]
-const COLOR_NIGHT := Color(0.45, 0.5, 0.72)
+const COLOR_NIGHT := Color(0.62, 0.66, 0.9)
 const COLOR_DAY := Color(1, 1, 1)
-const COLOR_DUSK := Color(1.0, 0.82, 0.64)
+const COLOR_DUSK := Color(1.0, 0.87, 0.74)
 
 var remote_players: Dictionary = {}
 var _local_player = null

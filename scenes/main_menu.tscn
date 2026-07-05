@@ -73,6 +73,10 @@ text = "Lobbies"
 layout_mode = 2
 text = "Friends"
 
+[node name="InboxButton" type="Button" parent="CenterContainer/VBoxContainer"]
+layout_mode = 2
+text = "Inbox"
+
 [node name="CharacterButton" type="Button" parent="CenterContainer/VBoxContainer"]
 layout_mode = 2
 text = "Customise Look"

@@ -43,6 +43,7 @@
 [ext_resource type="Texture2D" uid="uid://bo6x875nx7dh6" path="res://assets/cozy-towns/Housing/Exterior/Shop_merch.png" id="41_ucatk"]
 [ext_resource type="Texture2D" uid="uid://cuscxsk2agqh" path="res://assets/cozy-towns/Housing/Exterior/Shop_software.png" id="42_80neg"]
 [ext_resource type="Script" uid="uid://c6o1bgj0ub2mo" path="res://scripts/door_trigger.gd" id="43_bj576"]
+[ext_resource type="PackedScene" uid="uid://bnpcpixl00001" path="res://scenes/npc.tscn" id="44_npcs"]
 
 [sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_1knqj"]
 texture = ExtResource("2_02ewf")
@@ -3664,6 +3665,13 @@ theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_constants/outline_size = 2
 theme_override_font_sizes/font_size = 11
 text = "Press E to enter"
+
+[node name="Curator" parent="." instance=ExtResource("44_npcs")]
+position = Vector2(110, -140)
+npc_name = "Curator"
+skin = "cvc:7"
+wanders = false
+dialogue = "Welcome to the Project Showcase!\nSoon, projects shipped by players will be on display right here.\nCheck back after the open world update!"
 
 [node name="StaticBody2D" type="StaticBody2D" parent="." unique_id=794157930]
 

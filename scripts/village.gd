@@ -1,7 +1,5 @@
 extends "res://scripts/multiplayer_world.gd"
 
-const NPC := preload("res://scenes/npc.tscn")
-
 var can_transition: bool = false
 var _npcs: Array = []
 var _npcs_by_id: Dictionary = {}
@@ -20,30 +18,10 @@ func _exit_tree() -> void:
 	_save_npcs()
 
 func _spawn_npcs() -> void:
-	var defs := [
-		{"pos": Vector2(120, -81), "name": "Pip", "skin": "cvc:4", "projects": true,
-			"dialogue": "Built something? Talk to me to log your project."},
-		{"pos": Vector2(0, -120), "name": "Ridit", "skin": "cvc:3",
-			"dialogue": "Hey, I'm Ridit — welcome to the village!\nNice day for a stroll across the bridges, huh?"},
-		{"pos": Vector2(-430, -50), "name": "Mangoman", "skin": "cvc:2",
-			"dialogue": "Mango? Mango. The bridges link the whole village together."},
-		{"pos": Vector2(-410, -160), "name": "Imu", "skin": "cvc:6",
-			"dialogue": "I watch over the village from the shadows."},
-		{"pos": Vector2(-465, -440), "name": "Gabin", "skin": "cvc:8",
-			"dialogue": "Hi hi~ I'm Gabin! Cutest one in the village, obviously.\nDon't be shy, come hang out with me anytime!"},
-		{"pos": Vector2(-510, -465), "name": "Ricky", "skin": "cvc:5",
-			"dialogue": "Yo, I'm Ricky. Gabin dragged me here but honestly?\nThis village is pretty cool."},
-	]
-	for d in defs:
-		var n := NPC.instantiate()
-		n.position = d["pos"]
-		n.npc_name = d["name"]
-		n.skin = d["skin"]
-		n.dialogue = d["dialogue"]
-		n.opens_projects = d.get("projects", false)
-		add_child(n)
-		_npcs.append(n)
-		_npcs_by_id[d["name"]] = n
+	for child in get_children():
+		if child.has_method("npc_id"):
+			_npcs.append(child)
+			_npcs_by_id[child.npc_id()] = child
 
 func _on_npc_init(scene: String, npcs: Array) -> void:
 	if scene != _network_scene_name():

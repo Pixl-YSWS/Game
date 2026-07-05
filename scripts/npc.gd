@@ -5,6 +5,7 @@ const MONOCRAFT := preload("res://assets/fonts/Monocraft.ttf")
 @export var npc_name: String = "Villager"
 @export_multiline var dialogue: String = "Hello there!"
 @export var skin: String = "cvc:1"
+@export var custom_hair: String = ""
 @export var opens_projects: bool = false
 @export var wanders: bool = true
 @export var speed: float = 50.0
@@ -82,7 +83,7 @@ func apply_saved_position(p: Vector2) -> void:
 
 func set_skin(desc: String) -> void:
 	skin = desc
-	var tex := SkinUtil.resolve_sheet(desc)
+	var tex := SkinUtil.bake_with_hair(desc, custom_hair) if custom_hair != "" else SkinUtil.resolve_sheet(desc)
 	if tex == null:
 		return
 	var frames: SpriteFrames = _base_frames.duplicate(true)

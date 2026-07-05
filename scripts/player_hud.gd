@@ -10,6 +10,8 @@ var _name_label: Label
 var _online_label: Label
 var _clock_dot: ColorRect
 var _clock_label: Label
+var _inbox_dot: ColorRect
+var _inbox_label: Label
 var _players := {}
 var _list_root: Control
 var _list_box: VBoxContainer
@@ -121,6 +123,30 @@ func _build_ui() -> void:
 	friends_label.text = "Friends  [F]"
 	friends_row.add_child(friends_label)
 
+	var inbox_chip := PanelContainer.new()
+	inbox_chip.theme_type_variation = &"HudPanel"
+	inbox_chip.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	inbox_chip.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	inbox_chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	column.add_child(inbox_chip)
+
+	var inbox_row := HBoxContainer.new()
+	inbox_row.add_theme_constant_override("separation", 7)
+	inbox_chip.add_child(inbox_row)
+
+	_inbox_dot = ColorRect.new()
+	_inbox_dot.custom_minimum_size = Vector2(8, 8)
+	_inbox_dot.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_inbox_dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	inbox_row.add_child(_inbox_dot)
+
+	_inbox_label = Label.new()
+	_inbox_label.add_theme_font_size_override("font_size", 11)
+	inbox_row.add_child(_inbox_label)
+
+	_update_inbox(InboxHud.unread_count)
+	InboxHud.unread_changed.connect(_update_inbox)
+
 	var clock_chip := PanelContainer.new()
 	clock_chip.theme_type_variation = &"HudPanel"
 	clock_chip.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
@@ -148,6 +174,16 @@ func _build_ui() -> void:
 	clock_timer.autostart = true
 	clock_timer.timeout.connect(_update_clock)
 	add_child(clock_timer)
+
+func _update_inbox(unread: int) -> void:
+	if unread > 0:
+		_inbox_dot.color = COLOR_ACCENT
+		_inbox_label.text = "Inbox  [N]  •  %d new" % unread
+		_inbox_label.add_theme_color_override("font_color", COLOR_ACCENT)
+	else:
+		_inbox_dot.color = Color(0.62, 0.58, 0.5)
+		_inbox_label.text = "Inbox  [N]"
+		_inbox_label.remove_theme_color_override("font_color")
 
 func _update_clock() -> void:
 	var phase := global.day_phase()

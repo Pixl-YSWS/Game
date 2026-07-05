@@ -4,6 +4,7 @@ extends Control
 @onready var play_button: Button = $CenterContainer/VBoxContainer/PlayButton
 @onready var lobbies_button: Button = $CenterContainer/VBoxContainer/LobbiesButton
 @onready var friends_button: Button = $CenterContainer/VBoxContainer/FriendsButton
+@onready var inbox_button: Button = $CenterContainer/VBoxContainer/InboxButton
 @onready var character_button: Button = $CenterContainer/VBoxContainer/CharacterButton
 @onready var settings_button: Button = $CenterContainer/VBoxContainer/SettingsButton
 @onready var logout_button: Button = $CenterContainer/VBoxContainer/LogoutButton
@@ -27,6 +28,9 @@ func _ready() -> void:
 	play_button.pressed.connect(_on_play_pressed)
 	lobbies_button.pressed.connect(_on_lobbies_pressed)
 	friends_button.pressed.connect(_on_friends_pressed)
+	inbox_button.pressed.connect(_on_inbox_pressed)
+	_update_inbox_button(InboxHud.unread_count)
+	InboxHud.unread_changed.connect(_update_inbox_button)
 	character_button.pressed.connect(_on_character_pressed)
 	settings_button.pressed.connect(_on_settings_pressed)
 	logout_button.pressed.connect(_on_logout_pressed)
@@ -52,6 +56,12 @@ func _on_lobbies_pressed() -> void:
 
 func _on_friends_pressed() -> void:
 	FriendsHud.open()
+
+func _on_inbox_pressed() -> void:
+	InboxHud.open()
+
+func _update_inbox_button(unread: int) -> void:
+	inbox_button.text = "Inbox (%d)" % unread if unread > 0 else "Inbox"
 
 func _on_character_pressed() -> void:
 	global.editor_return_scene = "res://scenes/main_menu.tscn"

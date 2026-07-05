@@ -2,6 +2,7 @@ class_name SkinUtil
 #
 const PRESET_DIR := "res://assets/cozy-towns/CozyValley_Premium_1.3/Characters/-- Pre-assembled Characters/"
 const BASE_DIR := "res://assets/cozy-towns/CozyValley_Basic_1.0/Characters/"
+const PREMIUM_HAIR_DIR := "res://assets/cozy-towns/CozyValley_Premium_1.3/Characters/Hairstyles/"
 const SHEET_SIZE := Vector2i(160, 576)
 
 const PORTRAIT_REGION := Rect2(0, 32, 32, 32)
@@ -56,6 +57,18 @@ static func resolve_sheet(desc: String) -> Texture2D:
 		return _bake_outfit(parse_outfit(desc))
 	return load(PRESET_DIR + "char1.png")
 
+static func bake_with_hair(desc: String, hair_file: String) -> Texture2D:
+	var o := parse_outfit(desc)
+	var paths: Array[String] = [
+		BASE_DIR + "Base/Base%d_hand_back.png" % o.body,
+		BASE_DIR + "Base/Base%d_body.png" % o.body,
+		BASE_DIR + "Bottoms/Bottoms_shorts_%d.png" % o.bottom,
+		BASE_DIR + "Tops/Tops_shirt_%d.png" % o.top,
+		PREMIUM_HAIR_DIR + hair_file,
+		BASE_DIR + "Base/Base%d_hand_front.png" % o.body,
+	]
+	return _blend(paths)
+
 static func _bake_outfit(o: Dictionary) -> Texture2D:
 	var paths: Array[String] = [
 		BASE_DIR + "Base/Base%d_hand_back.png" % o.body,
@@ -66,7 +79,9 @@ static func _bake_outfit(o: Dictionary) -> Texture2D:
 	if int(o.hair) > 0:
 		paths.append(BASE_DIR + "Hairstyles/Hairstyles_short_%d.png" % o.hair)
 	paths.append(BASE_DIR + "Base/Base%d_hand_front.png" % o.body)
+	return _blend(paths)
 
+static func _blend(paths: Array[String]) -> Texture2D:
 	var result := Image.create_empty(SHEET_SIZE.x, SHEET_SIZE.y, false, Image.FORMAT_RGBA8)
 	for p in paths:
 		var tex := load(p) as Texture2D

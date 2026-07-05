@@ -1,7 +1,12 @@
 extends CanvasLayer
 
+signal unread_changed(count: int)
+
 const THEME := preload("res://themes/main_theme.tres")
 const GAMEPLAY_SCENES := ["village", "open_world", "house_interior"]
+const ACCENT_GOLD := Color(0.85098, 0.643137, 0.25098)
+
+var unread_count := 0
 
 var _root: Control
 var _list: VBoxContainer
@@ -12,6 +17,13 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_build_ui()
 	_root.visible = false
+	var poll := Timer.new()
+	poll.wait_time = 60.0
+	poll.autostart = true
+	poll.timeout.connect(_poll_unread)
+	add_child(poll)
+	NetworkManager.logged_in.connect(func(_n): _poll_unread())
+	_poll_unread()
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_N:
@@ -19,6 +31,12 @@ func _unhandled_input(event: InputEvent) -> void:
 			return
 		_toggle()
 		get_viewport().set_input_as_handled()
+	elif _open and event.is_action_pressed("ui_cancel"):
+		close()
+		get_viewport().set_input_as_handled()
+
+func is_open() -> bool:
+	return _open
 
 func _toggle() -> void:
 	if _open:
@@ -27,9 +45,6 @@ func _toggle() -> void:
 	var current := get_tree().current_scene
 	if current and GAMEPLAY_SCENES.has(current.scene_file_path.get_file().get_basename()):
 		open()
-
-func is_open() -> bool:
-	return _open
 
 func open() -> void:
 	if _open:
@@ -53,7 +68,7 @@ func _build_ui() -> void:
 	add_child(_root)
 
 	var backdrop := ColorRect.new()
-	backdrop.color = Color(0.039216, 0.031373, 0.019608, 0.9)
+	backdrop.color = Color(0.039216, 0.023529, 0.007843, 0.66)
 	backdrop.set_anchors_preset(Control.PRESET_FULL_RECT)
 	backdrop.mouse_filter = Control.MOUSE_FILTER_STOP
 	_root.add_child(backdrop)
@@ -62,34 +77,85 @@ func _build_ui() -> void:
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_root.add_child(center)
 
-	var panel := VBoxContainer.new()
-	panel.custom_minimum_size = Vector2(460, 0)
-	panel.add_theme_constant_override("separation", 12)
-	center.add_child(panel)
+	var wrap := VBoxContainer.new()
+	wrap.add_theme_constant_override("separation", -22)
+	center.add_child(wrap)
 
-	var title := Label.new()
-	title.text = "Inbox"
-	title.theme_type_variation = &"TitleText"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	panel.add_child(title)
+	var plate := PanelContainer.new()
+	plate.theme_type_variation = &"TitlePlate"
+	plate.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	plate.z_index = 1
+	var plate_label := Label.new()
+	plate_label.theme_type_variation = &"TitlePlateText"
+	plate_label.text = "INBOX"
+	plate.add_child(plate_label)
+	wrap.add_child(plate)
+
+	var panel := PanelContainer.new()
+	panel.custom_minimum_size = Vector2(500, 0)
+	wrap.add_child(panel)
+
+	var accents := Control.new()
+	accents.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.add_child(accents)
+	for i in 4:
+		var corner := ColorRect.new()
+		corner.color = ACCENT_GOLD
+		corner.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var right := i % 2 == 1
+		var bottom := i >= 2
+		corner.anchor_left = 1.0 if right else 0.0
+		corner.anchor_right = corner.anchor_left
+		corner.anchor_top = 1.0 if bottom else 0.0
+		corner.anchor_bottom = corner.anchor_top
+		corner.offset_left = -17.0 if right else 9.0
+		corner.offset_right = corner.offset_left + 8.0
+		corner.offset_top = -17.0 if bottom else 9.0
+		corner.offset_bottom = corner.offset_top + 8.0
+		accents.add_child(corner)
+
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 30)
+	margin.add_theme_constant_override("margin_top", 34)
+	margin.add_theme_constant_override("margin_right", 30)
+	margin.add_theme_constant_override("margin_bottom", 24)
+	panel.add_child(margin)
+
+	var body := VBoxContainer.new()
+	body.add_theme_constant_override("separation", 10)
+	margin.add_child(body)
 
 	var scroll := ScrollContainer.new()
-	scroll.custom_minimum_size = Vector2(0, 280)
+	scroll.custom_minimum_size = Vector2(0, 300)
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	panel.add_child(scroll)
+	body.add_child(scroll)
 	_list = VBoxContainer.new()
 	_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_list.add_theme_constant_override("separation", 8)
+	_list.add_theme_constant_override("separation", 6)
 	scroll.add_child(_list)
 
 	var close_button := Button.new()
+	close_button.theme_type_variation = &"GreyButton"
 	close_button.text = "Close"
-	close_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	close_button.pressed.connect(close)
-	panel.add_child(close_button)
+	body.add_child(close_button)
 
 func refresh() -> void:
 	_api(HTTPClient.METHOD_GET, "/api/notifications", _on_list)
+
+func _poll_unread() -> void:
+	if NetworkManager.session_token == "":
+		return
+	_api(HTTPClient.METHOD_GET, "/api/notifications", func(code, json):
+		if code == 200 and typeof(json) == TYPE_DICTIONARY and json.get("ok", false):
+			_set_unread(int(json.get("unread", 0)))
+	)
+
+func _set_unread(n: int) -> void:
+	if n == unread_count:
+		return
+	unread_count = n
+	emit_signal("unread_changed", n)
 
 func _on_list(code: int, json: Variant) -> void:
 	for child in _list.get_children():
@@ -100,30 +166,47 @@ func _on_list(code: int, json: Variant) -> void:
 	var notes: Array = json.get("notifications", [])
 	if notes.is_empty():
 		_list.add_child(_muted("No messages yet."))
+		_set_unread(0)
 		return
 	for n in notes:
 		_list.add_child(_note_row(n))
-	_api(HTTPClient.METHOD_POST, "/api/notifications/read", func(_c, _j): pass)
+	_api(HTTPClient.METHOD_POST, "/api/notifications/read", func(_c, _j): _set_unread(0))
 
 func _note_row(n: Dictionary) -> Control:
+	var shell := PanelContainer.new()
+	shell.theme_type_variation = &"RowPanel"
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 2)
+	shell.add_child(box)
+	var title_row := HBoxContainer.new()
+	title_row.add_theme_constant_override("separation", 8)
+	box.add_child(title_row)
+	if not bool(n.get("read", false)):
+		var dot := ColorRect.new()
+		dot.color = ACCENT_GOLD
+		dot.custom_minimum_size = Vector2(8, 8)
+		dot.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		title_row.add_child(dot)
 	var title := Label.new()
 	title.text = String(n.get("title", "Message"))
-	if not bool(n.get("read", false)):
-		title.text = "• " + title.text
-	box.add_child(title)
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title_row.add_child(title)
+	var when := Label.new()
+	when.theme_type_variation = &"InfoText"
+	var created := String(n.get("created_at", ""))
+	when.text = created.substr(0, 10) if created.length() >= 10 else ""
+	title_row.add_child(when)
 	var body := Label.new()
 	body.text = String(n.get("body", ""))
 	body.theme_type_variation = &"InfoText"
 	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(body)
-	return box
+	return shell
 
 func _muted(text: String) -> Label:
 	var l := Label.new()
-	l.text = text
 	l.theme_type_variation = &"InfoText"
+	l.text = text
 	return l
 
 func _api(method: int, path: String, cb: Callable) -> void:
