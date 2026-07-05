@@ -9,7 +9,10 @@ func _ready() -> void:
 
 	login_button.pressed.connect(_on_login_pressed)
 
-	if NetworkManager.display_name != "":
+	if NetworkManager.ban_message != "":
+		status_label.text = NetworkManager.ban_message
+		NetworkManager.ban_message = ""
+	elif NetworkManager.display_name != "":
 		status_label.text = "Logged in as: " + NetworkManager.display_name + " — connecting..."
 	else:
 		status_label.text = "Not logged in"

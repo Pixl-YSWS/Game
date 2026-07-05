@@ -30,6 +30,7 @@ var session_token: String = ""
 var user_id: String = ""
 var display_name: String = ""
 var is_new_account: bool = false
+var ban_message: String = ""
 var local_skin: String = "cvc:1"
 var current_scene_name: String = "village"
 var current_lobby_id: String = ""
@@ -112,11 +113,17 @@ func _process(_delta: float) -> void:
 			else:
 				_handle_voice_packet(pkt)
 	elif state == WebSocketPeer.STATE_CLOSED:
-		if _connected:
+		var was_connected := _connected
+		_connected = false
+		if was_connected:
 			var code = _socket.get_close_code()
 			if code == 4001:
 				clear_session()
-		_connected = false
+			elif code == 4003:
+				ban_message = _socket.get_close_reason()
+				if ban_message == "":
+					ban_message = "You are banned from Pixl."
+				get_tree().change_scene_to_file("res://scenes/login.tscn")
 		emit_signal("disconnected_from_server")
 
 func start_login() -> void:
@@ -262,8 +269,7 @@ func _handle_message(raw: String) -> void:
 				local_skin = sk
 			emit_signal("player_skin_changed", uid, sk)
 		"chat":
-			if String(json["userId"]) != user_id:
-				emit_signal("chat_message", json["userId"], String(json.get("displayName", "")), String(json.get("text", "")))
+			emit_signal("chat_message", json["userId"], String(json.get("displayName", "")), String(json.get("text", "")))
 		"emote":
 			emit_signal("emote_received", json["userId"], String(json.get("key", "")))
 		"npc_init":
@@ -359,7 +365,6 @@ func send_chat(text: String) -> void:
 	if not _is_socket_open():
 		return
 	_socket.send_text(JSON.stringify({"type": "chat", "text": text}))
-	emit_signal("chat_message", user_id, display_name, text)
 
 func send_scene_change(scene_name: String) -> void:
 	var actual := scene_name
