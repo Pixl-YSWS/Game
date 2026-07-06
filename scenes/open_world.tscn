@@ -3673,6 +3673,12 @@ skin = "cvc:7"
 wanders = false
 dialogue = "Welcome to the Project Showcase!\nSoon, projects shipped by players will be on display right here.\nCheck back after the open world update!"
 
+[node name="Cheetah" parent="." instance=ExtResource("44_npcs")]
+position = Vector2(40, -90)
+npc_name = "Cheetah"
+custom_sheet = "res://assets/npcs/cheetah_char.png"
+dialogue = "Nya~ I'm Cheetah! Fastest boy in the open world, and the prettiest.\nAll this space to run? Heaven. Race me, I dare you~"
+
 [node name="StaticBody2D" type="StaticBody2D" parent="." unique_id=794157930]
 
 [node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="StaticBody2D" unique_id=1201330055]
