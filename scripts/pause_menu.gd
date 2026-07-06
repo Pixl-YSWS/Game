@@ -9,6 +9,11 @@ var _root: Control
 var _resume_button: Button
 var _settings_root: Control
 var _is_paused := false
+var _name_section: VBoxContainer
+var _name_edit: LineEdit
+var _name_save: Button
+var _name_status: Label
+var _name_saving := false
 
 func _ready() -> void:
 	layer = 100
@@ -16,6 +21,7 @@ func _ready() -> void:
 	_build_ui()
 	_build_settings_ui()
 	_root.visible = false
+	NetworkManager.name_result.connect(_on_name_result)
 
 func _make_modal(title: String, width: float) -> Dictionary:
 	var wrap := VBoxContainer.new()
@@ -153,6 +159,37 @@ func _build_settings_ui() -> void:
 	voice_check.toggled.connect(Settings.set_voice_enabled)
 	body.add_child(voice_check)
 
+	_name_section = VBoxContainer.new()
+	_name_section.add_theme_constant_override("separation", 8)
+	body.add_child(_name_section)
+
+	var name_label := Label.new()
+	name_label.text = "Display name"
+	name_label.theme_type_variation = &"InfoText"
+	_name_section.add_child(name_label)
+
+	var name_row := HBoxContainer.new()
+	name_row.add_theme_constant_override("separation", 8)
+	_name_section.add_child(name_row)
+
+	_name_edit = LineEdit.new()
+	_name_edit.placeholder_text = "Your display name"
+	_name_edit.max_length = 24
+	_name_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_name_edit.text_submitted.connect(func(_t): _submit_name())
+	name_row.add_child(_name_edit)
+
+	_name_save = Button.new()
+	_name_save.text = "Save"
+	_name_save.pressed.connect(_submit_name)
+	name_row.add_child(_name_save)
+
+	_name_status = Label.new()
+	_name_status.add_theme_font_size_override("font_size", 13)
+	_name_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_name_status.visible = false
+	_name_section.add_child(_name_status)
+
 	var spacer := Control.new()
 	spacer.custom_minimum_size = Vector2(0, 6)
 	body.add_child(spacer)
@@ -165,11 +202,42 @@ func _build_settings_ui() -> void:
 
 func open_settings() -> void:
 	_root.visible = false
+	_name_section.visible = NetworkManager.session_token != ""
+	_name_edit.text = NetworkManager.display_name
+	_name_status.visible = false
+	_name_saving = false
+	_name_save.disabled = false
+	_name_save.text = "Save"
 	_settings_root.visible = true
 
 func _close_settings() -> void:
 	_settings_root.visible = false
 	_root.visible = _is_paused
+
+func _submit_name() -> void:
+	var name := _name_edit.text.strip_edges()
+	if name == "" or name == NetworkManager.display_name:
+		_name_status.visible = false
+		return
+	_name_saving = true
+	_name_save.disabled = true
+	_name_save.text = "Saving…"
+	NetworkManager.submit_display_name(name)
+
+func _on_name_result(ok: bool, text: String) -> void:
+	if not _name_saving:
+		return
+	_name_saving = false
+	_name_save.disabled = false
+	_name_save.text = "Save"
+	_name_status.visible = true
+	if ok:
+		_name_edit.text = text
+		_name_status.add_theme_color_override("font_color", ACCENT_GOLD)
+		_name_status.text = "Name updated!"
+	else:
+		_name_status.add_theme_color_override("font_color", Color(1, 0.419608, 0.419608))
+		_name_status.text = text
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):
