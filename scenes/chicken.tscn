@@ -106,6 +106,8 @@ animations = [{
 radius = 4.0
 
 [node name="Chicken" type="CharacterBody2D" unique_id=1644066447]
+collision_layer = 8
+collision_mask = 1
 script = ExtResource("1_1yv3s")
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="." unique_id=1274005982]

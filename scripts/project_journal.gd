@@ -15,12 +15,21 @@ const COLOR_ACCENT := Color(1, 0.819608, 0.4)
 
 var _project_id := 0
 var _submitting := false
+var _uploading := false
 
 func _ready() -> void:
 	visible = false
 	_back_button.pressed.connect(func(): closed.emit())
 	_add_button.pressed.connect(_submit)
+	_editor.caret_blink = true
+	_editor.gui_input.connect(_on_editor_input)
 	_build_toolbar()
+
+func _on_editor_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and event.keycode == KEY_V \
+			and (event.ctrl_pressed or event.meta_pressed) and DisplayServer.clipboard_has_image():
+		_editor.accept_event()
+		_paste_image()
 
 func open(project: Dictionary) -> void:
 	_project_id = int(project.get("id", 0))
@@ -54,6 +63,41 @@ func _build_toolbar() -> void:
 		b.focus_mode = Control.FOCUS_NONE
 		b.pressed.connect(_apply_markdown.bind(a[1], a[2], a[3]))
 		_toolbar.add_child(b)
+	var img_btn := Button.new()
+	img_btn.theme_type_variation = &"StepButton"
+	img_btn.text = "Img"
+	img_btn.tooltip_text = "Upload the image on your clipboard (or Ctrl+V in the editor)"
+	img_btn.focus_mode = Control.FOCUS_NONE
+	img_btn.pressed.connect(_paste_image)
+	_toolbar.add_child(img_btn)
+
+func _paste_image() -> void:
+	if _uploading:
+		return
+	if not DisplayServer.clipboard_has_image():
+		_show_error("Copy an image first, then press Img (or Ctrl+V).")
+		return
+	var img := DisplayServer.clipboard_get_image()
+	if img == null or img.is_empty():
+		_show_error("Couldn't read an image from the clipboard.")
+		return
+	_uploading = true
+	_show_status("Uploading image…")
+	var req := HTTPRequest.new()
+	add_child(req)
+	var url := NetworkManager.SERVER_HTTP_URL + "/api/uploads?token=" + NetworkManager.session_token.uri_encode()
+	req.request_completed.connect(func(_result, code, _headers, data):
+		req.queue_free()
+		_uploading = false
+		var json = JSON.parse_string(data.get_string_from_utf8()) if data.size() > 0 else null
+		if code == 200 and typeof(json) == TYPE_DICTIONARY and json.get("ok", false):
+			_error.visible = false
+			_editor.insert_text_at_caret("![image](%s)\n" % String(json.get("url", "")))
+			_editor.grab_focus()
+		else:
+			_show_error("Image upload failed — try again.")
+	)
+	req.request_raw(url, PackedStringArray(["Content-Type: image/png"]), HTTPClient.METHOD_POST, img.save_png_to_buffer())
 
 func _apply_markdown(prefix: String, suffix: String, line_prefix: bool) -> void:
 	if line_prefix:
@@ -122,11 +166,8 @@ func _entry_row(e: Dictionary) -> Control:
 
 	var hours := float(e.get("hours", 0))
 	if hours > 0.0:
-		var hs := String.num(hours, 2)
-		if hs.contains("."):
-			hs = hs.rstrip("0").rstrip(".")
 		var h := Label.new()
-		h.text = "%sh" % hs
+		h.text = "%sh" % MarkdownUtil.format_hours(hours)
 		h.add_theme_color_override("font_color", COLOR_ACCENT)
 		header.add_child(h)
 
@@ -141,43 +182,11 @@ func _entry_row(e: Dictionary) -> Control:
 	del.pressed.connect(_delete_entry.bind(int(e.get("id", 0))))
 	header.add_child(del)
 
-	var body := RichTextLabel.new()
-	body.bbcode_enabled = true
-	body.fit_content = true
-	body.selection_enabled = true
-	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	body.text = _md_to_bbcode(String(e.get("content", "")))
-	body.meta_clicked.connect(func(meta): OS.shell_open(String(meta)))
-	box.add_child(body)
+	box.add_child(MarkdownUtil.build_body(String(e.get("content", ""))))
 	return panel
 
 func _delete_entry(entry_id: int) -> void:
 	_api(HTTPClient.METHOD_DELETE, "/api/projects/%d/journal/%d" % [_project_id, entry_id], null, func(_code, _json): _refresh())
-
-func _md_to_bbcode(md: String) -> String:
-	var lines := PackedStringArray()
-	for line in md.replace("[", "[lb]").split("\n"):
-		var l := String(line)
-		if l.begins_with("### "):
-			l = "[b]" + l.substr(4) + "[/b]"
-		elif l.begins_with("## "):
-			l = "[font_size=20][b]" + l.substr(3) + "[/b][/font_size]"
-		elif l.begins_with("# "):
-			l = "[font_size=24][b]" + l.substr(2) + "[/b][/font_size]"
-		elif l.begins_with("- ") or l.begins_with("* "):
-			l = "  • " + l.substr(2)
-		lines.append(l)
-	var text := "\n".join(lines)
-	text = _re_sub(text, "\\*\\*(.+?)\\*\\*", "[b]$1[/b]")
-	text = _re_sub(text, "\\*(.+?)\\*", "[i]$1[/i]")
-	text = _re_sub(text, "`(.+?)`", "[code]$1[/code]")
-	text = _re_sub(text, "\\[lb\\]([^\\]]+?)\\]\\((https?://[^)\\s]+)\\)", "[url=$2]$1[/url]")
-	return text
-
-func _re_sub(text: String, pattern: String, replacement: String) -> String:
-	var re := RegEx.new()
-	re.compile(pattern)
-	return re.sub(text, replacement, true)
 
 func _set_submitting(on: bool) -> void:
 	_submitting = on
@@ -187,6 +196,12 @@ func _set_submitting(on: bool) -> void:
 
 func _show_error(message: String) -> void:
 	_error.text = message
+	_error.add_theme_color_override("font_color", Color(1, 0.419608, 0.419608))
+	_error.visible = true
+
+func _show_status(message: String) -> void:
+	_error.text = message
+	_error.add_theme_color_override("font_color", COLOR_ACCENT)
 	_error.visible = true
 
 func _clear_entries() -> void:

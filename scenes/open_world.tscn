@@ -3677,7 +3677,16 @@ dialogue = "Welcome to the Project Showcase!\nSoon, projects shipped by players 
 position = Vector2(40, -90)
 npc_name = "Cheetah"
 custom_sheet = "res://assets/npcs/cheetah_char.png"
+opens_explore = true
 dialogue = "Nya~ I'm Cheetah! Fastest boy in the open world, and the prettiest.\nAll this space to run? Heaven. Race me, I dare you~"
+
+[node name="Gabin" parent="." instance=ExtResource("44_npcs")]
+position = Vector2(-30, -60)
+npc_name = "Gabin"
+skin = "cv1:b1h0t4o1"
+custom_hair = "Hairstyles_ponytail_5.png"
+opens_explore = true
+dialogue = "Hi hi~ I'm Gabin! I moved out here to see what everyone's building.\nWanna take a look too?"
 
 [node name="StaticBody2D" type="StaticBody2D" parent="." unique_id=794157930]
 

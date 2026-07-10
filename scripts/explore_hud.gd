@@ -1,0 +1,416 @@
+extends CanvasLayer
+
+const THEME := preload("res://themes/main_theme.tres")
+const ACCENT_GOLD := Color(0.85098, 0.643137, 0.25098)
+const COLOR_ACCENT := Color(1, 0.819608, 0.4)
+
+var _root: Control
+var _plate_label: Label
+var _search_edit: LineEdit
+var _players_view: VBoxContainer
+var _players_list: VBoxContainer
+var _player_view: VBoxContainer
+var _player_info: Label
+var _projects_list: VBoxContainer
+var _project_view: VBoxContainer
+var _project_meta: RichTextLabel
+var _entries_list: VBoxContainer
+var _open := false
+var _current_player: Dictionary = {}
+
+func _ready() -> void:
+	layer = 100
+	process_mode = Node.PROCESS_MODE_ALWAYS
+	_build_ui()
+	_root.visible = false
+
+func _unhandled_input(event: InputEvent) -> void:
+	if not _open:
+		return
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:
+		get_viewport().set_input_as_handled()
+		if _project_view.visible:
+			_show_player(_current_player)
+		elif _player_view.visible:
+			_show_players()
+		else:
+			close()
+
+func is_open() -> bool:
+	return _open
+
+func open() -> void:
+	if _open:
+		return
+	_open = true
+	global.push_ui_blocker()
+	_root.visible = true
+	_show_players()
+	_search_edit.text = ""
+	_load_players("")
+
+func close() -> void:
+	if not _open:
+		return
+	_open = false
+	global.pop_ui_blocker()
+	_root.visible = false
+
+func _build_ui() -> void:
+	_root = Control.new()
+	_root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_root.theme = THEME
+	add_child(_root)
+
+	var backdrop := ColorRect.new()
+	backdrop.color = Color(0.039216, 0.023529, 0.007843, 0.78)
+	backdrop.set_anchors_preset(Control.PRESET_FULL_RECT)
+	backdrop.mouse_filter = Control.MOUSE_FILTER_STOP
+	_root.add_child(backdrop)
+
+	var center := CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_root.add_child(center)
+
+	var wrap := VBoxContainer.new()
+	wrap.add_theme_constant_override("separation", -22)
+	center.add_child(wrap)
+
+	var plate := PanelContainer.new()
+	plate.theme_type_variation = &"TitlePlate"
+	plate.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	plate.z_index = 1
+	_plate_label = Label.new()
+	_plate_label.theme_type_variation = &"TitlePlateText"
+	_plate_label.text = "EXPLORE"
+	plate.add_child(_plate_label)
+	wrap.add_child(plate)
+
+	var panel := PanelContainer.new()
+	panel.custom_minimum_size = Vector2(720, 540)
+	wrap.add_child(panel)
+
+	var accents := Control.new()
+	accents.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.add_child(accents)
+	for i in 4:
+		var dot := ColorRect.new()
+		dot.color = ACCENT_GOLD
+		dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var right := i % 2 == 1
+		var bottom := i >= 2
+		dot.anchor_left = 1.0 if right else 0.0
+		dot.anchor_right = dot.anchor_left
+		dot.anchor_top = 1.0 if bottom else 0.0
+		dot.anchor_bottom = dot.anchor_top
+		dot.offset_left = -17.0 if right else 9.0
+		dot.offset_right = dot.offset_left + 8.0
+		dot.offset_top = -17.0 if bottom else 9.0
+		dot.offset_bottom = dot.offset_top + 8.0
+		accents.add_child(dot)
+
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 30)
+	margin.add_theme_constant_override("margin_top", 34)
+	margin.add_theme_constant_override("margin_right", 30)
+	margin.add_theme_constant_override("margin_bottom", 22)
+	panel.add_child(margin)
+
+	var body := VBoxContainer.new()
+	body.add_theme_constant_override("separation", 10)
+	margin.add_child(body)
+
+	_players_view = _build_players_view()
+	body.add_child(_players_view)
+	_player_view = _build_player_view()
+	body.add_child(_player_view)
+	_project_view = _build_project_view()
+	body.add_child(_project_view)
+
+	var footer := HBoxContainer.new()
+	body.add_child(footer)
+	var spacer := Control.new()
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	footer.add_child(spacer)
+	var close_btn := Button.new()
+	close_btn.theme_type_variation = &"GreyButton"
+	close_btn.text = "Close"
+	close_btn.custom_minimum_size = Vector2(130, 0)
+	close_btn.pressed.connect(close)
+	footer.add_child(close_btn)
+
+func _build_players_view() -> VBoxContainer:
+	var view := VBoxContainer.new()
+	view.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	view.add_theme_constant_override("separation", 10)
+
+	var search_row := HBoxContainer.new()
+	search_row.add_theme_constant_override("separation", 8)
+	view.add_child(search_row)
+	_search_edit = LineEdit.new()
+	_search_edit.placeholder_text = "Search players…"
+	_search_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_search_edit.text_submitted.connect(func(_t): _load_players(_search_edit.text.strip_edges()))
+	search_row.add_child(_search_edit)
+	var search_btn := Button.new()
+	search_btn.theme_type_variation = &"StepButton"
+	search_btn.text = "Search"
+	search_btn.pressed.connect(func(): _load_players(_search_edit.text.strip_edges()))
+	search_row.add_child(search_btn)
+
+	_players_list = _make_list(view)
+	return view
+
+func _build_player_view() -> VBoxContainer:
+	var view := VBoxContainer.new()
+	view.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	view.add_theme_constant_override("separation", 10)
+	view.visible = false
+
+	var header := HBoxContainer.new()
+	header.add_theme_constant_override("separation", 10)
+	view.add_child(header)
+	header.add_child(_back_button(_show_players))
+	_player_info = Label.new()
+	_player_info.theme_type_variation = &"InfoText"
+	_player_info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header.add_child(_player_info)
+
+	_projects_list = _make_list(view)
+	return view
+
+func _build_project_view() -> VBoxContainer:
+	var view := VBoxContainer.new()
+	view.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	view.add_theme_constant_override("separation", 10)
+	view.visible = false
+
+	var header := HBoxContainer.new()
+	header.add_theme_constant_override("separation", 10)
+	view.add_child(header)
+	header.add_child(_back_button(func(): _show_player(_current_player)))
+	_project_meta = RichTextLabel.new()
+	_project_meta.bbcode_enabled = true
+	_project_meta.fit_content = true
+	_project_meta.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_project_meta.meta_clicked.connect(func(meta): OS.shell_open(String(meta)))
+	header.add_child(_project_meta)
+
+	_entries_list = _make_list(view)
+	return view
+
+func _back_button(action: Callable) -> Button:
+	var b := Button.new()
+	b.theme_type_variation = &"StepButton"
+	b.text = "< Back"
+	b.pressed.connect(action)
+	return b
+
+func _make_list(view: VBoxContainer) -> VBoxContainer:
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	view.add_child(scroll)
+	var list := VBoxContainer.new()
+	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	list.add_theme_constant_override("separation", 8)
+	scroll.add_child(list)
+	return list
+
+func _show_players() -> void:
+	_plate_label.text = "EXPLORE"
+	_players_view.visible = true
+	_player_view.visible = false
+	_project_view.visible = false
+
+func _show_player(p: Dictionary) -> void:
+	_current_player = p
+	var pname := String(p.get("display_name", "?"))
+	_plate_label.text = pname.to_upper().left(24)
+	_players_view.visible = false
+	_player_view.visible = true
+	_project_view.visible = false
+	_player_info.text = "joined %s" % String(p.get("created_at", "")).substr(0, 10)
+	_clear(_projects_list)
+	_projects_list.add_child(_muted("Loading…"))
+	_api("/api/explore/players/" + String(p.get("id", "")), _on_player)
+
+func _show_project(pr: Dictionary) -> void:
+	_plate_label.text = String(pr.get("name", "?")).to_upper().left(24)
+	_players_view.visible = false
+	_player_view.visible = false
+	_project_view.visible = true
+	_project_meta.text = ""
+	_clear(_entries_list)
+	_entries_list.add_child(_muted("Loading…"))
+	_api("/api/explore/projects/%d" % int(pr.get("id", 0)), _on_project)
+
+func _load_players(q: String) -> void:
+	_clear(_players_list)
+	_players_list.add_child(_muted("Loading…"))
+	var path := "/api/explore/players"
+	if q != "":
+		path += "?q=" + q.uri_encode()
+	_api(path, _on_players)
+
+func _on_players(code: int, json: Variant) -> void:
+	_clear(_players_list)
+	if code != 200 or typeof(json) != TYPE_DICTIONARY or not json.get("ok", false):
+		_players_list.add_child(_muted("Couldn't load players."))
+		return
+	var players: Array = json.get("players", [])
+	if players.is_empty():
+		_players_list.add_child(_muted("No players found."))
+		return
+	for p in players:
+		_players_list.add_child(_player_row(p))
+
+func _player_row(p: Dictionary) -> Control:
+	var panel := PanelContainer.new()
+	panel.theme_type_variation = &"RowPanel"
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 12)
+	panel.add_child(row)
+
+	var main := VBoxContainer.new()
+	main.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	main.add_theme_constant_override("separation", 2)
+	row.add_child(main)
+	var name_label := Label.new()
+	name_label.text = String(p.get("display_name", "?"))
+	name_label.clip_text = true
+	main.add_child(name_label)
+	var meta := Label.new()
+	meta.theme_type_variation = &"InfoText"
+	var count := int(p.get("project_count", 0))
+	meta.text = "joined %s · %d project%s" % [String(p.get("created_at", "")).substr(0, 10), count, "" if count == 1 else "s"]
+	main.add_child(meta)
+
+	var view_btn := Button.new()
+	view_btn.theme_type_variation = &"StepButton"
+	view_btn.text = "View"
+	view_btn.pressed.connect(_show_player.bind(p))
+	row.add_child(view_btn)
+	return panel
+
+func _on_player(code: int, json: Variant) -> void:
+	_clear(_projects_list)
+	if code != 200 or typeof(json) != TYPE_DICTIONARY or not json.get("ok", false):
+		_projects_list.add_child(_muted("Couldn't load this player."))
+		return
+	var projects: Array = json.get("projects", [])
+	if projects.is_empty():
+		_projects_list.add_child(_muted("No projects yet."))
+		return
+	for pr in projects:
+		_projects_list.add_child(_project_row(pr))
+
+func _project_row(pr: Dictionary) -> Control:
+	var panel := PanelContainer.new()
+	panel.theme_type_variation = &"RowPanel"
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 12)
+	panel.add_child(row)
+
+	var main := VBoxContainer.new()
+	main.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	main.add_theme_constant_override("separation", 2)
+	row.add_child(main)
+	var name_label := Label.new()
+	name_label.text = String(pr.get("name", "?"))
+	name_label.clip_text = true
+	main.add_child(name_label)
+	var desc := String(pr.get("description", "")).strip_edges()
+	if desc != "":
+		var meta := Label.new()
+		meta.theme_type_variation = &"InfoText"
+		meta.text = desc
+		meta.clip_text = true
+		main.add_child(meta)
+
+	var open_btn := Button.new()
+	open_btn.theme_type_variation = &"StepButton"
+	open_btn.text = "Open"
+	open_btn.pressed.connect(_show_project.bind(pr))
+	row.add_child(open_btn)
+	return panel
+
+func _on_project(code: int, json: Variant) -> void:
+	_clear(_entries_list)
+	if code != 200 or typeof(json) != TYPE_DICTIONARY or not json.get("ok", false):
+		_entries_list.add_child(_muted("Couldn't load this project."))
+		return
+	var pr: Dictionary = json.get("project", {})
+	var owner: Variant = json.get("owner", null)
+	var parts := PackedStringArray()
+	if typeof(owner) == TYPE_DICTIONARY:
+		parts.append("by [b]%s[/b]" % String(owner.get("display_name", "?")).replace("[", "[lb]"))
+	parts.append("created %s" % String(pr.get("created_at", "")).substr(0, 10))
+	var repo := String(pr.get("repo_url", ""))
+	if repo != "":
+		parts.append("[url=%s]repo[/url]" % repo)
+	var demo := String(pr.get("demo_url", ""))
+	if demo != "":
+		parts.append("[url=%s]demo[/url]" % demo)
+	var ht: Array = pr.get("hackatime_projects", [])
+	if not ht.is_empty():
+		parts.append("hackatime: %s" % ", ".join(PackedStringArray(ht)).replace("[", "[lb]"))
+	_project_meta.text = " · ".join(parts)
+	var desc := String(pr.get("description", "")).strip_edges()
+	if desc != "":
+		_entries_list.add_child(_muted(desc))
+	var entries: Array = json.get("entries", [])
+	if entries.is_empty():
+		_entries_list.add_child(_muted("No journal entries yet."))
+		return
+	for e in entries:
+		_entries_list.add_child(_entry_row(e))
+
+func _entry_row(e: Dictionary) -> Control:
+	var panel := PanelContainer.new()
+	panel.theme_type_variation = &"RowPanel"
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 4)
+	panel.add_child(box)
+
+	var header := HBoxContainer.new()
+	header.add_theme_constant_override("separation", 10)
+	box.add_child(header)
+	var date := Label.new()
+	date.theme_type_variation = &"InfoText"
+	date.text = String(e.get("created_at", "")).substr(0, 10)
+	header.add_child(date)
+	var hours := float(e.get("hours", 0))
+	if hours > 0.0:
+		var h := Label.new()
+		h.text = "%sh" % MarkdownUtil.format_hours(hours)
+		h.add_theme_color_override("font_color", COLOR_ACCENT)
+		header.add_child(h)
+
+	box.add_child(MarkdownUtil.build_body(String(e.get("content", ""))))
+	return panel
+
+func _muted(text: String) -> Label:
+	var l := Label.new()
+	l.text = text
+	l.theme_type_variation = &"InfoText"
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	return l
+
+func _clear(list: VBoxContainer) -> void:
+	for c in list.get_children():
+		c.queue_free()
+
+func _api(path: String, cb: Callable) -> void:
+	var req := HTTPRequest.new()
+	add_child(req)
+	var sep := "&" if path.contains("?") else "?"
+	var url := NetworkManager.SERVER_HTTP_URL + path + sep + "token=" + NetworkManager.session_token.uri_encode()
+	req.request_completed.connect(func(_result, code, _headers, data):
+		var json = null
+		if data.size() > 0:
+			json = JSON.parse_string(data.get_string_from_utf8())
+		cb.call(code, json)
+		req.queue_free()
+	)
+	req.request(url)

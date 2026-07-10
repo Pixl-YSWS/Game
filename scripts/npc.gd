@@ -8,6 +8,7 @@ const MONOCRAFT := preload("res://assets/fonts/Monocraft.ttf")
 @export var custom_hair: String = ""
 @export var custom_sheet: String = ""
 @export var opens_projects: bool = false
+@export var opens_explore: bool = false
 @export var wanders: bool = true
 @export var speed: float = 50.0
 @export var wander_radius: float = 56.0
@@ -204,6 +205,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		if opens_projects:
 			ProjectsHud.open()
+		elif opens_explore:
+			ExploreHud.open()
 		else:
 			Dialogue.open(npc_name, dialogue.split("\n"))
 		_update_prompt()
