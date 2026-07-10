@@ -25,6 +25,15 @@ func _ready() -> void:
 	_root.visible = false
 
 func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_E:
+		if ChatHud.is_typing() or Dialogue.is_open or (not _open and (global.ui_blocked() or global.player_in_range)):
+			return
+		if _open:
+			close()
+		else:
+			open()
+		get_viewport().set_input_as_handled()
+		return
 	if not _open:
 		return
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:
@@ -327,6 +336,21 @@ func _project_row(pr: Dictionary) -> Control:
 		meta.text = desc
 		meta.clip_text = true
 		main.add_child(meta)
+	var links := PackedStringArray()
+	var repo := String(pr.get("repo_url", ""))
+	if repo != "":
+		links.append("[url=%s]repo[/url]" % repo)
+	var demo := String(pr.get("demo_url", ""))
+	if demo != "":
+		links.append("[url=%s]demo[/url]" % demo)
+	if not links.is_empty():
+		var link_label := RichTextLabel.new()
+		link_label.bbcode_enabled = true
+		link_label.fit_content = true
+		link_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		link_label.text = " · ".join(links)
+		link_label.meta_clicked.connect(func(meta): OS.shell_open(String(meta)))
+		main.add_child(link_label)
 
 	var open_btn := Button.new()
 	open_btn.theme_type_variation = &"StepButton"
