@@ -141,6 +141,14 @@ layout_mode = 2
 placeholder_text = "Demo link (optional)"
 max_length = 500
 
+[node name="ErrorLabel" type="Label" parent="Center/Wrap/Card/Margin/Panel"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.419608, 0.419608, 1)
+autowrap_mode = 3
+horizontal_alignment = 1
+
 [node name="HtLabel" type="Label" parent="Center/Wrap/Card/Margin/Panel"]
 layout_mode = 2
 theme_type_variation = &"SubText"

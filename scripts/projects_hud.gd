@@ -92,12 +92,19 @@ func _on_create_submitted(data: Dictionary) -> void:
 	if data.has("id"):
 		method = HTTPClient.METHOD_PUT
 		path = "/api/projects/%d" % int(data["id"])
-	_api(method, path, data, func(code, _json):
+	_api(method, path, data, func(code, json):
 		if code >= 200 and code < 300:
 			_hide_create()
 			_api(HTTPClient.METHOD_GET, "/api/projects", null, _on_projects)
 		else:
-			_create_screen.on_submit_failed()
+			var msg := ""
+			if typeof(json) == TYPE_DICTIONARY:
+				match String(json.get("error", "")):
+					"repo_not_github":
+						msg = "Repo link must be a GitHub repository."
+					"name_required":
+						msg = "Project name is required."
+			_create_screen.on_submit_failed(msg)
 	)
 
 # --- networking ------------------------------------------------------------

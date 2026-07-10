@@ -7,6 +7,7 @@ signal cancelled
 @onready var _desc: TextEdit = %Description
 @onready var _repo: LineEdit = %Repo
 @onready var _demo: LineEdit = %Demo
+@onready var _error: Label = %ErrorLabel
 @onready var _grid: GridContainer = %HtGrid
 @onready var _title: Label = %Title
 @onready var _create_button: Button = %CreateButton
@@ -32,13 +33,20 @@ func open_edit(project: Dictionary, ht_projects: Array) -> void:
 	_fill(project, ht_projects)
 	_show()
 
-func on_submit_failed() -> void:
+func on_submit_failed(message := "") -> void:
 	_set_submitting(false)
+	if message != "":
+		_show_error(message)
 
 func _show() -> void:
 	_set_submitting(false)
+	_error.visible = false
 	visible = true
 	_name.grab_focus()
+
+func _show_error(message: String) -> void:
+	_error.text = message
+	_error.visible = true
 
 func _fill(project: Dictionary, ht_projects: Array) -> void:
 	_name.text = String(project.get("name", ""))
@@ -80,6 +88,17 @@ func _set_submitting(on: bool) -> void:
 	else:
 		_create_button.text = "Save" if _edit_id != 0 else "Create"
 
+func _is_github_repo(url: String) -> bool:
+	var rest := ""
+	var lower := url.to_lower()
+	for prefix: String in ["https://github.com/", "http://github.com/", "https://www.github.com/", "http://www.github.com/"]:
+		if lower.begins_with(prefix):
+			rest = url.substr(prefix.length())
+			break
+	if rest == "":
+		return false
+	return rest.split("/", false).size() >= 2
+
 func _submit() -> void:
 	if _submitting:
 		return
@@ -87,6 +106,14 @@ func _submit() -> void:
 	if pname == "":
 		_name.grab_focus()
 		return
+	var repo := _repo.text.strip_edges()
+	if repo.to_lower().begins_with("github.com/") or repo.to_lower().begins_with("www.github.com/"):
+		repo = "https://" + repo
+	if repo != "" and not _is_github_repo(repo):
+		_show_error("Repo link must be a GitHub repository (github.com/owner/repo).")
+		_repo.grab_focus()
+		return
+	_error.visible = false
 	var selected: Array = []
 	for cb in _grid.get_children():
 		if cb is Button and cb.button_pressed:
@@ -94,7 +121,7 @@ func _submit() -> void:
 	var data := {
 		"name": pname,
 		"description": _desc.text.strip_edges(),
-		"repoUrl": _repo.text.strip_edges(),
+		"repoUrl": repo,
 		"demoUrl": _demo.text.strip_edges(),
 		"hackatimeProjects": selected,
 	}
