@@ -2,6 +2,7 @@ extends CanvasLayer
 
 const GAMEPLAY_SCENES := ["village", "open_world", "house_interior"]
 const PROJECT_CREATE := preload("res://scenes/project_create.tscn")
+const PROJECT_JOURNAL := preload("res://scenes/project_journal.tscn")
 
 @onready var _root: Control = %Root
 @onready var _modal: Control = %Root.get_node("CenterContainer")
@@ -11,6 +12,7 @@ const PROJECT_CREATE := preload("res://scenes/project_create.tscn")
 var _open := false
 var _ht_projects: Array = []
 var _create_screen: Control
+var _journal_screen: Control
 var _confirm_root: Control
 var _confirm_label: Label
 var _pending_delete_id := 0
@@ -25,6 +27,9 @@ func _ready() -> void:
 	_root.add_child(_create_screen)
 	_create_screen.submitted.connect(_on_create_submitted)
 	_create_screen.cancelled.connect(_hide_create)
+	_journal_screen = PROJECT_JOURNAL.instantiate()
+	_root.add_child(_journal_screen)
+	_journal_screen.closed.connect(_hide_journal)
 	_build_confirm_ui()
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -40,6 +45,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			_modal.visible = true
 		elif _create_screen.visible:
 			_hide_create()
+		elif _journal_screen.visible:
+			_hide_journal()
 		else:
 			close()
 
@@ -70,6 +77,7 @@ func close() -> void:
 	_open = false
 	global.pop_ui_blocker()
 	_create_screen.visible = false
+	_journal_screen.visible = false
 	_confirm_root.visible = false
 	_modal.visible = true
 	_root.visible = false
@@ -85,6 +93,14 @@ func _open_create() -> void:
 func _open_edit(project: Dictionary) -> void:
 	_modal.visible = false
 	_create_screen.open_edit(project, _ht_projects)
+
+func _open_journal(project: Dictionary) -> void:
+	_modal.visible = false
+	_journal_screen.open(project)
+
+func _hide_journal() -> void:
+	_journal_screen.visible = false
+	_modal.visible = true
 
 func _on_create_submitted(data: Dictionary) -> void:
 	var method := HTTPClient.METHOD_POST
@@ -180,6 +196,12 @@ func _project_row(p: Dictionary) -> Control:
 		meta.text = desc
 		meta.clip_text = true
 		main.add_child(meta)
+
+	var journal := Button.new()
+	journal.theme_type_variation = &"StepButton"
+	journal.text = "Journal"
+	journal.pressed.connect(_open_journal.bind(p))
+	row.add_child(journal)
 
 	var edit := Button.new()
 	edit.theme_type_variation = &"StepButton"

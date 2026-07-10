@@ -1,0 +1,187 @@
+[gd_scene format=3 uid="uid://dxjournal1qk4"]
+
+[ext_resource type="Theme" uid="uid://bv3yjmmciab5v" path="res://themes/main_theme.tres" id="1_theme"]
+[ext_resource type="Script" path="res://scripts/project_journal.gd" id="2_script"]
+
+[node name="ProjectJournal" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme = ExtResource("1_theme")
+script = ExtResource("2_script")
+
+[node name="Backdrop" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.054902, 0.035294, 0.015686, 1)
+
+[node name="Center" type="CenterContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Wrap" type="VBoxContainer" parent="Center"]
+layout_mode = 2
+theme_override_constants/separation = -22
+
+[node name="TitlePlate" type="PanelContainer" parent="Center/Wrap"]
+z_index = 1
+layout_mode = 2
+size_flags_horizontal = 4
+theme_type_variation = &"TitlePlate"
+
+[node name="Title" type="Label" parent="Center/Wrap/TitlePlate"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"TitlePlateText"
+text = "JOURNAL"
+
+[node name="Card" type="PanelContainer" parent="Center/Wrap"]
+custom_minimum_size = Vector2(720, 0)
+layout_mode = 2
+
+[node name="Accents" type="Control" parent="Center/Wrap/Card"]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="TL" type="ColorRect" parent="Center/Wrap/Card/Accents"]
+layout_mode = 1
+offset_left = 9.0
+offset_top = 9.0
+offset_right = 17.0
+offset_bottom = 17.0
+mouse_filter = 2
+color = Color(0.85098, 0.643137, 0.25098, 1)
+
+[node name="TR" type="ColorRect" parent="Center/Wrap/Card/Accents"]
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -17.0
+offset_top = 9.0
+offset_right = -9.0
+offset_bottom = 17.0
+grow_horizontal = 0
+mouse_filter = 2
+color = Color(0.85098, 0.643137, 0.25098, 1)
+
+[node name="BL" type="ColorRect" parent="Center/Wrap/Card/Accents"]
+layout_mode = 1
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 9.0
+offset_top = -17.0
+offset_right = 17.0
+offset_bottom = -9.0
+grow_vertical = 0
+mouse_filter = 2
+color = Color(0.85098, 0.643137, 0.25098, 1)
+
+[node name="BR" type="ColorRect" parent="Center/Wrap/Card/Accents"]
+layout_mode = 1
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -17.0
+offset_top = -17.0
+offset_right = -9.0
+offset_bottom = -9.0
+grow_horizontal = 0
+grow_vertical = 0
+mouse_filter = 2
+color = Color(0.85098, 0.643137, 0.25098, 1)
+
+[node name="Margin" type="MarginContainer" parent="Center/Wrap/Card"]
+layout_mode = 2
+theme_override_constants/margin_left = 30
+theme_override_constants/margin_top = 34
+theme_override_constants/margin_right = 30
+theme_override_constants/margin_bottom = 24
+
+[node name="Panel" type="VBoxContainer" parent="Center/Wrap/Card/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Scroll" type="ScrollContainer" parent="Center/Wrap/Card/Margin/Panel"]
+custom_minimum_size = Vector2(0, 240)
+layout_mode = 2
+horizontal_scroll_mode = 0
+
+[node name="Entries" type="VBoxContainer" parent="Center/Wrap/Card/Margin/Panel/Scroll"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="EditorLabel" type="Label" parent="Center/Wrap/Card/Margin/Panel"]
+layout_mode = 2
+theme_type_variation = &"SubText"
+text = "— new entry —"
+horizontal_alignment = 1
+
+[node name="Toolbar" type="HBoxContainer" parent="Center/Wrap/Card/Margin/Panel"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Editor" type="TextEdit" parent="Center/Wrap/Card/Margin/Panel"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 120)
+layout_mode = 2
+placeholder_text = "What did you work on? Markdown supported: # heading, **bold**, *italic*, `code`, - list, [link](https://...)"
+wrap_mode = 1
+
+[node name="HoursRow" type="HBoxContainer" parent="Center/Wrap/Card/Margin/Panel"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="HoursLabel" type="Label" parent="Center/Wrap/Card/Margin/Panel/HoursRow"]
+layout_mode = 2
+theme_type_variation = &"InfoText"
+text = "Hours spent"
+
+[node name="Hours" type="SpinBox" parent="Center/Wrap/Card/Margin/Panel/HoursRow"]
+unique_name_in_owner = true
+layout_mode = 2
+max_value = 24.0
+step = 0.25
+suffix = "h"
+
+[node name="ErrorLabel" type="Label" parent="Center/Wrap/Card/Margin/Panel"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.419608, 0.419608, 1)
+autowrap_mode = 3
+horizontal_alignment = 1
+
+[node name="Buttons" type="HBoxContainer" parent="Center/Wrap/Card/Margin/Panel"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="BackButton" type="Button" parent="Center/Wrap/Card/Margin/Panel/Buttons"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"GreyButton"
+text = "Back"
+
+[node name="AddButton" type="Button" parent="Center/Wrap/Card/Margin/Panel/Buttons"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Add entry"
