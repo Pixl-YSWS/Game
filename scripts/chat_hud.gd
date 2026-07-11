@@ -19,6 +19,7 @@ var _lines: Array[Dictionary] = []
 var _unread := 0
 var _line_style: StyleBoxFlat
 var _closing := false
+var _censor_regex := RegEx.create_from_string("([jJ])[oO]([bB])")
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -119,12 +120,15 @@ func _on_submit(text: String) -> void:
 		NetworkManager.send_chat(t)
 	_close_input()
 
+func _censor(text: String) -> String:
+	return _censor_regex.sub(text, "$1*$2", true)
+
 func _on_chat(user_id: String, display_name: String, text: String) -> void:
-	_add_line("%s: %s" % [display_name, text], COLOR_TEXT, user_id == NetworkManager.user_id)
+	_add_line("%s: %s" % [display_name, _censor(text)], COLOR_TEXT, user_id == NetworkManager.user_id)
 
 func _on_dm(from_name: String, to_name: String, text: String, outgoing: bool) -> void:
 	var prefix := "to %s" % to_name if outgoing else "from %s" % from_name
-	_add_line("[%s] %s" % [prefix, text], COLOR_DM, outgoing)
+	_add_line("[%s] %s" % [prefix, _censor(text)], COLOR_DM, outgoing)
 
 func _add_line(display: String, color: Color, own: bool) -> void:
 	var panel := PanelContainer.new()

@@ -2834,11 +2834,19 @@ npc_name = "Imu"
 dialogue = "I watch over the village from the shadows."
 skin = "cvc:6"
 
+[node name="Gabin" parent="." unique_id=1600952998 instance=ExtResource("48_npcs")]
+position = Vector2(-465, -440)
+npc_name = "Gabin"
+dialogue = "Hi hi~ I'm Gabin! Cutest one in the village, obviously.
+Don't be shy, come hang out with me anytime!"
+skin = "cv1:b1h0t4o1"
+custom_hair = "Hairstyles_ponytail_5.png"
+
 [node name="Ricky" parent="." unique_id=1966649830 instance=ExtResource("48_npcs")]
 position = Vector2(-510, -465)
 npc_name = "Ricky"
-dialogue = "Yo, I'm Ricky. Gabin's off exploring the open world now,
-but honestly? This village is pretty cool."
+dialogue = "Yo, I'm Ricky. Gabin dragged me here but honestly?
+This village is pretty cool."
 skin = "cv1:b1h4t2o1"
 
 [connection signal="body_entered" from="DoorTrigger" to="DoorTrigger" method="_on_body_entered"]
