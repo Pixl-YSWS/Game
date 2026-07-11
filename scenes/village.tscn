@@ -2765,6 +2765,13 @@ position = Vector2(7, 0)
 tile_map_data = PackedByteArray("AAAFAPn/BQACAAAAAAAFAP7/BQACAAAAAAANAPr/BQACAAAAAAAPAPf/BQACAAAAAAABAPD/BQACAAAAAAD4//H/BQACAAAAAAD3//3/BQACAAAAAAAPAAAABQACAAAAAADe/wAABQACAAAAAADe//3/BQACAAAAAADe//r/BQACAAAAAADe//f/BQACAAAAAADe//T/BQACAAAAAADe//H/BQACAAAAAADj//j/BQACAAAAAADm//j/BQACAAAAAADp//j/BQACAAAAAADs//j/BQACAAAAAADj//T/BQACAAAAAADm//T/BQACAAAAAADp//T/BQACAAAAAADs//T/BQACAAAAAADv//7/BQACAAAAAADp/wEABQACAAAAAADk//3/BQACAAAAAADw//D/BQACAAAAAADl//D/BQACAAAAAADW/+X/CAACAAAAAADn/9z/CAACAAAAAADW/9v/CAACAAAAAADn/+P/CAACAAAAAADg/97/CAACAAAAAADe/+T/CAACAAAAAAA=")
 tile_set = SubResource("TileSet_15b3c")
 
+[node name="Trees" type="TileMapLayer" parent="Trees" unique_id=37468841]
+z_index = 10
+y_sort_enabled = true
+position = Vector2(7, 0)
+tile_map_data = PackedByteArray("AAAFAPn/BQACAAAAAAAFAP7/BQACAAAAAAANAPr/BQACAAAAAAAPAPf/BQACAAAAAAABAPD/BQACAAAAAAD4//H/BQACAAAAAAD3//3/BQACAAAAAAAPAAAABQACAAAAAADe/wAABQACAAAAAADe//3/BQACAAAAAADe//r/BQACAAAAAADe//f/BQACAAAAAADe//T/BQACAAAAAADe//H/BQACAAAAAADj//j/BQACAAAAAADm//j/BQACAAAAAADp//j/BQACAAAAAADs//j/BQACAAAAAADj//T/BQACAAAAAADm//T/BQACAAAAAADp//T/BQACAAAAAADs//T/BQACAAAAAADv//7/BQACAAAAAADp/wEABQACAAAAAADk//3/BQACAAAAAADw//D/BQACAAAAAADl//D/BQACAAAAAADW/+X/CAACAAAAAADn/9z/CAACAAAAAADW/9v/CAACAAAAAADn/+P/CAACAAAAAADg/97/CAACAAAAAADe/+T/CAACAAAAAAA=")
+tile_set = SubResource("TileSet_15b3c")
+
 [node name="Bridge" type="TileMapLayer" parent="." unique_id=7444106]
 z_index = 5
 tile_map_data = PackedByteArray("AADx//X/AAAHAAAAAADx//b/AAAHAAEAAADx//f/AAAHAAIAAADy//X/AAAIAAAAAADy//b/AAAIAAEAAADy//f/AAAIAAIAAADz//X/AAAJAAAAAADz//b/AAAJAAEAAADz//f/AAAJAAIAAAD0//X/AAAJAAAAAAD0//b/AAAKAAEAAAD0//f/AAAKAAIAAAD2//X/AAAKAAAAAAD2//b/AAAKAAEAAAD3//X/AAALAAAAAAD3//b/AAALAAEAAAD1//X/AAAJAAAAAAD1//b/AAAKAAEAAAD1//f/AAAJAAIAAAD2//f/AAAKAAIAAAD3//f/AAALAAIAAADx//j/AAAHAAQAAADy//j/AAAIAAQAAADz//j/AAAJAAQAAAD0//j/AAAJAAQAAAD1//j/AAAJAAQAAAD2//j/AAAKAAQAAAD3//j/AAALAAQAAADf/+f/AAADAAAAAADf/+j/AAADAAEAAADf/+n/AAADAAIAAADf/+r/AAADAAMAAADg/+f/AAAEAAAAAADg/+j/AAAEAAEAAADg/+n/AAAEAAIAAADg/+r/AAAEAAMAAADh/+f/AAAFAAAAAADh/+j/AAAFAAEAAADh/+n/AAAFAAIAAADh/+r/AAAFAAMAAADf/+v/AAADAAIAAADf/+z/AAADAAMAAADg/+v/AAAEAAIAAADg/+z/AAAEAAMAAADh/+v/AAAFAAIAAADh/+z/AAAFAAMAAADf/+3/AAADAAIAAADf/+7/AAADAAMAAADg/+3/AAAEAAIAAADg/+7/AAAEAAMAAADh/+3/AAAFAAIAAADh/+7/AAAFAAMAAADf/+//AAADAAQAAADg/+//AAAEAAQAAADh/+//AAAFAAQAAADi/+f/AAAGAAAAAADi/+j/AAAGAAEAAADi/+n/AAAGAAEAAADi/+r/AAAGAAEAAADi/+v/AAAGAAEAAADi/+z/AAAGAAEAAADi/+3/AAAGAAEAAADi/+7/AAAGAAEAAADi/+//AAAGAAQAAADe/+//AAACAAQAAADe/+f/AAACAAAAAADe/+j/AAACAAEAAADe/+n/AAACAAEAAADe/+r/AAACAAEAAADe/+v/AAACAAEAAADe/+z/AAACAAEAAADe/+3/AAACAAEAAADe/+7/AAACAAEAAAA=")
@@ -2801,36 +2808,39 @@ z_index = 10
 position = Vector2(-481, -74)
 route_path = NodePath("../Sheep3Route")
 
-[node name="Pip" parent="." instance=ExtResource("48_npcs")]
+[node name="Pip" parent="." unique_id=375969893 instance=ExtResource("48_npcs")]
 position = Vector2(120, -81)
 npc_name = "Pip"
+dialogue = "Built something? Talk to me to log your project."
 skin = "cvc:4"
 opens_projects = true
-dialogue = "Built something? Talk to me to log your project."
 
-[node name="Ridit" parent="." instance=ExtResource("48_npcs")]
+[node name="Ridit" parent="." unique_id=1922539171 instance=ExtResource("48_npcs")]
 position = Vector2(0, -120)
 npc_name = "Ridit"
+dialogue = "Hey, I'm Ridit — welcome to the village!
+Nice day for a stroll across the bridges, huh?"
 skin = "cvc:3"
-dialogue = "Hey, I'm Ridit — welcome to the village!\nNice day for a stroll across the bridges, huh?"
 
-[node name="Mangoman" parent="." instance=ExtResource("48_npcs")]
+[node name="Mangoman" parent="." unique_id=967392462 instance=ExtResource("48_npcs")]
 position = Vector2(-430, -50)
 npc_name = "Mangoman"
-skin = "cvc:2"
 dialogue = "Mango? Mango. The bridges link the whole village together."
+skin = "cvc:2"
 
-[node name="Imu" parent="." instance=ExtResource("48_npcs")]
+[node name="Imu" parent="." unique_id=1598029634 instance=ExtResource("48_npcs")]
 position = Vector2(-410, -160)
 npc_name = "Imu"
-skin = "cvc:6"
 dialogue = "I watch over the village from the shadows."
+skin = "cvc:6"
 
-[node name="Ricky" parent="." instance=ExtResource("48_npcs")]
+[node name="Ricky" parent="." unique_id=1966649830 instance=ExtResource("48_npcs")]
 position = Vector2(-510, -465)
 npc_name = "Ricky"
+dialogue = "Yo, I'm Ricky. Gabin's off exploring the open world now,
+but honestly? This village is pretty cool."
 skin = "cv1:b1h4t2o1"
-dialogue = "Yo, I'm Ricky. Gabin's off exploring the open world now,\nbut honestly? This village is pretty cool."
+
 [connection signal="body_entered" from="DoorTrigger" to="DoorTrigger" method="_on_body_entered"]
 [connection signal="body_exited" from="DoorTrigger" to="DoorTrigger" method="_on_body_exited"]
 [connection signal="body_entered" from="DoorTrigger2" to="DoorTrigger2" method="_on_body_entered"]
