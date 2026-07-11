@@ -23,7 +23,7 @@ const DEV_WS_URL = "ws://localhost:4728/ws"
 const PROD_SERVER_URL = "https://server.pixl.rsvp"
 const PROD_WS_URL = "wss://server.pixl.rsvp/ws"
 
-const USE_PROD: bool = false
+const USE_PROD: bool = true
 
 const SERVER_HTTP_URL = PROD_SERVER_URL if USE_PROD else DEV_SERVER_URL
 const SERVER_WS_URL = PROD_WS_URL if USE_PROD else DEV_WS_URL
