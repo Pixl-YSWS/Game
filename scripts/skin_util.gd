@@ -2,15 +2,16 @@ class_name SkinUtil
 #
 const PRESET_DIR := "res://assets/cozy-towns/CozyValley_Premium_1.3/Characters/-- Pre-assembled Characters/"
 const BASE_DIR := "res://assets/cozy-towns/CozyValley_Basic_1.0/Characters/"
+const PREMIUM_DIR := "res://assets/cozy-towns/CozyValley_Premium_1.3/Characters/"
 const PREMIUM_HAIR_DIR := "res://assets/cozy-towns/CozyValley_Premium_1.3/Characters/Hairstyles/"
 const SHEET_SIZE := Vector2i(160, 576)
 
 const PORTRAIT_REGION := Rect2(0, 32, 32, 32)
 
 const NUM_BODY := 3
-const NUM_HAIR := 6
-const NUM_TOP := 6
-const NUM_BOTTOM := 6
+const NUM_HAIR := 18
+const NUM_TOP := 18
+const NUM_BOTTOM := 18
 const NUM_PRESETS := 9
 
 static func encode_outfit(body: int, hair: int, top: int, bottom: int) -> String:
@@ -26,20 +27,20 @@ static func preset_index(desc: String) -> int:
 
 static func parse_outfit(desc: String) -> Dictionary:
 	var re := RegEx.new()
-	re.compile("^cv1:b([1-3])h([0-6])t([1-6])o([1-6])$")
+	re.compile("^cv1:b([1-3])h(\\d{1,2})t(\\d{1,2})o(\\d{1,2})$")
 	var m := re.search(desc)
 	if m == null:
 		return {"body": 1, "hair": 1, "top": 1, "bottom": 1}
 	return {
 		"body": int(m.get_string(1)),
-		"hair": int(m.get_string(2)),
-		"top": int(m.get_string(3)),
-		"bottom": int(m.get_string(4)),
+		"hair": clampi(int(m.get_string(2)), 0, NUM_HAIR),
+		"top": clampi(int(m.get_string(3)), 1, NUM_TOP),
+		"bottom": clampi(int(m.get_string(4)), 1, NUM_BOTTOM),
 	}
 
 static func is_valid(desc: String) -> bool:
 	var re := RegEx.new()
-	re.compile("^(cvc:[1-9]|cv1:b[1-3]h[0-6]t[1-6]o[1-6])$")
+	re.compile("^(cvc:[1-9]|cv1:b[1-3]h(\\d|1[0-8])t([1-9]|1[0-8])o([1-9]|1[0-8]))$")
 	return re.search(desc) != null
 
 static func random_outfit() -> String:
@@ -57,13 +58,34 @@ static func resolve_sheet(desc: String) -> Texture2D:
 		return _bake_outfit(parse_outfit(desc))
 	return load(PRESET_DIR + "char1.png")
 
+static func hair_path(n: int) -> String:
+	if n <= 6:
+		return BASE_DIR + "Hairstyles/Hairstyles_short_%d.png" % n
+	if n <= 12:
+		return PREMIUM_DIR + "Hairstyles/Hairstyles_ponytail_%d.png" % (n - 6)
+	return PREMIUM_DIR + "Hairstyles/Hairstyles_middlePart_%d.png" % (n - 12)
+
+static func top_path(n: int) -> String:
+	if n <= 6:
+		return BASE_DIR + "Tops/Tops_shirt_%d.png" % n
+	if n <= 12:
+		return PREMIUM_DIR + "Tops/Tops_hoodie_%d.png" % (n - 6)
+	return PREMIUM_DIR + "Tops/Tops_striped_%d.png" % (n - 12)
+
+static func bottom_path(n: int) -> String:
+	if n <= 6:
+		return BASE_DIR + "Bottoms/Bottoms_shorts_%d.png" % n
+	if n <= 12:
+		return PREMIUM_DIR + "Bottoms/Bottoms_long_%d.png" % (n - 6)
+	return PREMIUM_DIR + "Bottoms/Bottoms_skirt_%d.png" % (n - 12)
+
 static func bake_with_hair(desc: String, hair_file: String) -> Texture2D:
 	var o := parse_outfit(desc)
 	var paths: Array[String] = [
 		BASE_DIR + "Base/Base%d_hand_back.png" % o.body,
 		BASE_DIR + "Base/Base%d_body.png" % o.body,
-		BASE_DIR + "Bottoms/Bottoms_shorts_%d.png" % o.bottom,
-		BASE_DIR + "Tops/Tops_shirt_%d.png" % o.top,
+		bottom_path(o.bottom),
+		top_path(o.top),
 		PREMIUM_HAIR_DIR + hair_file,
 		BASE_DIR + "Base/Base%d_hand_front.png" % o.body,
 	]
@@ -73,11 +95,11 @@ static func _bake_outfit(o: Dictionary) -> Texture2D:
 	var paths: Array[String] = [
 		BASE_DIR + "Base/Base%d_hand_back.png" % o.body,
 		BASE_DIR + "Base/Base%d_body.png" % o.body,
-		BASE_DIR + "Bottoms/Bottoms_shorts_%d.png" % o.bottom,
-		BASE_DIR + "Tops/Tops_shirt_%d.png" % o.top,
+		bottom_path(o.bottom),
+		top_path(o.top),
 	]
 	if int(o.hair) > 0:
-		paths.append(BASE_DIR + "Hairstyles/Hairstyles_short_%d.png" % o.hair)
+		paths.append(hair_path(o.hair))
 	paths.append(BASE_DIR + "Base/Base%d_hand_front.png" % o.body)
 	return _blend(paths)
 

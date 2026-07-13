@@ -9,6 +9,9 @@ const MONOCRAFT := preload("res://assets/fonts/Monocraft.ttf")
 @export var custom_sheet: String = ""
 @export var opens_projects: bool = false
 @export var opens_explore: bool = false
+@export var quest_project: bool = false
+@export_multiline var quest_offer: String = ""
+@export_multiline var quest_done: String = ""
 @export var wanders: bool = true
 @export var speed: float = 50.0
 @export var wander_radius: float = 56.0
@@ -18,6 +21,7 @@ const MONOCRAFT := preload("res://assets/fonts/Monocraft.ttf")
 
 var _in_range := false
 var _prompt: Label
+var _quest_pending := false
 var _base_frames: SpriteFrames
 var _home: Vector2
 var _target: Vector2
@@ -207,6 +211,38 @@ func _unhandled_input(event: InputEvent) -> void:
 			ProjectsHud.open()
 		elif opens_explore:
 			ExploreHud.open()
+		elif quest_project:
+			_start_project_quest()
 		else:
 			Dialogue.open(npc_name, dialogue.split("\n"))
 		_update_prompt()
+
+func _start_project_quest() -> void:
+	if _quest_pending:
+		return
+	_quest_pending = true
+	var req := HTTPRequest.new()
+	add_child(req)
+	var url := NetworkManager.SERVER_HTTP_URL + "/api/projects?token=" + NetworkManager.session_token.uri_encode()
+	req.request_completed.connect(func(_result, code, _headers, data):
+		_quest_pending = false
+		req.queue_free()
+		if not _in_range:
+			return
+		var json = null
+		if data.size() > 0:
+			json = JSON.parse_string(data.get_string_from_utf8())
+		var projects: Array = []
+		if code == 200 and typeof(json) == TYPE_DICTIONARY and json.get("ok", false):
+			projects = json.get("projects", [])
+		if projects.is_empty():
+			Dialogue.open(npc_name, quest_offer.split("\n"))
+			Dialogue.closed.connect(func(): ProjectsHud.open(), CONNECT_ONE_SHOT)
+		else:
+			Dialogue.open(npc_name, quest_done.split("\n"))
+		_update_prompt()
+	)
+	if req.request(url) != OK:
+		_quest_pending = false
+		req.queue_free()
+		Dialogue.open(npc_name, dialogue.split("\n"))

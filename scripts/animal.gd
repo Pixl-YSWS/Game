@@ -110,7 +110,7 @@ func _pick_new_target() -> void:
 
 func _setup_pet_area() -> void:
 	var area := Area2D.new()
-	area.collision_mask = 1
+	area.collision_mask = 2
 	var shape := CollisionShape2D.new()
 	var circle := CircleShape2D.new()
 	circle.radius = 26.0

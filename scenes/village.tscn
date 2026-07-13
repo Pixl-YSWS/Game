@@ -2808,13 +2808,6 @@ dialogue = "Built something? Talk to me to log your project."
 skin = "cvc:4"
 opens_projects = true
 
-[node name="Ridit" parent="." unique_id=1922539171 instance=ExtResource("48_npcs")]
-position = Vector2(0, -120)
-npc_name = "Ridit"
-dialogue = "Hey, I'm Ridit — welcome to the village!
-Nice day for a stroll across the bridges, huh?"
-skin = "cvc:3"
-
 [node name="Mangoman" parent="." unique_id=967392462 instance=ExtResource("48_npcs")]
 position = Vector2(-430, -50)
 npc_name = "Mangoman"
