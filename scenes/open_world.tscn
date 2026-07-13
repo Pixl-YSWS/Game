@@ -3033,7 +3033,7 @@ position = Vector2(54, -130)
 [node name="Houses" type="TileMapLayer" parent="." unique_id=1575588917]
 z_index = 10
 y_sort_enabled = true
-position = Vector2(10, 0)
+position = Vector2(10, 1)
 tile_map_data = PackedByteArray("AAADAPL/BwAkAAAAAAA=")
 tile_set = SubResource("TileSet_1knqj")
 

@@ -229,9 +229,14 @@ func _project_row(p: Dictionary) -> Control:
 		var ship := Button.new()
 		ship.theme_type_variation = &"StepButton"
 		ship.text = "Ship"
+		var missing := PackedStringArray()
 		if String(p.get("repo_url", "")).strip_edges() == "":
+			missing.append("a GitHub repo link")
+		if String(p.get("demo_url", "")).strip_edges() == "":
+			missing.append("a demo link")
+		if not missing.is_empty():
 			ship.disabled = true
-			ship.tooltip_text = "Add a GitHub repo link first."
+			ship.tooltip_text = "Add %s first." % " and ".join(missing)
 		else:
 			ship.pressed.connect(_ask_ship.bind(p))
 		row.add_child(ship)
