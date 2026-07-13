@@ -3,10 +3,14 @@ extends Control
 signal submitted(data: Dictionary)
 signal cancelled
 
+const TYPES := ["game", "website", "app", "cli", "hardware", "other"]
+const TYPE_LABELS := ["Game", "Website", "App", "CLI", "Hardware", "Other"]
+
 @onready var _name: LineEdit = %Name
 @onready var _desc: TextEdit = %Description
 @onready var _repo: LineEdit = %Repo
 @onready var _demo: LineEdit = %Demo
+@onready var _type: OptionButton = %Type
 @onready var _error: Label = %ErrorLabel
 @onready var _grid: GridContainer = %HtGrid
 @onready var _title: Label = %Title
@@ -18,6 +22,8 @@ var _edit_id := 0
 
 func _ready() -> void:
 	visible = false
+	for label in TYPE_LABELS:
+		_type.add_item(label)
 	_cancel_button.pressed.connect(func(): cancelled.emit())
 	_create_button.pressed.connect(_submit)
 
@@ -53,6 +59,8 @@ func _fill(project: Dictionary, ht_projects: Array) -> void:
 	_desc.text = String(project.get("description", ""))
 	_repo.text = String(project.get("repo_url", ""))
 	_demo.text = String(project.get("demo_url", ""))
+	var idx := TYPES.find(String(project.get("type", "game")))
+	_type.selected = idx if idx >= 0 else TYPES.find("other")
 	_populate(ht_projects, project.get("hackatime_projects", []))
 
 func _populate(ht_projects: Array, linked: Array) -> void:
@@ -123,6 +131,7 @@ func _submit() -> void:
 		"description": _desc.text.strip_edges(),
 		"repoUrl": repo,
 		"demoUrl": _demo.text.strip_edges(),
+		"type": TYPES[maxi(_type.selected, 0)],
 		"hackatimeProjects": selected,
 	}
 	if _edit_id != 0:

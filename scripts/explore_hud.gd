@@ -4,11 +4,21 @@ const THEME := preload("res://themes/main_theme.tres")
 const ACCENT_GOLD := Color(0.85098, 0.643137, 0.25098)
 const COLOR_ACCENT := Color(1, 0.819608, 0.4)
 
+const TYPE_FILTERS := [["", "All"], ["game", "Game"], ["website", "Website"], ["app", "App"], ["cli", "CLI"], ["hardware", "Hardware"], ["other", "Other"]]
+
 var _root: Control
 var _plate_label: Label
 var _search_edit: LineEdit
+var _tabs_row: HBoxContainer
+var _tab_players: Button
+var _tab_projects: Button
 var _players_view: VBoxContainer
 var _players_list: VBoxContainer
+var _browse_view: VBoxContainer
+var _browse_list: VBoxContainer
+var _browse_search: LineEdit
+var _filter_buttons: Array[Button] = []
+var _filter_type := ""
 var _player_view: VBoxContainer
 var _player_info: Label
 var _projects_list: VBoxContainer
@@ -17,6 +27,7 @@ var _project_meta: RichTextLabel
 var _entries_list: VBoxContainer
 var _open := false
 var _current_player: Dictionary = {}
+var _from_browse := false
 
 func _ready() -> void:
 	layer = 100
@@ -39,7 +50,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:
 		get_viewport().set_input_as_handled()
 		if _project_view.visible:
-			_show_player(_current_player)
+			_back_from_project()
 		elif _player_view.visible:
 			_show_players()
 		else:
@@ -129,8 +140,18 @@ func _build_ui() -> void:
 	body.add_theme_constant_override("separation", 10)
 	margin.add_child(body)
 
+	_tabs_row = HBoxContainer.new()
+	_tabs_row.add_theme_constant_override("separation", 8)
+	body.add_child(_tabs_row)
+	_tab_players = _tab_button("PLAYERS", _show_players)
+	_tabs_row.add_child(_tab_players)
+	_tab_projects = _tab_button("PROJECTS", _show_browse)
+	_tabs_row.add_child(_tab_projects)
+
 	_players_view = _build_players_view()
 	body.add_child(_players_view)
+	_browse_view = _build_browse_view()
+	body.add_child(_browse_view)
 	_player_view = _build_player_view()
 	body.add_child(_player_view)
 	_project_view = _build_project_view()
@@ -170,6 +191,84 @@ func _build_players_view() -> VBoxContainer:
 	_players_list = _make_list(view)
 	return view
 
+func _tab_button(text: String, action: Callable) -> Button:
+	var b := Button.new()
+	b.text = text
+	b.custom_minimum_size = Vector2(140, 0)
+	b.pressed.connect(action)
+	return b
+
+func _build_browse_view() -> VBoxContainer:
+	var view := VBoxContainer.new()
+	view.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	view.add_theme_constant_override("separation", 10)
+	view.visible = false
+
+	var filters := HBoxContainer.new()
+	filters.add_theme_constant_override("separation", 6)
+	view.add_child(filters)
+	for f in TYPE_FILTERS:
+		var b := Button.new()
+		b.theme_type_variation = &"StepButton"
+		b.text = f[1]
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		b.pressed.connect(_on_filter.bind(String(f[0])))
+		_filter_buttons.append(b)
+		filters.add_child(b)
+
+	var search_row := HBoxContainer.new()
+	search_row.add_theme_constant_override("separation", 8)
+	view.add_child(search_row)
+	_browse_search = LineEdit.new()
+	_browse_search.placeholder_text = "Search projects…"
+	_browse_search.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_browse_search.text_submitted.connect(func(_t): _load_browse())
+	search_row.add_child(_browse_search)
+	var search_btn := Button.new()
+	search_btn.theme_type_variation = &"StepButton"
+	search_btn.text = "Search"
+	search_btn.pressed.connect(_load_browse)
+	search_row.add_child(search_btn)
+
+	_browse_list = _make_list(view)
+	return view
+
+func _on_filter(type: String) -> void:
+	_filter_type = type
+	_update_filter_buttons()
+	_load_browse()
+
+func _update_filter_buttons() -> void:
+	for i in _filter_buttons.size():
+		var active := String(TYPE_FILTERS[i][0]) == _filter_type
+		_filter_buttons[i].add_theme_color_override("font_color", COLOR_ACCENT if active else Color(0.956863, 0.890196, 0.760784))
+
+func _load_browse() -> void:
+	_clear(_browse_list)
+	_browse_list.add_child(_muted("Loading…"))
+	var path := "/api/explore/projects"
+	var params := PackedStringArray()
+	if _filter_type != "":
+		params.append("type=" + _filter_type.uri_encode())
+	var q := _browse_search.text.strip_edges()
+	if q != "":
+		params.append("q=" + q.uri_encode())
+	if not params.is_empty():
+		path += "?" + "&".join(params)
+	_api(path, _on_browse)
+
+func _on_browse(code: int, json: Variant) -> void:
+	_clear(_browse_list)
+	if code != 200 or typeof(json) != TYPE_DICTIONARY or not json.get("ok", false):
+		_browse_list.add_child(_muted("Couldn't load projects."))
+		return
+	var projects: Array = json.get("projects", [])
+	if projects.is_empty():
+		_browse_list.add_child(_muted("No projects found."))
+		return
+	for pr in projects:
+		_browse_list.add_child(_project_row(pr, true))
+
 func _build_player_view() -> VBoxContainer:
 	var view := VBoxContainer.new()
 	view.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -197,7 +296,7 @@ func _build_project_view() -> VBoxContainer:
 	var header := HBoxContainer.new()
 	header.add_theme_constant_override("separation", 10)
 	view.add_child(header)
-	header.add_child(_back_button(func(): _show_player(_current_player)))
+	header.add_child(_back_button(_back_from_project))
 	_project_meta = RichTextLabel.new()
 	_project_meta.bbcode_enabled = true
 	_project_meta.fit_content = true
@@ -228,15 +327,36 @@ func _make_list(view: VBoxContainer) -> VBoxContainer:
 
 func _show_players() -> void:
 	_plate_label.text = "EXPLORE"
+	_tabs_row.visible = true
 	_players_view.visible = true
+	_browse_view.visible = false
 	_player_view.visible = false
 	_project_view.visible = false
+	_update_tabs(true)
+
+func _show_browse() -> void:
+	_plate_label.text = "PROJECTS"
+	_tabs_row.visible = true
+	_players_view.visible = false
+	_browse_view.visible = true
+	_player_view.visible = false
+	_project_view.visible = false
+	_update_tabs(false)
+	if _browse_list.get_child_count() == 0:
+		_update_filter_buttons()
+		_load_browse()
+
+func _update_tabs(players_active: bool) -> void:
+	_tab_players.theme_type_variation = &"" if players_active else &"GreyButton"
+	_tab_projects.theme_type_variation = &"GreyButton" if players_active else &""
 
 func _show_player(p: Dictionary) -> void:
 	_current_player = p
 	var pname := String(p.get("display_name", "?"))
 	_plate_label.text = pname.to_upper().left(24)
+	_tabs_row.visible = false
 	_players_view.visible = false
+	_browse_view.visible = false
 	_player_view.visible = true
 	_project_view.visible = false
 	_player_info.text = "joined %s" % String(p.get("created_at", "")).substr(0, 10)
@@ -244,9 +364,18 @@ func _show_player(p: Dictionary) -> void:
 	_projects_list.add_child(_muted("Loading…"))
 	_api("/api/explore/players/" + String(p.get("id", "")), _on_player)
 
-func _show_project(pr: Dictionary) -> void:
+func _back_from_project() -> void:
+	if _from_browse:
+		_show_browse()
+	else:
+		_show_player(_current_player)
+
+func _show_project(pr: Dictionary, from_browse := false) -> void:
+	_from_browse = from_browse
 	_plate_label.text = String(pr.get("name", "?")).to_upper().left(24)
+	_tabs_row.visible = false
 	_players_view.visible = false
+	_browse_view.visible = false
 	_player_view.visible = false
 	_project_view.visible = true
 	_project_meta.text = ""
@@ -314,7 +443,7 @@ func _on_player(code: int, json: Variant) -> void:
 	for pr in projects:
 		_projects_list.add_child(_project_row(pr))
 
-func _project_row(pr: Dictionary) -> Control:
+func _project_row(pr: Dictionary, show_owner := false) -> Control:
 	var panel := PanelContainer.new()
 	panel.theme_type_variation = &"RowPanel"
 	var row := HBoxContainer.new()
@@ -329,6 +458,16 @@ func _project_row(pr: Dictionary) -> Control:
 	name_label.text = String(pr.get("name", "?"))
 	name_label.clip_text = true
 	main.add_child(name_label)
+	if show_owner:
+		var owner := Label.new()
+		owner.theme_type_variation = &"InfoText"
+		var parts := PackedStringArray(["by %s" % String(pr.get("owner_name", "?")), String(pr.get("type", "other"))])
+		if String(pr.get("status", "")) == "approved":
+			parts.append("approved ✔")
+		owner.text = " · ".join(parts)
+		owner.add_theme_color_override("font_color", COLOR_ACCENT)
+		owner.clip_text = true
+		main.add_child(owner)
 	var desc := String(pr.get("description", "")).strip_edges()
 	if desc != "":
 		var meta := Label.new()
@@ -355,7 +494,7 @@ func _project_row(pr: Dictionary) -> Control:
 	var open_btn := Button.new()
 	open_btn.theme_type_variation = &"StepButton"
 	open_btn.text = "Open"
-	open_btn.pressed.connect(_show_project.bind(pr))
+	open_btn.pressed.connect(_show_project.bind(pr, show_owner))
 	row.add_child(open_btn)
 	return panel
 

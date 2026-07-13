@@ -4,6 +4,13 @@ const GAMEPLAY_SCENES := ["village", "open_world", "house_interior"]
 const PROJECT_CREATE := preload("res://scenes/project_create.tscn")
 const PROJECT_JOURNAL := preload("res://scenes/project_journal.tscn")
 
+const STATUS_BADGES := {
+	"draft": ["draft", Color(0.72, 0.67, 0.58)],
+	"shipped": ["in review", Color(1, 0.819608, 0.4)],
+	"approved": ["approved", Color(0.45, 0.85, 0.5)],
+	"needs_changes": ["needs changes", Color(1, 0.419608, 0.419608)],
+}
+
 @onready var _root: Control = %Root
 @onready var _modal: Control = %Root.get_node("CenterContainer")
 @onready var _status: Label = %Status
@@ -15,7 +22,8 @@ var _create_screen: Control
 var _journal_screen: Control
 var _confirm_root: Control
 var _confirm_label: Label
-var _pending_delete_id := 0
+var _confirm_button: Button
+var _confirm_action := Callable()
 
 func _ready() -> void:
 	_root.visible = false
@@ -184,10 +192,21 @@ func _project_row(p: Dictionary) -> Control:
 	main.add_theme_constant_override("separation", 2)
 	row.add_child(main)
 
+	var name_row := HBoxContainer.new()
+	name_row.add_theme_constant_override("separation", 8)
+	main.add_child(name_row)
 	var name_label := Label.new()
 	name_label.text = String(p.get("name", "?"))
 	name_label.clip_text = true
-	main.add_child(name_label)
+	name_row.add_child(name_label)
+
+	var status := String(p.get("status", "draft"))
+	var badge_info: Array = STATUS_BADGES.get(status, STATUS_BADGES["draft"])
+	var badge := Label.new()
+	badge.theme_type_variation = &"InfoText"
+	badge.text = "[%s]" % badge_info[0]
+	badge.add_theme_color_override("font_color", badge_info[1])
+	name_row.add_child(badge)
 
 	var desc := String(p.get("description", "")).strip_edges()
 	if desc != "":
@@ -196,6 +215,26 @@ func _project_row(p: Dictionary) -> Control:
 		meta.text = desc
 		meta.clip_text = true
 		main.add_child(meta)
+
+	var note := String(p.get("review_note", "")).strip_edges()
+	if status == "needs_changes" and note != "":
+		var note_label := Label.new()
+		note_label.theme_type_variation = &"InfoText"
+		note_label.text = "Reviewer: " + note
+		note_label.add_theme_color_override("font_color", Color(1, 0.419608, 0.419608))
+		note_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		main.add_child(note_label)
+
+	if status == "draft" or status == "needs_changes":
+		var ship := Button.new()
+		ship.theme_type_variation = &"StepButton"
+		ship.text = "Ship"
+		if String(p.get("repo_url", "")).strip_edges() == "":
+			ship.disabled = true
+			ship.tooltip_text = "Add a GitHub repo link first."
+		else:
+			ship.pressed.connect(_ask_ship.bind(p))
+		row.add_child(ship)
 
 	var journal := Button.new()
 	journal.theme_type_variation = &"StepButton"
@@ -262,22 +301,41 @@ func _build_confirm_ui() -> void:
 		_confirm_root.visible = false
 		_modal.visible = true)
 	buttons.add_child(cancel)
-	var confirm := Button.new()
-	confirm.text = "Delete"
-	confirm.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	confirm.pressed.connect(_do_delete)
-	buttons.add_child(confirm)
+	_confirm_button = Button.new()
+	_confirm_button.text = "Delete"
+	_confirm_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_confirm_button.pressed.connect(func():
+		_confirm_root.visible = false
+		_modal.visible = true
+		if _confirm_action.is_valid():
+			_confirm_action.call())
+	buttons.add_child(_confirm_button)
 
-func _ask_delete(p: Dictionary) -> void:
-	_pending_delete_id = int(p.get("id", 0))
-	_confirm_label.text = "Delete \"%s\"?" % String(p.get("name", "this project"))
+func _ask_confirm(text: String, button_text: String, action: Callable) -> void:
+	_confirm_label.text = text
+	_confirm_button.text = button_text
+	_confirm_action = action
 	_modal.visible = false
 	_confirm_root.visible = true
 
-func _do_delete() -> void:
-	_confirm_root.visible = false
-	_modal.visible = true
-	_api(HTTPClient.METHOD_DELETE, "/api/projects/%d" % _pending_delete_id, null, func(_code, _json): _api(HTTPClient.METHOD_GET, "/api/projects", null, _on_projects))
+func _refresh_projects() -> void:
+	_api(HTTPClient.METHOD_GET, "/api/projects", null, _on_projects)
+
+func _ask_delete(p: Dictionary) -> void:
+	var id := int(p.get("id", 0))
+	_ask_confirm(
+		"Delete \"%s\"?" % String(p.get("name", "this project")),
+		"Delete",
+		func(): _api(HTTPClient.METHOD_DELETE, "/api/projects/%d" % id, null, func(_code, _json): _refresh_projects()),
+	)
+
+func _ask_ship(p: Dictionary) -> void:
+	var id := int(p.get("id", 0))
+	_ask_confirm(
+		"Ship \"%s\" for review?\nReviewers will look at your repo, demo and journal, and you'll get the verdict in your inbox." % String(p.get("name", "?")),
+		"Ship it",
+		func(): _api(HTTPClient.METHOD_POST, "/api/projects/%d/ship" % id, null, func(_code, _json): _refresh_projects()),
+	)
 
 func _muted(text: String) -> Label:
 	var l := Label.new()

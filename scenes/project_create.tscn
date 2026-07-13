@@ -141,6 +141,20 @@ layout_mode = 2
 placeholder_text = "Demo link (optional)"
 max_length = 500
 
+[node name="TypeRow" type="HBoxContainer" parent="Center/Wrap/Card/Margin/Panel"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="TypeLabel" type="Label" parent="Center/Wrap/Card/Margin/Panel/TypeRow"]
+layout_mode = 2
+theme_type_variation = &"SubText"
+text = "Type"
+
+[node name="Type" type="OptionButton" parent="Center/Wrap/Card/Margin/Panel/TypeRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+
 [node name="ErrorLabel" type="Label" parent="Center/Wrap/Card/Margin/Panel"]
 unique_name_in_owner = true
 visible = false
