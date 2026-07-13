@@ -39,7 +39,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:
 		get_viewport().set_input_as_handled()
 		if _project_view.visible:
-			_back_from_project()
+			_show_player(_current_player)
 		elif _player_view.visible:
 			_show_players()
 		else:
@@ -57,16 +57,6 @@ func open() -> void:
 	_show_players()
 	_search_edit.text = ""
 	_load_players("")
-
-func open_project(pr: Dictionary) -> void:
-	if _open:
-		return
-	_open = true
-	global.push_ui_blocker()
-	_root.visible = true
-	_current_player = {}
-	_search_edit.text = ""
-	_show_project(pr)
 
 func close() -> void:
 	if not _open:
@@ -207,7 +197,7 @@ func _build_project_view() -> VBoxContainer:
 	var header := HBoxContainer.new()
 	header.add_theme_constant_override("separation", 10)
 	view.add_child(header)
-	header.add_child(_back_button(_back_from_project))
+	header.add_child(_back_button(func(): _show_player(_current_player)))
 	_project_meta = RichTextLabel.new()
 	_project_meta.bbcode_enabled = true
 	_project_meta.fit_content = true
@@ -253,13 +243,6 @@ func _show_player(p: Dictionary) -> void:
 	_clear(_projects_list)
 	_projects_list.add_child(_muted("Loading…"))
 	_api("/api/explore/players/" + String(p.get("id", "")), _on_player)
-
-func _back_from_project() -> void:
-	if _current_player.is_empty():
-		_show_players()
-		_load_players("")
-	else:
-		_show_player(_current_player)
 
 func _show_project(pr: Dictionary) -> void:
 	_plate_label.text = String(pr.get("name", "?")).to_upper().left(24)
