@@ -141,6 +141,51 @@ layout_mode = 2
 placeholder_text = "Demo link (optional)"
 max_length = 500
 
+[node name="LevelLabel" type="Label" parent="Center/Wrap/Card/Margin/Panel"]
+layout_mode = 2
+theme_type_variation = &"SubText"
+text = "Complexity"
+
+[node name="LevelRow" type="HBoxContainer" parent="Center/Wrap/Card/Margin/Panel"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="ThumbRow" type="HBoxContainer" parent="Center/Wrap/Card/Margin/Panel"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="ThumbLabel" type="Label" parent="Center/Wrap/Card/Margin/Panel/ThumbRow"]
+layout_mode = 2
+theme_type_variation = &"SubText"
+text = "Thumbnail"
+
+[node name="ThumbButton" type="Button" parent="Center/Wrap/Card/Margin/Panel/ThumbRow"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"StepButton"
+text = "Choose…"
+
+[node name="ThumbPaste" type="Button" parent="Center/Wrap/Card/Margin/Panel/ThumbRow"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"StepButton"
+tooltip_text = "Upload the image on your clipboard"
+text = "Paste"
+
+[node name="ThumbStatus" type="Label" parent="Center/Wrap/Card/Margin/Panel/ThumbRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"InfoText"
+clip_text = true
+
+[node name="AiCheck" type="CheckBox" parent="Center/Wrap/Card/Margin/Panel"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Reviewers care about what you did with the output, so be honest. Only you and reviewers see this."
+text = "I used AI on this project"
+
 [node name="ErrorLabel" type="Label" parent="Center/Wrap/Card/Margin/Panel"]
 unique_name_in_owner = true
 visible = false

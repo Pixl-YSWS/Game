@@ -3,6 +3,14 @@ extends Control
 signal submitted(data: Dictionary)
 signal cancelled
 
+const LEVEL_LABELS := ["L1 Greenhorn", "L2 Deputy", "L3 Outlaw", "L4 Legend"]
+const LEVEL_TIPS := [
+	"A first ship: simple site, script, or tiny tool.",
+	"A focused app, CLI, or game with clean polish.",
+	"Multiple systems working together: backend, state, infra.",
+	"Deep systems work: complex architecture, serious scope.",
+]
+
 @onready var _name: LineEdit = %Name
 @onready var _desc: TextEdit = %Description
 @onready var _repo: LineEdit = %Repo
@@ -12,14 +20,37 @@ signal cancelled
 @onready var _title: Label = %Title
 @onready var _create_button: Button = %CreateButton
 @onready var _cancel_button: Button = %CancelButton
+@onready var _level_row: HBoxContainer = %LevelRow
+@onready var _thumb_button: Button = %ThumbButton
+@onready var _thumb_paste: Button = %ThumbPaste
+@onready var _thumb_status: Label = %ThumbStatus
+@onready var _ai_check: CheckBox = %AiCheck
 
 var _submitting := false
 var _edit_id := 0
+var _level := 1
+var _thumb_url := ""
+var _uploading := false
+var _level_buttons: Array[Button] = []
 
 func _ready() -> void:
 	visible = false
 	_cancel_button.pressed.connect(func(): cancelled.emit())
 	_create_button.pressed.connect(_submit)
+	_thumb_button.pressed.connect(_choose_thumb)
+	_thumb_paste.pressed.connect(_paste_thumb)
+	var group := ButtonGroup.new()
+	for i in LEVEL_LABELS.size():
+		var b := Button.new()
+		b.toggle_mode = true
+		b.button_group = group
+		b.theme_type_variation = &"StepButton"
+		b.text = LEVEL_LABELS[i]
+		b.tooltip_text = LEVEL_TIPS[i]
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		b.pressed.connect(func(): _level = i + 1)
+		_level_buttons.append(b)
+		_level_row.add_child(b)
 
 func open(ht_projects: Array) -> void:
 	_edit_id = 0
@@ -53,7 +84,84 @@ func _fill(project: Dictionary, ht_projects: Array) -> void:
 	_desc.text = String(project.get("description", ""))
 	_repo.text = String(project.get("repo_url", ""))
 	_demo.text = String(project.get("demo_url", ""))
+	_level = clampi(int(project.get("level", 1)), 1, 4)
+	_level_buttons[_level - 1].button_pressed = true
+	_thumb_url = String(project.get("image_url", ""))
+	_ai_check.button_pressed = bool(project.get("used_ai", false))
+	_update_thumb_status()
 	_populate(ht_projects, project.get("hackatime_projects", []))
+
+func _update_thumb_status() -> void:
+	if _uploading:
+		_thumb_status.text = "Uploading…"
+		_thumb_status.remove_theme_color_override("font_color")
+	elif _thumb_url == "":
+		_thumb_status.text = "No image — required before shipping"
+		_thumb_status.add_theme_color_override("font_color", Color(1, 0.819608, 0.4))
+	else:
+		_thumb_status.text = "Image added ✔"
+		_thumb_status.add_theme_color_override("font_color", Color(0.45, 0.85, 0.5))
+
+func _choose_thumb() -> void:
+	if _uploading:
+		return
+	var fd := FileDialog.new()
+	fd.file_mode = FileDialog.FILE_MODE_OPEN_FILE
+	fd.access = FileDialog.ACCESS_FILESYSTEM
+	fd.use_native_dialog = true
+	fd.filters = PackedStringArray(["*.png, *.jpg, *.jpeg, *.webp, *.gif ; Images"])
+	add_child(fd)
+	fd.file_selected.connect(func(path: String):
+		fd.queue_free()
+		_upload_thumb_file(path))
+	fd.canceled.connect(func(): fd.queue_free())
+	fd.popup_centered(Vector2i(700, 500))
+
+func _upload_thumb_file(path: String) -> void:
+	var bytes := FileAccess.get_file_as_bytes(path)
+	if bytes.is_empty():
+		_show_error("Couldn't read that file.")
+		return
+	var mime := "image/png"
+	match path.get_extension().to_lower():
+		"jpg", "jpeg":
+			mime = "image/jpeg"
+		"webp":
+			mime = "image/webp"
+		"gif":
+			mime = "image/gif"
+	_upload_thumb(bytes, mime)
+
+func _paste_thumb() -> void:
+	if _uploading:
+		return
+	if not DisplayServer.clipboard_has_image():
+		_show_error("Copy an image first, then press Paste.")
+		return
+	var img := DisplayServer.clipboard_get_image()
+	if img == null or img.is_empty():
+		_show_error("Couldn't read an image from the clipboard.")
+		return
+	_upload_thumb(img.save_png_to_buffer(), "image/png")
+
+func _upload_thumb(bytes: PackedByteArray, mime: String) -> void:
+	_uploading = true
+	_error.visible = false
+	_update_thumb_status()
+	var req := HTTPRequest.new()
+	add_child(req)
+	var url := NetworkManager.SERVER_HTTP_URL + "/api/uploads?token=" + NetworkManager.session_token.uri_encode()
+	req.request_completed.connect(func(_result, code, _headers, data):
+		req.queue_free()
+		_uploading = false
+		var json = JSON.parse_string(data.get_string_from_utf8()) if data.size() > 0 else null
+		if code == 200 and typeof(json) == TYPE_DICTIONARY and json.get("ok", false):
+			_thumb_url = String(json.get("url", ""))
+		else:
+			_show_error("Image upload failed — try again.")
+		_update_thumb_status()
+	)
+	req.request_raw(url, PackedStringArray(["Content-Type: " + mime]), HTTPClient.METHOD_POST, bytes)
 
 func _populate(ht_projects: Array, linked: Array) -> void:
 	for c in _grid.get_children():
@@ -123,6 +231,9 @@ func _submit() -> void:
 		"description": _desc.text.strip_edges(),
 		"repoUrl": repo,
 		"demoUrl": _demo.text.strip_edges(),
+		"imageUrl": _thumb_url,
+		"level": _level,
+		"usedAi": _ai_check.button_pressed,
 		"hackatimeProjects": selected,
 	}
 	if _edit_id != 0:

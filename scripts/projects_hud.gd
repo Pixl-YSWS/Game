@@ -24,6 +24,16 @@ var _confirm_root: Control
 var _confirm_label: Label
 var _confirm_button: Button
 var _confirm_action := Callable()
+var _ship_root: Control
+var _ship_title: Label
+var _ship_info: Label
+var _ship_notes: TextEdit
+var _ship_ysws: CheckBox
+var _ship_error: Label
+var _ship_button: Button
+var _ship_project_id := 0
+var _ship_is_update := false
+var _shipping := false
 
 func _ready() -> void:
 	_root.visible = false
@@ -39,6 +49,7 @@ func _ready() -> void:
 	_root.add_child(_journal_screen)
 	_journal_screen.closed.connect(_hide_journal)
 	_build_confirm_ui()
+	_build_ship_ui()
 
 func _unhandled_input(event: InputEvent) -> void:
 	if not (event is InputEventKey and event.pressed and not event.echo):
@@ -50,6 +61,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		if _confirm_root.visible:
 			_confirm_root.visible = false
+			_modal.visible = true
+		elif _ship_root.visible:
+			_ship_root.visible = false
 			_modal.visible = true
 		elif _create_screen.visible:
 			_hide_create()
@@ -87,6 +101,7 @@ func close() -> void:
 	_create_screen.visible = false
 	_journal_screen.visible = false
 	_confirm_root.visible = false
+	_ship_root.visible = false
 	_modal.visible = true
 	_root.visible = false
 
@@ -225,15 +240,17 @@ func _project_row(p: Dictionary) -> Control:
 		note_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		main.add_child(note_label)
 
-	if status == "draft" or status == "needs_changes":
+	if status == "draft" or status == "needs_changes" or status == "approved":
 		var ship := Button.new()
 		ship.theme_type_variation = &"StepButton"
-		ship.text = "Ship"
+		ship.text = "Ship update" if status == "approved" else "Ship"
 		var missing := PackedStringArray()
 		if String(p.get("repo_url", "")).strip_edges() == "":
 			missing.append("a GitHub repo link")
 		if String(p.get("demo_url", "")).strip_edges() == "":
 			missing.append("a demo link")
+		if String(p.get("image_url", "")).strip_edges() == "":
+			missing.append("a thumbnail image")
 		if not missing.is_empty():
 			ship.disabled = true
 			ship.tooltip_text = "Add %s first." % " and ".join(missing)
@@ -334,12 +351,147 @@ func _ask_delete(p: Dictionary) -> void:
 		func(): _api(HTTPClient.METHOD_DELETE, "/api/projects/%d" % id, null, func(_code, _json): _refresh_projects()),
 	)
 
+func _build_ship_ui() -> void:
+	_ship_root = Control.new()
+	_ship_root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_ship_root.visible = false
+	_root.add_child(_ship_root)
+
+	var backdrop := ColorRect.new()
+	backdrop.color = Color(0.039216, 0.031373, 0.019608, 0.8)
+	backdrop.set_anchors_preset(Control.PRESET_FULL_RECT)
+	backdrop.mouse_filter = Control.MOUSE_FILTER_STOP
+	_ship_root.add_child(backdrop)
+
+	var center := CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_ship_root.add_child(center)
+
+	var card := PanelContainer.new()
+	center.add_child(card)
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 22)
+	margin.add_theme_constant_override("margin_right", 22)
+	margin.add_theme_constant_override("margin_top", 18)
+	margin.add_theme_constant_override("margin_bottom", 18)
+	card.add_child(margin)
+
+	var panel := VBoxContainer.new()
+	panel.custom_minimum_size = Vector2(460, 0)
+	panel.add_theme_constant_override("separation", 12)
+	margin.add_child(panel)
+
+	_ship_title = Label.new()
+	_ship_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	panel.add_child(_ship_title)
+
+	_ship_info = Label.new()
+	_ship_info.theme_type_variation = &"InfoText"
+	_ship_info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	panel.add_child(_ship_info)
+
+	_ship_notes = TextEdit.new()
+	_ship_notes.custom_minimum_size = Vector2(0, 90)
+	_ship_notes.placeholder_text = "What changed since the last approval? Reviewers only look at what's new."
+	_ship_notes.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
+	panel.add_child(_ship_notes)
+
+	_ship_ysws = CheckBox.new()
+	_ship_ysws.text = "I also submitted this project to another YSWS"
+	panel.add_child(_ship_ysws)
+
+	var warning := Label.new()
+	warning.theme_type_variation = &"InfoText"
+	warning.text = "No double dipping! If this project was already submitted to another YSWS, tick the box above. Undisclosed re-submissions are detected automatically, flagged to reviewers, and can get you banned."
+	warning.add_theme_color_override("font_color", Color(1, 0.819608, 0.4))
+	warning.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	panel.add_child(warning)
+
+	_ship_error = Label.new()
+	_ship_error.visible = false
+	_ship_error.add_theme_color_override("font_color", Color(1, 0.419608, 0.419608))
+	_ship_error.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	panel.add_child(_ship_error)
+
+	var buttons := HBoxContainer.new()
+	buttons.add_theme_constant_override("separation", 10)
+	panel.add_child(buttons)
+	var cancel := Button.new()
+	cancel.theme_type_variation = &"GreyButton"
+	cancel.text = "Cancel"
+	cancel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	cancel.pressed.connect(func():
+		_ship_root.visible = false
+		_modal.visible = true)
+	buttons.add_child(cancel)
+	_ship_button = Button.new()
+	_ship_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_ship_button.pressed.connect(_submit_ship)
+	buttons.add_child(_ship_button)
+
 func _ask_ship(p: Dictionary) -> void:
-	var id := int(p.get("id", 0))
-	_ask_confirm(
-		"Ship \"%s\" for review?\nReviewers will look at your repo, demo and journal, and you'll get the verdict in your inbox." % String(p.get("name", "?")),
-		"Ship it",
-		func(): _api(HTTPClient.METHOD_POST, "/api/projects/%d/ship" % id, null, func(_code, _json): _refresh_projects()),
+	_ship_project_id = int(p.get("id", 0))
+	_ship_is_update = String(p.get("status", "")) == "approved"
+	var pname := String(p.get("name", "?"))
+	if _ship_is_update:
+		_ship_title.text = "SHIP AN UPDATE"
+		_ship_info.text = "\"%s\" was already approved. Shipping again sends it back to the review queue as an update — tell reviewers what's new since then." % pname
+	else:
+		_ship_title.text = "SHIP FOR REVIEW"
+		_ship_info.text = "Ship \"%s\" for review? Reviewers will look at your repo, demo and journal, and you'll get the verdict in your inbox." % pname
+	_ship_notes.visible = _ship_is_update
+	_ship_notes.text = ""
+	_ship_ysws.button_pressed = false
+	_ship_error.visible = false
+	_shipping = false
+	_ship_button.disabled = false
+	_ship_button.text = "Ship update" if _ship_is_update else "Ship it"
+	_modal.visible = false
+	_ship_root.visible = true
+
+func _submit_ship() -> void:
+	if _shipping:
+		return
+	var notes := _ship_notes.text.strip_edges()
+	if _ship_is_update and notes == "":
+		_ship_error.text = "Tell reviewers what changed since the last approval."
+		_ship_error.visible = true
+		return
+	_shipping = true
+	_ship_button.disabled = true
+	_ship_error.visible = false
+	var body := {"updateNotes": notes, "otherYsws": _ship_ysws.button_pressed}
+	_api(HTTPClient.METHOD_POST, "/api/projects/%d/ship" % _ship_project_id, body, func(code, json):
+		_shipping = false
+		_ship_button.disabled = false
+		if code >= 200 and code < 300:
+			_ship_root.visible = false
+			_modal.visible = true
+			_refresh_projects()
+			return
+		var msg := "Couldn't ship — try again."
+		if typeof(json) == TYPE_DICTIONARY:
+			match String(json.get("error", "")):
+				"image_required":
+					msg = "Add a thumbnail image first (Edit the project)."
+				"update_notes_required":
+					msg = "Tell reviewers what changed since the last approval."
+				"repo_required":
+					msg = "Add a GitHub repo link first."
+				"demo_required":
+					msg = "Add a demo link first."
+				"repo_not_found":
+					msg = "Your GitHub repo link 404s — is the repo public?"
+				"demo_unreachable":
+					msg = "Your demo link doesn't respond — double-check it."
+				"hackatime_hours_required":
+					msg = "Link this project to Hackatime and log at least 1 hour of coding first."
+				"hackatime_unavailable":
+					msg = "Hackatime is unreachable right now — try again in a bit."
+				"already_shipped":
+					msg = "This project is already in the review queue."
+		_ship_error.text = msg
+		_ship_error.visible = true
 	)
 
 func _muted(text: String) -> Label:
