@@ -4,8 +4,6 @@ const THEME := preload("res://themes/main_theme.tres")
 const ACCENT_GOLD := Color(0.85098, 0.643137, 0.25098)
 const COLOR_ACCENT := Color(1, 0.819608, 0.4)
 
-const TYPE_FILTERS := [["", "All"], ["game", "Game"], ["website", "Website"], ["app", "App"], ["cli", "CLI"], ["hardware", "Hardware"], ["other", "Other"]]
-
 var _root: Control
 var _plate_label: Label
 var _search_edit: LineEdit
@@ -17,8 +15,6 @@ var _players_list: VBoxContainer
 var _browse_view: VBoxContainer
 var _browse_list: VBoxContainer
 var _browse_search: LineEdit
-var _filter_buttons: Array[Button] = []
-var _filter_type := ""
 var _player_view: VBoxContainer
 var _player_info: Label
 var _projects_list: VBoxContainer
@@ -204,18 +200,6 @@ func _build_browse_view() -> VBoxContainer:
 	view.add_theme_constant_override("separation", 10)
 	view.visible = false
 
-	var filters := HBoxContainer.new()
-	filters.add_theme_constant_override("separation", 6)
-	view.add_child(filters)
-	for f in TYPE_FILTERS:
-		var b := Button.new()
-		b.theme_type_variation = &"StepButton"
-		b.text = f[1]
-		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		b.pressed.connect(_on_filter.bind(String(f[0])))
-		_filter_buttons.append(b)
-		filters.add_child(b)
-
 	var search_row := HBoxContainer.new()
 	search_row.add_theme_constant_override("separation", 8)
 	view.add_child(search_row)
@@ -233,23 +217,11 @@ func _build_browse_view() -> VBoxContainer:
 	_browse_list = _make_list(view)
 	return view
 
-func _on_filter(type: String) -> void:
-	_filter_type = type
-	_update_filter_buttons()
-	_load_browse()
-
-func _update_filter_buttons() -> void:
-	for i in _filter_buttons.size():
-		var active := String(TYPE_FILTERS[i][0]) == _filter_type
-		_filter_buttons[i].add_theme_color_override("font_color", COLOR_ACCENT if active else Color(0.956863, 0.890196, 0.760784))
-
 func _load_browse() -> void:
 	_clear(_browse_list)
 	_browse_list.add_child(_muted("Loading…"))
 	var path := "/api/explore/projects"
 	var params := PackedStringArray()
-	if _filter_type != "":
-		params.append("type=" + _filter_type.uri_encode())
 	var q := _browse_search.text.strip_edges()
 	if q != "":
 		params.append("q=" + q.uri_encode())
@@ -343,7 +315,6 @@ func _show_browse() -> void:
 	_project_view.visible = false
 	_update_tabs(false)
 	if _browse_list.get_child_count() == 0:
-		_update_filter_buttons()
 		_load_browse()
 
 func _update_tabs(players_active: bool) -> void:
@@ -461,7 +432,7 @@ func _project_row(pr: Dictionary, show_owner := false) -> Control:
 	if show_owner:
 		var owner := Label.new()
 		owner.theme_type_variation = &"InfoText"
-		var parts := PackedStringArray(["by %s" % String(pr.get("owner_name", "?")), String(pr.get("type", "other"))])
+		var parts := PackedStringArray(["by %s" % String(pr.get("owner_name", "?"))])
 		if String(pr.get("status", "")) == "approved":
 			parts.append("approved ✔")
 		owner.text = " · ".join(parts)
