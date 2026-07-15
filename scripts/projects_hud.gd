@@ -216,11 +216,16 @@ func _project_row(p: Dictionary) -> Control:
 	name_row.add_child(name_label)
 
 	var status := String(p.get("status", "draft"))
-	var badge_info: Array = STATUS_BADGES.get(status, STATUS_BADGES["draft"])
+	var rejected := p.get("rejected_at") != null
 	var badge := Label.new()
 	badge.theme_type_variation = &"InfoText"
-	badge.text = "[%s]" % badge_info[0]
-	badge.add_theme_color_override("font_color", badge_info[1])
+	if rejected:
+		badge.text = "[REJECTED]"
+		badge.add_theme_color_override("font_color", Color(1, 0.419608, 0.419608))
+	else:
+		var badge_info: Array = STATUS_BADGES.get(status, STATUS_BADGES["draft"])
+		badge.text = "[%s]" % badge_info[0]
+		badge.add_theme_color_override("font_color", badge_info[1])
 	name_row.add_child(badge)
 
 	var desc := String(p.get("description", "")).strip_edges()
@@ -232,7 +237,7 @@ func _project_row(p: Dictionary) -> Control:
 		main.add_child(meta)
 
 	var note := String(p.get("review_note", "")).strip_edges()
-	if status == "needs_changes" and note != "":
+	if status == "needs_changes" and note != "" and not rejected:
 		var note_label := Label.new()
 		note_label.theme_type_variation = &"InfoText"
 		note_label.text = "Reviewer: " + note
@@ -240,10 +245,21 @@ func _project_row(p: Dictionary) -> Control:
 		note_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		main.add_child(note_label)
 
-	if status == "draft" or status == "needs_changes" or status == "approved":
+	if rejected:
+		var reason := String(p.get("reject_reason", "")).strip_edges()
+		var by := String(p.get("reject_by", "")).strip_edges()
+		var head := "Rejected by " + by if by != "" else "Rejected"
+		var reject_label := Label.new()
+		reject_label.theme_type_variation = &"InfoText"
+		reject_label.text = (head + ": " + reason if reason != "" else head) + "\nFix it and ship again — contact the Pixl team if you think this is a mistake."
+		reject_label.add_theme_color_override("font_color", Color(1, 0.419608, 0.419608))
+		reject_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		main.add_child(reject_label)
+
+	if rejected or status == "draft" or status == "needs_changes" or status == "approved":
 		var ship := Button.new()
 		ship.theme_type_variation = &"StepButton"
-		ship.text = "Ship update" if status == "approved" else "Ship"
+		ship.text = "Ship again" if rejected else ("Ship update" if status == "approved" else "Ship")
 		var missing := PackedStringArray()
 		if String(p.get("repo_url", "")).strip_edges() == "":
 			missing.append("a GitHub repo link")
@@ -429,9 +445,13 @@ func _build_ship_ui() -> void:
 
 func _ask_ship(p: Dictionary) -> void:
 	_ship_project_id = int(p.get("id", 0))
-	_ship_is_update = String(p.get("status", "")) == "approved"
+	var rejected := p.get("rejected_at") != null
+	_ship_is_update = String(p.get("status", "")) == "approved" and not rejected
 	var pname := String(p.get("name", "?"))
-	if _ship_is_update:
+	if rejected:
+		_ship_title.text = "SHIP AGAIN"
+		_ship_info.text = "\"%s\" was rejected. Fix what the reviewer flagged, then ship it again for another review." % pname
+	elif _ship_is_update:
 		_ship_title.text = "SHIP AN UPDATE"
 		_ship_info.text = "\"%s\" was already approved. Shipping again sends it back to the review queue as an update — tell reviewers what's new since then." % pname
 	else:
