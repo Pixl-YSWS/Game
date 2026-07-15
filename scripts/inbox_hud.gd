@@ -11,6 +11,17 @@ var unread_count := 0
 var _root: Control
 var _list: VBoxContainer
 var _open := false
+var _ui_font: SystemFont
+
+func _rfont() -> SystemFont:
+	if _ui_font == null:
+		_ui_font = SystemFont.new()
+		_ui_font.font_names = PackedStringArray(["Sans-Serif", "Noto Sans", "DejaVu Sans", "Arial"])
+	return _ui_font
+
+func _readable(c: Control, size: int) -> void:
+	c.add_theme_font_override("font", _rfont())
+	c.add_theme_font_size_override("font_size", size)
 
 func _ready() -> void:
 	layer = 104
@@ -190,16 +201,19 @@ func _note_row(n: Dictionary) -> Control:
 	var title := Label.new()
 	title.text = String(n.get("title", "Message"))
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_readable(title, 21)
 	title_row.add_child(title)
 	var when := Label.new()
 	when.theme_type_variation = &"InfoText"
 	var created := String(n.get("created_at", ""))
 	when.text = created.substr(0, 10) if created.length() >= 10 else ""
+	_readable(when, 16)
 	title_row.add_child(when)
 	var body := Label.new()
 	body.text = String(n.get("body", ""))
 	body.theme_type_variation = &"InfoText"
 	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_readable(body, 18)
 	box.add_child(body)
 	return shell
 
@@ -207,6 +221,7 @@ func _muted(text: String) -> Label:
 	var l := Label.new()
 	l.theme_type_variation = &"InfoText"
 	l.text = text
+	_readable(l, 18)
 	return l
 
 func _api(method: int, path: String, cb: Callable) -> void:
