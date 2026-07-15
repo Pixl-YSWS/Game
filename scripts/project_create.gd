@@ -96,8 +96,8 @@ func _update_thumb_status() -> void:
 		_thumb_status.text = "Uploading…"
 		_thumb_status.remove_theme_color_override("font_color")
 	elif _thumb_url == "":
-		_thumb_status.text = "No image — required before shipping"
-		_thumb_status.add_theme_color_override("font_color", Color(1, 0.819608, 0.4))
+		_thumb_status.text = "No image (optional)"
+		_thumb_status.remove_theme_color_override("font_color")
 	else:
 		_thumb_status.text = "Image added ✔"
 		_thumb_status.add_theme_color_override("font_color", Color(0.45, 0.85, 0.5))
@@ -105,11 +105,25 @@ func _update_thumb_status() -> void:
 func _choose_thumb() -> void:
 	if _uploading:
 		return
+	var filters := PackedStringArray(["*.png, *.jpg, *.jpeg, *.webp, *.gif ; Images"])
+	var start_dir := OS.get_system_dir(OS.SYSTEM_DIR_PICTURES)
+	if start_dir == "":
+		start_dir = OS.get_environment("HOME")
+	if DisplayServer.has_feature(DisplayServer.FEATURE_NATIVE_DIALOG_FILE):
+		DisplayServer.file_dialog_show(
+			"Choose a thumbnail", start_dir, "", false,
+			DisplayServer.FILE_DIALOG_MODE_OPEN_FILE, filters,
+			func(ok: bool, paths: PackedStringArray, _filter: int):
+				if ok and not paths.is_empty():
+					_upload_thumb_file(paths[0]))
+		return
 	var fd := FileDialog.new()
 	fd.file_mode = FileDialog.FILE_MODE_OPEN_FILE
 	fd.access = FileDialog.ACCESS_FILESYSTEM
 	fd.use_native_dialog = true
-	fd.filters = PackedStringArray(["*.png, *.jpg, *.jpeg, *.webp, *.gif ; Images"])
+	fd.filters = filters
+	if start_dir != "":
+		fd.current_dir = start_dir
 	add_child(fd)
 	fd.file_selected.connect(func(path: String):
 		fd.queue_free()

@@ -249,8 +249,6 @@ func _project_row(p: Dictionary) -> Control:
 			missing.append("a GitHub repo link")
 		if String(p.get("demo_url", "")).strip_edges() == "":
 			missing.append("a demo link")
-		if String(p.get("image_url", "")).strip_edges() == "":
-			missing.append("a thumbnail image")
 		if not missing.is_empty():
 			ship.disabled = true
 			ship.tooltip_text = "Add %s first." % " and ".join(missing)
@@ -472,8 +470,6 @@ func _submit_ship() -> void:
 		var msg := "Couldn't ship — try again."
 		if typeof(json) == TYPE_DICTIONARY:
 			match String(json.get("error", "")):
-				"image_required":
-					msg = "Add a thumbnail image first (Edit the project)."
 				"update_notes_required":
 					msg = "Tell reviewers what changed since the last approval."
 				"repo_required":
