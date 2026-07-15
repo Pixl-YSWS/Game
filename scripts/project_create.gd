@@ -32,6 +32,13 @@ var _level := 1
 var _thumb_url := ""
 var _uploading := false
 var _level_buttons: Array[Button] = []
+var _readable_font: SystemFont
+
+func _ht_font() -> SystemFont:
+	if _readable_font == null:
+		_readable_font = SystemFont.new()
+		_readable_font.font_names = PackedStringArray(["Sans-Serif", "Noto Sans", "DejaVu Sans", "Arial"])
+	return _readable_font
 
 func _ready() -> void:
 	visible = false
@@ -197,6 +204,8 @@ func _populate(ht_projects: Array, linked: Array) -> void:
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		var secs := int(p.get("seconds", 0))
 		b.text = "%s\n%.1fh" % [nm if nm != "" else "?", secs / 3600.0]
+		b.add_theme_font_override("font", _ht_font())
+		b.add_theme_font_size_override("font_size", 15)
 		b.set_meta("ht_name", nm)
 		b.button_pressed = linked.has(nm)
 		_grid.add_child(b)
