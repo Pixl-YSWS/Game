@@ -34,6 +34,17 @@ var _ship_button: Button
 var _ship_project_id := 0
 var _ship_is_update := false
 var _shipping := false
+var _ui_font: SystemFont
+
+func _rfont() -> SystemFont:
+	if _ui_font == null:
+		_ui_font = SystemFont.new()
+		_ui_font.font_names = PackedStringArray(["Sans-Serif", "Noto Sans", "DejaVu Sans", "Arial"])
+	return _ui_font
+
+func _readable(c: Control, size: int) -> void:
+	c.add_theme_font_override("font", _rfont())
+	c.add_theme_font_size_override("font_size", size)
 
 func _ready() -> void:
 	_root.visible = false
@@ -41,6 +52,11 @@ func _ready() -> void:
 	_connect_button.pressed.connect(_on_connect)
 	%CloseButton.pressed.connect(close)
 	%CreateButton.pressed.connect(_open_create)
+	_readable(_status, 22)
+	_readable(%RefreshButton, 20)
+	_readable(_connect_button, 20)
+	_readable(%CloseButton, 20)
+	_readable(%CreateButton, 20)
 	_create_screen = PROJECT_CREATE.instantiate()
 	_root.add_child(_create_screen)
 	_create_screen.submitted.connect(_on_create_submitted)
@@ -198,12 +214,16 @@ func _on_projects(code: int, json: Variant) -> void:
 func _project_row(p: Dictionary) -> Control:
 	var panel := PanelContainer.new()
 	panel.theme_type_variation = &"RowPanel"
+	var outer := VBoxContainer.new()
+	outer.add_theme_constant_override("separation", 4)
+	panel.add_child(outer)
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 12)
-	panel.add_child(row)
+	outer.add_child(row)
 
 	var main := VBoxContainer.new()
 	main.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	main.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	main.add_theme_constant_override("separation", 2)
 	row.add_child(main)
 
@@ -213,13 +233,20 @@ func _project_row(p: Dictionary) -> Control:
 	var name_label := Label.new()
 	name_label.text = String(p.get("name", "?"))
 	name_label.clip_text = true
+	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_readable(name_label, 22)
 	name_row.add_child(name_label)
 
 	var status := String(p.get("status", "draft"))
 	var rejected := p.get("rejected_at") != null
+	var banned := p.get("banned_at") != null
 	var badge := Label.new()
 	badge.theme_type_variation = &"InfoText"
-	if rejected:
+	_readable(badge, 18)
+	if banned:
+		badge.text = "[BANNED]"
+		badge.add_theme_color_override("font_color", Color(0.92, 0.26, 0.32))
+	elif rejected:
 		badge.text = "[REJECTED]"
 		badge.add_theme_color_override("font_color", Color(1, 0.419608, 0.419608))
 	else:
@@ -234,18 +261,32 @@ func _project_row(p: Dictionary) -> Control:
 		meta.theme_type_variation = &"InfoText"
 		meta.text = desc
 		meta.clip_text = true
+		_readable(meta, 18)
 		main.add_child(meta)
 
+	if banned:
+		var ban_reason := String(p.get("ban_reason", "")).strip_edges()
+		var ban_by := String(p.get("ban_by", "")).strip_edges()
+		var ban_head := "Banned by " + ban_by if ban_by != "" else "Banned"
+		var ban_label := Label.new()
+		ban_label.theme_type_variation = &"InfoText"
+		ban_label.text = (ban_head + ": " + ban_reason if ban_reason != "" else ban_head) + "\nThis project is permanently banned and can't be shipped. Contact the Pixl team if you think this is a mistake."
+		ban_label.add_theme_color_override("font_color", Color(0.92, 0.26, 0.32))
+		ban_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_readable(ban_label, 18)
+		outer.add_child(ban_label)
+
 	var note := String(p.get("review_note", "")).strip_edges()
-	if status == "needs_changes" and note != "" and not rejected:
+	if status == "needs_changes" and note != "" and not rejected and not banned:
 		var note_label := Label.new()
 		note_label.theme_type_variation = &"InfoText"
 		note_label.text = "Reviewer: " + note
 		note_label.add_theme_color_override("font_color", Color(1, 0.419608, 0.419608))
 		note_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		main.add_child(note_label)
+		_readable(note_label, 18)
+		outer.add_child(note_label)
 
-	if rejected:
+	if rejected and not banned:
 		var reason := String(p.get("reject_reason", "")).strip_edges()
 		var by := String(p.get("reject_by", "")).strip_edges()
 		var head := "Rejected by " + by if by != "" else "Rejected"
@@ -254,12 +295,14 @@ func _project_row(p: Dictionary) -> Control:
 		reject_label.text = (head + ": " + reason if reason != "" else head) + "\nFix it and ship again — contact the Pixl team if you think this is a mistake."
 		reject_label.add_theme_color_override("font_color", Color(1, 0.419608, 0.419608))
 		reject_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		main.add_child(reject_label)
+		_readable(reject_label, 18)
+		outer.add_child(reject_label)
 
-	if rejected or status == "draft" or status == "needs_changes" or status == "approved":
+	if not banned and (rejected or status == "draft" or status == "needs_changes" or status == "approved"):
 		var ship := Button.new()
 		ship.theme_type_variation = &"StepButton"
 		ship.text = "Ship again" if rejected else ("Ship update" if status == "approved" else "Ship")
+		_readable(ship, 20)
 		var missing := PackedStringArray()
 		if String(p.get("repo_url", "")).strip_edges() == "":
 			missing.append("a GitHub repo link")
@@ -275,18 +318,21 @@ func _project_row(p: Dictionary) -> Control:
 	var journal := Button.new()
 	journal.theme_type_variation = &"StepButton"
 	journal.text = "Journal"
+	_readable(journal, 20)
 	journal.pressed.connect(_open_journal.bind(p))
 	row.add_child(journal)
 
 	var edit := Button.new()
 	edit.theme_type_variation = &"StepButton"
 	edit.text = "Edit"
+	_readable(edit, 20)
 	edit.pressed.connect(_open_edit.bind(p))
 	row.add_child(edit)
 
 	var del := Button.new()
 	del.theme_type_variation = &"StepButton"
 	del.text = "X"
+	_readable(del, 20)
 	del.pressed.connect(_ask_delete.bind(p))
 	row.add_child(del)
 	return panel
@@ -324,6 +370,7 @@ func _build_confirm_ui() -> void:
 	_confirm_label = Label.new()
 	_confirm_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_confirm_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_readable(_confirm_label, 20)
 	panel.add_child(_confirm_label)
 
 	var buttons := HBoxContainer.new()
@@ -333,6 +380,7 @@ func _build_confirm_ui() -> void:
 	cancel.theme_type_variation = &"GreyButton"
 	cancel.text = "Cancel"
 	cancel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_readable(cancel, 20)
 	cancel.pressed.connect(func():
 		_confirm_root.visible = false
 		_modal.visible = true)
@@ -340,6 +388,7 @@ func _build_confirm_ui() -> void:
 	_confirm_button = Button.new()
 	_confirm_button.text = "Delete"
 	_confirm_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_readable(_confirm_button, 20)
 	_confirm_button.pressed.connect(func():
 		_confirm_root.visible = false
 		_modal.visible = true
@@ -397,21 +446,25 @@ func _build_ship_ui() -> void:
 
 	_ship_title = Label.new()
 	_ship_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_readable(_ship_title, 26)
 	panel.add_child(_ship_title)
 
 	_ship_info = Label.new()
 	_ship_info.theme_type_variation = &"InfoText"
 	_ship_info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_readable(_ship_info, 20)
 	panel.add_child(_ship_info)
 
 	_ship_notes = TextEdit.new()
 	_ship_notes.custom_minimum_size = Vector2(0, 90)
 	_ship_notes.placeholder_text = "What changed since the last approval? Reviewers only look at what's new."
 	_ship_notes.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
+	_readable(_ship_notes, 20)
 	panel.add_child(_ship_notes)
 
 	_ship_ysws = CheckBox.new()
 	_ship_ysws.text = "I also submitted this project to another YSWS"
+	_readable(_ship_ysws, 20)
 	panel.add_child(_ship_ysws)
 
 	var warning := Label.new()
@@ -419,12 +472,14 @@ func _build_ship_ui() -> void:
 	warning.text = "No double dipping! If this project was already submitted to another YSWS, tick the box above. Undisclosed re-submissions are detected automatically, flagged to reviewers, and can get you banned."
 	warning.add_theme_color_override("font_color", Color(1, 0.819608, 0.4))
 	warning.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_readable(warning, 18)
 	panel.add_child(warning)
 
 	_ship_error = Label.new()
 	_ship_error.visible = false
 	_ship_error.add_theme_color_override("font_color", Color(1, 0.419608, 0.419608))
 	_ship_error.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_readable(_ship_error, 18)
 	panel.add_child(_ship_error)
 
 	var buttons := HBoxContainer.new()
@@ -434,12 +489,14 @@ func _build_ship_ui() -> void:
 	cancel.theme_type_variation = &"GreyButton"
 	cancel.text = "Cancel"
 	cancel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_readable(cancel, 20)
 	cancel.pressed.connect(func():
 		_ship_root.visible = false
 		_modal.visible = true)
 	buttons.add_child(cancel)
 	_ship_button = Button.new()
 	_ship_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_readable(_ship_button, 20)
 	_ship_button.pressed.connect(_submit_ship)
 	buttons.add_child(_ship_button)
 
@@ -490,6 +547,8 @@ func _submit_ship() -> void:
 		var msg := "Couldn't ship — try again."
 		if typeof(json) == TYPE_DICTIONARY:
 			match String(json.get("error", "")):
+				"project_banned":
+					msg = "This project was permanently banned and can't be shipped. Contact the Pixl team."
 				"update_notes_required":
 					msg = "Tell reviewers what changed since the last approval."
 				"repo_required":
@@ -514,6 +573,7 @@ func _muted(text: String) -> Label:
 	var l := Label.new()
 	l.text = text
 	l.theme_type_variation = &"InfoText"
+	_readable(l, 20)
 	return l
 
 func _on_connect() -> void:
