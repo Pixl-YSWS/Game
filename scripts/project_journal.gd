@@ -3,6 +3,15 @@ extends Control
 signal closed
 
 const COLOR_ACCENT := Color(1, 0.819608, 0.4)
+const MAIN_THEME := preload("res://themes/main_theme.tres")
+
+static func readable_theme() -> Theme:
+	var f := SystemFont.new()
+	f.font_names = PackedStringArray(["Sans-Serif", "Noto Sans", "DejaVu Sans", "Arial"])
+	var t: Theme = MAIN_THEME.duplicate(true)
+	t.default_font = f
+	t.default_font_size = 17
+	return t
 
 @onready var _title: Label = %Title
 @onready var _entries: VBoxContainer = %Entries
@@ -19,6 +28,7 @@ var _uploading := false
 
 func _ready() -> void:
 	visible = false
+	theme = readable_theme()
 	_back_button.pressed.connect(func(): closed.emit())
 	_add_button.pressed.connect(_submit)
 	_editor.caret_blink = true

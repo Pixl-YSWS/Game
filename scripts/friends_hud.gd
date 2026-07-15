@@ -14,6 +14,14 @@ var _search_results: VBoxContainer
 var _open := false
 var _joining := false
 
+func _readable_theme() -> Theme:
+	var f := SystemFont.new()
+	f.font_names = PackedStringArray(["Sans-Serif", "Noto Sans", "DejaVu Sans", "Arial"])
+	var t: Theme = THEME.duplicate(true)
+	t.default_font = f
+	t.default_font_size = 17
+	return t
+
 func _ready() -> void:
 	layer = 105
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -73,7 +81,7 @@ func refresh() -> void:
 func _build_ui() -> void:
 	_root = Control.new()
 	_root.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_root.theme = THEME
+	_root.theme = _readable_theme()
 	add_child(_root)
 
 	var backdrop := ColorRect.new()

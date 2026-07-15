@@ -286,6 +286,21 @@ func _project_row(p: Dictionary) -> Control:
 		_readable(note_label, 18)
 		outer.add_child(note_label)
 
+	if status == "approved" and not rejected and not banned:
+		var approved_label := Label.new()
+		approved_label.theme_type_variation = &"InfoText"
+		var credited: Variant = p.get("approved_hours")
+		var txt := "Approved ✔"
+		if credited != null:
+			txt += " · %.1fh credited" % float(credited)
+		if note != "":
+			txt += "\nReviewer: " + note
+		approved_label.text = txt
+		approved_label.add_theme_color_override("font_color", Color(0.45, 0.85, 0.5))
+		approved_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_readable(approved_label, 18)
+		outer.add_child(approved_label)
+
 	if rejected and not banned:
 		var reason := String(p.get("reject_reason", "")).strip_edges()
 		var by := String(p.get("reject_by", "")).strip_edges()
