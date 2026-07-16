@@ -39,6 +39,8 @@ var _shipping := false
 var _ui_font: SystemFont
 var _poll_timer: Timer
 var _poll_count := 0
+var _list_timer: Timer
+var _last_sig := ""
 
 func _rfont() -> SystemFont:
 	if _ui_font == null:
@@ -77,6 +79,10 @@ func _ready() -> void:
 	_journal_screen.closed.connect(_hide_journal)
 	_build_confirm_ui()
 	_build_ship_ui()
+	_list_timer = Timer.new()
+	_list_timer.wait_time = 12.0
+	_list_timer.timeout.connect(_poll_projects)
+	add_child(_list_timer)
 
 func _unhandled_input(event: InputEvent) -> void:
 	if not (event is InputEventKey and event.pressed and not event.echo):
@@ -119,6 +125,8 @@ func open() -> void:
 	global.push_ui_blocker()
 	_root.visible = true
 	refresh()
+	if _list_timer != null:
+		_list_timer.start()
 
 func close() -> void:
 	if not _open:
@@ -126,6 +134,8 @@ func close() -> void:
 	_open = false
 	if _poll_timer != null:
 		_poll_timer.stop()
+	if _list_timer != null:
+		_list_timer.stop()
 	global.pop_ui_blocker()
 	_create_screen.visible = false
 	_journal_screen.visible = false
@@ -211,13 +221,25 @@ func _on_stats(code: int, json: Variant) -> void:
 		_status.text = "HackTime: not connected"
 		_connect_button.text = "Connect"
 
+func _poll_projects() -> void:
+	if not _open or not _modal.visible:
+		return
+	_refresh_projects()
+
 func _on_projects(code: int, json: Variant) -> void:
-	for child in _list.get_children():
-		child.queue_free()
 	if code != 200 or typeof(json) != TYPE_DICTIONARY or not json.get("ok", false):
+		_last_sig = "__error__"
+		for child in _list.get_children():
+			child.queue_free()
 		_list.add_child(_muted("Couldn't load projects."))
 		return
 	var projects: Array = json.get("projects", [])
+	var sig := JSON.stringify(projects)
+	if sig == _last_sig:
+		return
+	_last_sig = sig
+	for child in _list.get_children():
+		child.queue_free()
 	if projects.is_empty():
 		_list.add_child(_muted("No projects yet — create one below."))
 		return
