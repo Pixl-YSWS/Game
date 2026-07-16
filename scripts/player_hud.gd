@@ -17,6 +17,8 @@ var _hours_label: Label
 var _players := {}
 var _list_root: Control
 var _list_box: VBoxContainer
+var _tx_root: Control
+var _tx_box: VBoxContainer
 var _scaled: Array = []
 
 func _ssize(c: Control, base: int) -> void:
@@ -58,6 +60,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		if _in_gameplay() and not global.ui_blocked() and not ChatHud.is_typing() and not Dialogue.is_open:
 			_toggle_list()
 			get_viewport().set_input_as_handled()
+	elif event.keycode == KEY_ESCAPE and _tx_root != null and _tx_root.visible:
+		_tx_root.visible = false
+		get_viewport().set_input_as_handled()
 	elif event.keycode == KEY_ESCAPE and _list_root.visible:
 		_list_root.visible = false
 		get_viewport().set_input_as_handled()
@@ -80,7 +85,11 @@ func _build_ui() -> void:
 	wallet_card.theme_type_variation = &"HudPanel"
 	wallet_card.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	wallet_card.custom_minimum_size = Vector2(200, 0)
-	wallet_card.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	wallet_card.mouse_filter = Control.MOUSE_FILTER_STOP
+	wallet_card.tooltip_text = "Click for your pixel history"
+	wallet_card.gui_input.connect(func(event: InputEvent):
+		if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+			_open_tx_history())
 	column.add_child(wallet_card)
 
 	var wallet_margin := MarginContainer.new()
@@ -253,6 +262,137 @@ func _update_clock() -> void:
 	var td := Time.get_time_dict_from_system()
 	_clock_dot.color = phase["color"]
 	_clock_label.text = "%s %02d:%02d  •  %s" % [phase["name"], td.hour, td.minute, phase["next"]]
+
+func _open_tx_history() -> void:
+	if _tx_root == null:
+		_build_tx_ui()
+	_tx_root.visible = true
+	for child in _tx_box.get_children():
+		child.queue_free()
+	var loading := Label.new()
+	loading.theme_type_variation = &"SubText"
+	loading.text = "Loading…"
+	_tx_box.add_child(loading)
+	var req := HTTPRequest.new()
+	add_child(req)
+	var url := NetworkManager.SERVER_HTTP_URL + "/api/profile/transactions?token=" + NetworkManager.session_token.uri_encode()
+	req.request_completed.connect(func(_result, code, _headers, data):
+		req.queue_free()
+		if not _tx_root.visible:
+			return
+		for child in _tx_box.get_children():
+			child.queue_free()
+		var json = JSON.parse_string(data.get_string_from_utf8()) if data.size() > 0 else null
+		if code != 200 or typeof(json) != TYPE_DICTIONARY or not json.get("ok", false):
+			var err := Label.new()
+			err.theme_type_variation = &"SubText"
+			err.text = "Couldn't load your history."
+			_tx_box.add_child(err)
+			return
+		var txs: Array = json.get("transactions", [])
+		if txs.is_empty():
+			var none := Label.new()
+			none.theme_type_variation = &"SubText"
+			none.text = "No pixel activity yet — ship a project!"
+			_tx_box.add_child(none)
+			return
+		for t in txs:
+			_tx_box.add_child(_tx_row(t))
+	)
+	req.request(url, PackedStringArray(), HTTPClient.METHOD_GET)
+
+func _tx_reason(reason: String) -> String:
+	match reason:
+		"project_approved":
+			return "Project approved"
+		"review_reverted":
+			return "Verdict reverted"
+		"manual_deduction":
+			return "Adjusted by the Pixl team"
+		"manual_grant":
+			return "Granted by the Pixl team"
+	return reason
+
+func _tx_row(t: Dictionary) -> Control:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	var amount := int(t.get("amount", 0))
+	var amt := Label.new()
+	amt.text = ("+%d" % amount) if amount >= 0 else str(amount)
+	amt.custom_minimum_size = Vector2(70, 0)
+	amt.add_theme_color_override("font_color", COLOR_ONLINE if amount >= 0 else Color(1, 0.419608, 0.419608))
+	row.add_child(amt)
+	var what := Label.new()
+	var reason := _tx_reason(String(t.get("reason", "")))
+	var project := String(t.get("project", "")).strip_edges()
+	what.text = reason + (" · " + project if project != "" else "")
+	what.clip_text = true
+	what.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(what)
+	var when := Label.new()
+	when.theme_type_variation = &"SubText"
+	when.text = String(t.get("created_at", "")).substr(0, 10)
+	row.add_child(when)
+	return row
+
+func _build_tx_ui() -> void:
+	_tx_root = Control.new()
+	_tx_root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_tx_root.theme = THEME
+	_tx_root.visible = false
+	add_child(_tx_root)
+
+	var dim := ColorRect.new()
+	dim.color = Color(0.039216, 0.023529, 0.007843, 0.66)
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	_tx_root.add_child(dim)
+
+	var close_catch := Button.new()
+	close_catch.flat = true
+	close_catch.set_anchors_preset(Control.PRESET_FULL_RECT)
+	close_catch.pressed.connect(func(): _tx_root.visible = false)
+	_tx_root.add_child(close_catch)
+
+	var center := CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_tx_root.add_child(center)
+
+	var wrap := VBoxContainer.new()
+	wrap.add_theme_constant_override("separation", -22)
+	center.add_child(wrap)
+
+	var plate := PanelContainer.new()
+	plate.theme_type_variation = &"TitlePlate"
+	plate.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	plate.z_index = 1
+	var plate_label := Label.new()
+	plate_label.theme_type_variation = &"TitlePlateText"
+	plate_label.text = "PIXEL HISTORY"
+	plate.add_child(plate_label)
+	wrap.add_child(plate)
+
+	var panel := PanelContainer.new()
+	panel.custom_minimum_size = Vector2(480, 0)
+	wrap.add_child(panel)
+
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 26)
+	margin.add_theme_constant_override("margin_right", 26)
+	margin.add_theme_constant_override("margin_top", 34)
+	margin.add_theme_constant_override("margin_bottom", 22)
+	panel.add_child(margin)
+
+	var scroll := ScrollContainer.new()
+	scroll.custom_minimum_size = Vector2(0, 340)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	margin.add_child(scroll)
+
+	_tx_box = VBoxContainer.new()
+	_tx_box.add_theme_constant_override("separation", 8)
+	_tx_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(_tx_box)
 
 func _fetch_wallet() -> void:
 	if NetworkManager.session_token == "":

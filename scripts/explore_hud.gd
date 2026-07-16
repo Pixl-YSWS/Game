@@ -10,6 +10,9 @@ var _search_edit: LineEdit
 var _tabs_row: HBoxContainer
 var _tab_players: Button
 var _tab_projects: Button
+var _tab_board: Button
+var _board_view: VBoxContainer
+var _board_list: VBoxContainer
 var _players_view: VBoxContainer
 var _players_list: VBoxContainer
 var _browse_view: VBoxContainer
@@ -152,11 +155,19 @@ func _build_ui() -> void:
 	_tabs_row.add_child(_tab_players)
 	_tab_projects = _tab_button("PROJECTS", _show_browse)
 	_tabs_row.add_child(_tab_projects)
+	_tab_board = _tab_button("LEADERBOARD", _show_board)
+	_tabs_row.add_child(_tab_board)
 
 	_players_view = _build_players_view()
 	body.add_child(_players_view)
 	_browse_view = _build_browse_view()
 	body.add_child(_browse_view)
+	_board_view = VBoxContainer.new()
+	_board_view.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_board_view.add_theme_constant_override("separation", 10)
+	_board_view.visible = false
+	_board_list = _make_list(_board_view)
+	body.add_child(_board_view)
 	_player_view = _build_player_view()
 	body.add_child(_player_view)
 	_project_view = _build_project_view()
@@ -311,24 +322,97 @@ func _show_players() -> void:
 	_tabs_row.visible = true
 	_players_view.visible = true
 	_browse_view.visible = false
+	_board_view.visible = false
 	_player_view.visible = false
 	_project_view.visible = false
-	_update_tabs(true)
+	_update_tabs("players")
 
 func _show_browse() -> void:
 	_plate_label.text = "PROJECTS"
 	_tabs_row.visible = true
 	_players_view.visible = false
 	_browse_view.visible = true
+	_board_view.visible = false
 	_player_view.visible = false
 	_project_view.visible = false
-	_update_tabs(false)
+	_update_tabs("projects")
 	if _browse_list.get_child_count() == 0:
 		_load_browse()
 
-func _update_tabs(players_active: bool) -> void:
-	_tab_players.theme_type_variation = &"" if players_active else &"GreyButton"
-	_tab_projects.theme_type_variation = &"GreyButton" if players_active else &""
+func _show_board() -> void:
+	_plate_label.text = "LEADERBOARD"
+	_tabs_row.visible = true
+	_players_view.visible = false
+	_browse_view.visible = false
+	_board_view.visible = true
+	_player_view.visible = false
+	_project_view.visible = false
+	_update_tabs("board")
+	_load_board()
+
+func _load_board() -> void:
+	_clear(_board_list)
+	_board_list.add_child(_muted("Loading…"))
+	_api("/api/explore/leaderboard", _on_board)
+
+func _on_board(code: int, json: Variant) -> void:
+	_clear(_board_list)
+	if code != 200 or typeof(json) != TYPE_DICTIONARY or not json.get("ok", false):
+		_board_list.add_child(_muted("Couldn't load the leaderboard."))
+		return
+	var players: Array = json.get("players", [])
+	if players.is_empty():
+		_board_list.add_child(_muted("Nobody has pixels yet — ship something!"))
+		return
+	for p in players:
+		_board_list.add_child(_board_row(p))
+	var your_rank := int(json.get("yourRank", 0))
+	var your_pixels := int(json.get("yourPixels", 0))
+	if your_rank > players.size():
+		var me := Label.new()
+		me.theme_type_variation = &"InfoText"
+		me.text = "You: #%d · %d pixels" % [your_rank, your_pixels]
+		me.add_theme_color_override("font_color", COLOR_ACCENT)
+		_board_list.add_child(me)
+
+func _board_row(p: Dictionary) -> Control:
+	var panel := PanelContainer.new()
+	panel.theme_type_variation = &"RowPanel"
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 12)
+	panel.add_child(row)
+
+	var rank := Label.new()
+	rank.text = "#%d" % int(p.get("rank", 0))
+	rank.custom_minimum_size = Vector2(52, 0)
+	var r := int(p.get("rank", 0))
+	if r == 1:
+		rank.add_theme_color_override("font_color", Color(1, 0.819608, 0.4))
+	elif r == 2:
+		rank.add_theme_color_override("font_color", Color(0.78, 0.78, 0.8))
+	elif r == 3:
+		rank.add_theme_color_override("font_color", Color(0.8, 0.52, 0.25))
+	row.add_child(rank)
+
+	var name_label := Label.new()
+	name_label.text = String(p.get("display_name", "?"))
+	if bool(p.get("you", false)):
+		name_label.text += "  (you)"
+		name_label.add_theme_color_override("font_color", COLOR_ACCENT)
+	name_label.clip_text = true
+	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(name_label)
+
+	var px := Label.new()
+	px.text = "%d px" % int(p.get("pixels", 0))
+	px.add_theme_color_override("font_color", COLOR_ACCENT)
+	row.add_child(px)
+	return panel
+
+func _update_tabs(active: String) -> void:
+	_tab_players.theme_type_variation = &"" if active == "players" else &"GreyButton"
+	_tab_projects.theme_type_variation = &"" if active == "projects" else &"GreyButton"
+	_tab_board.theme_type_variation = &"" if active == "board" else &"GreyButton"
 
 func _show_player(p: Dictionary) -> void:
 	_current_player = p
@@ -337,6 +421,7 @@ func _show_player(p: Dictionary) -> void:
 	_tabs_row.visible = false
 	_players_view.visible = false
 	_browse_view.visible = false
+	_board_view.visible = false
 	_player_view.visible = true
 	_project_view.visible = false
 	_player_info.text = "joined %s" % String(p.get("created_at", "")).substr(0, 10)
@@ -356,6 +441,7 @@ func _show_project(pr: Dictionary, from_browse := false) -> void:
 	_tabs_row.visible = false
 	_players_view.visible = false
 	_browse_view.visible = false
+	_board_view.visible = false
 	_player_view.visible = false
 	_project_view.visible = true
 	_project_meta.text = ""
