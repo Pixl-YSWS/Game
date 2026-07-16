@@ -34,6 +34,7 @@ var _thumb_url := ""
 var _uploading := false
 var _level_buttons: Array[Button] = []
 var _readable_font: SystemFont
+var _web_thumb_cb
 
 func _ht_font() -> SystemFont:
 	if _readable_font == null:
@@ -122,6 +123,9 @@ func _update_thumb_status() -> void:
 func _choose_thumb() -> void:
 	if _uploading:
 		return
+	if OS.has_feature("web"):
+		_web_pick_file()
+		return
 	var filters := PackedStringArray(["*.png, *.jpg, *.jpeg, *.webp, *.gif ; Images"])
 	var start_dir := OS.get_system_dir(OS.SYSTEM_DIR_PICTURES)
 	if start_dir == "":
@@ -148,6 +152,44 @@ func _choose_thumb() -> void:
 		_upload_thumb_file(path))
 	fd.canceled.connect(func(): fd.queue_free())
 	fd.popup_centered(Vector2i(700, 500))
+
+func _web_pick_file() -> void:
+	_web_thumb_cb = JavaScriptBridge.create_callback(_on_web_thumb_bytes)
+	var window = JavaScriptBridge.get_interface("window")
+	window.godotThumbCallback = _web_thumb_cb
+	JavaScriptBridge.eval("""
+	(function(){
+		var input = document.createElement('input');
+		input.type = 'file';
+		input.accept = 'image/png,image/jpeg,image/webp,image/gif';
+		input.style.display = 'none';
+		input.onchange = function(e){
+			var f = e.target.files && e.target.files[0];
+			if(!f){ return; }
+			var r = new FileReader();
+			r.onload = function(){
+				var s = String(r.result);
+				var b64 = s.indexOf(',') >= 0 ? s.split(',')[1] : s;
+				window.godotThumbCallback(b64, f.type || 'image/png');
+			};
+			r.readAsDataURL(f);
+		};
+		document.body.appendChild(input);
+		input.click();
+		setTimeout(function(){ input.remove(); }, 60000);
+	})();
+	""", true)
+
+func _on_web_thumb_bytes(args: Array) -> void:
+	if args.size() < 1:
+		return
+	var b64 := String(args[0])
+	var mime := String(args[1]) if args.size() > 1 else "image/png"
+	var bytes := Marshalls.base64_to_raw(b64)
+	if bytes.is_empty():
+		_show_error("Couldn't read that image.")
+		return
+	_upload_thumb(bytes, mime)
 
 func _on_files_dropped(files: PackedStringArray) -> void:
 	if not visible or _uploading:
