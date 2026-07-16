@@ -519,7 +519,7 @@ func _on_project(code: int, json: Variant) -> void:
 		badges.append("Other YSWS disclosed")
 	if String(pr.get("status", "")) == "approved":
 		var ah: Variant = pr.get("approved_hours")
-		badges.append("Approved ✔ · %.1f pixels" % float(ah) if ah != null else "Approved ✔")
+		badges.append("Approved ✔ · %d pixels" % int(round(float(ah) * 5.0)) if ah != null else "Approved ✔")
 	if not badges.is_empty():
 		var badge_label := Label.new()
 		badge_label.theme_type_variation = &"InfoText"

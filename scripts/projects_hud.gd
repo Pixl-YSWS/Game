@@ -327,7 +327,7 @@ func _project_row(p: Dictionary) -> Control:
 		var credited: Variant = p.get("approved_hours")
 		var txt := "Approved ✔"
 		if credited != null:
-			txt += " · %.1f pixels credited" % float(credited)
+			txt += " · %.1fh approved · %d pixels" % [float(credited), int(round(float(credited) * 5.0))]
 		if note != "":
 			txt += "\nReviewer: " + note
 		approved_label.text = txt
