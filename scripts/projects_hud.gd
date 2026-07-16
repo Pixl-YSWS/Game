@@ -3,6 +3,7 @@ extends CanvasLayer
 const GAMEPLAY_SCENES := ["village", "open_world", "house_interior"]
 const PROJECT_CREATE := preload("res://scenes/project_create.tscn")
 const PROJECT_JOURNAL := preload("res://scenes/project_journal.tscn")
+const MAIN_THEME := preload("res://themes/main_theme.tres")
 
 const STATUS_BADGES := {
 	"draft": ["draft", Color(0.72, 0.67, 0.58)],
@@ -36,6 +37,8 @@ var _ship_project_id := 0
 var _ship_is_update := false
 var _shipping := false
 var _ui_font: SystemFont
+var _poll_timer: Timer
+var _poll_count := 0
 
 func _rfont() -> SystemFont:
 	if _ui_font == null:
@@ -47,7 +50,14 @@ func _readable(c: Control, size: int) -> void:
 	c.add_theme_font_override("font", _rfont())
 	c.add_theme_font_size_override("font_size", size)
 
+func _readable_theme() -> Theme:
+	var t := MAIN_THEME.duplicate(true)
+	t.default_font = _rfont()
+	t.default_font_size = 18
+	return t
+
 func _ready() -> void:
+	_root.theme = _readable_theme()
 	_root.visible = false
 	%RefreshButton.pressed.connect(refresh)
 	_connect_button.pressed.connect(_on_connect)
@@ -114,6 +124,8 @@ func close() -> void:
 	if not _open:
 		return
 	_open = false
+	if _poll_timer != null:
+		_poll_timer.stop()
 	global.pop_ui_blocker()
 	_create_screen.visible = false
 	_journal_screen.visible = false
@@ -602,4 +614,29 @@ func _on_connect() -> void:
 		JavaScriptBridge.eval('window.open("%s","_blank")' % url, true)
 	else:
 		OS.shell_open(url)
-	_status.text = "HackTime: finish in your browser, then Refresh"
+	_status.text = "HackTime: finishing in your browser…"
+	_start_connect_poll()
+
+func _start_connect_poll() -> void:
+	_poll_count = 0
+	if _poll_timer == null:
+		_poll_timer = Timer.new()
+		_poll_timer.wait_time = 3.0
+		_poll_timer.timeout.connect(_poll_connection)
+		add_child(_poll_timer)
+	_poll_timer.start()
+
+func _poll_connection() -> void:
+	_poll_count += 1
+	if _poll_count > 40:
+		if _poll_timer != null:
+			_poll_timer.stop()
+		return
+	_api(HTTPClient.METHOD_GET, "/api/hackatime/stats", null, func(code, json):
+		if code == 200 and typeof(json) == TYPE_DICTIONARY and json.get("ok", false):
+			var stats: Dictionary = json.get("stats", {})
+			if stats.get("connected", false):
+				if _poll_timer != null:
+					_poll_timer.stop()
+				_on_stats(code, json)
+				_api(HTTPClient.METHOD_GET, "/api/projects", null, _on_projects))

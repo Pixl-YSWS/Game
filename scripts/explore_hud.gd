@@ -498,15 +498,72 @@ func _on_project(code: int, json: Variant) -> void:
 	if not ht.is_empty():
 		parts.append("hackatime: %s" % ", ".join(PackedStringArray(ht)).replace("[", "[lb]"))
 	_project_meta.text = " · ".join(parts)
+
+	var image_url := String(pr.get("image_url", "")).strip_edges()
+	if image_url != "":
+		var thumb := TextureRect.new()
+		thumb.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		thumb.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		thumb.custom_minimum_size = Vector2(0, 220)
+		thumb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		_entries_list.add_child(thumb)
+		_load_image(image_url, thumb)
+
+	var badges := PackedStringArray()
+	var lvl := int(pr.get("level", 0))
+	if lvl >= 1:
+		badges.append("Level %d" % lvl)
+	if bool(pr.get("used_ai", false)):
+		badges.append("AI used")
+	if bool(pr.get("other_ysws", false)):
+		badges.append("Other YSWS disclosed")
+	if String(pr.get("status", "")) == "approved":
+		var ah: Variant = pr.get("approved_hours")
+		badges.append("Approved ✔ · %.1f pixels" % float(ah) if ah != null else "Approved ✔")
+	if not badges.is_empty():
+		var badge_label := Label.new()
+		badge_label.theme_type_variation = &"InfoText"
+		badge_label.text = " · ".join(badges)
+		badge_label.add_theme_color_override("font_color", COLOR_ACCENT)
+		badge_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_entries_list.add_child(badge_label)
+
 	var desc := String(pr.get("description", "")).strip_edges()
 	if desc != "":
-		_entries_list.add_child(_muted(desc))
+		var desc_label := Label.new()
+		desc_label.text = desc
+		desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_entries_list.add_child(desc_label)
+
+	var journal_head := Label.new()
+	journal_head.theme_type_variation = &"InfoText"
+	journal_head.text = "Journal"
+	_entries_list.add_child(journal_head)
 	var entries: Array = json.get("entries", [])
 	if entries.is_empty():
 		_entries_list.add_child(_muted("No journal entries yet."))
 		return
 	for e in entries:
 		_entries_list.add_child(_entry_row(e))
+
+func _load_image(url: String, target: TextureRect) -> void:
+	var req := HTTPRequest.new()
+	add_child(req)
+	req.request_completed.connect(func(_result, code, _headers, data):
+		req.queue_free()
+		if code != 200 or data.is_empty():
+			return
+		var img := Image.new()
+		var err := img.load_png_from_buffer(data)
+		if err != OK:
+			err = img.load_jpg_from_buffer(data)
+		if err != OK:
+			err = img.load_webp_from_buffer(data)
+		if err != OK:
+			return
+		target.texture = ImageTexture.create_from_image(img)
+	)
+	req.request(url)
 
 func _entry_row(e: Dictionary) -> Control:
 	var panel := PanelContainer.new()

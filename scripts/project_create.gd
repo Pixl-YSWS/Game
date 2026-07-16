@@ -3,6 +3,7 @@ extends Control
 signal submitted(data: Dictionary)
 signal cancelled
 
+const MAIN_THEME := preload("res://themes/main_theme.tres")
 const LEVEL_LABELS := ["L1 Greenhorn", "L2 Deputy", "L3 Outlaw", "L4 Legend"]
 const LEVEL_TIPS := [
 	"A first ship: simple site, script, or tiny tool.",
@@ -40,7 +41,14 @@ func _ht_font() -> SystemFont:
 		_readable_font.font_names = PackedStringArray(["Sans-Serif", "Noto Sans", "DejaVu Sans", "Arial"])
 	return _readable_font
 
+func _readable_theme() -> Theme:
+	var t := MAIN_THEME.duplicate(true)
+	t.default_font = _ht_font()
+	t.default_font_size = 18
+	return t
+
 func _ready() -> void:
+	theme = _readable_theme()
 	visible = false
 	_cancel_button.pressed.connect(func(): cancelled.emit())
 	_create_button.pressed.connect(_submit)
@@ -116,14 +124,15 @@ func _choose_thumb() -> void:
 	var start_dir := OS.get_system_dir(OS.SYSTEM_DIR_PICTURES)
 	if start_dir == "":
 		start_dir = OS.get_environment("HOME")
-	if DisplayServer.has_feature(DisplayServer.FEATURE_NATIVE_DIALOG_FILE):
-		DisplayServer.file_dialog_show(
+	var native_cb := func(ok: bool, paths: PackedStringArray, _filter: int):
+		if ok and not paths.is_empty():
+			_upload_thumb_file(paths[0])
+	if DisplayServer.has_method("file_dialog_show"):
+		var err: int = DisplayServer.file_dialog_show(
 			"Choose a thumbnail", start_dir, "", false,
-			DisplayServer.FILE_DIALOG_MODE_OPEN_FILE, filters,
-			func(ok: bool, paths: PackedStringArray, _filter: int):
-				if ok and not paths.is_empty():
-					_upload_thumb_file(paths[0]))
-		return
+			DisplayServer.FILE_DIALOG_MODE_OPEN_FILE, filters, native_cb)
+		if err == OK:
+			return
 	var fd := FileDialog.new()
 	fd.file_mode = FileDialog.FILE_MODE_OPEN_FILE
 	fd.access = FileDialog.ACCESS_FILESYSTEM
