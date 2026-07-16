@@ -1,27 +1,67 @@
 extends Area2D
 
-@export var prompt_text: String = "Press E to enter"
-@onready var label: Label = $Label
+const MONOCRAFT := preload("res://assets/fonts/Monocraft.ttf")
+const COLOR_ACCENT := Color(1, 0.819608, 0.4)
 
-var player_in_range := false
+@export_enum("projects", "explore", "leaderboard") var action: String = "projects"
+@export var sign_text: String = ""
 
-func _ready():
-	label.visible = false
-	label.text = prompt_text
+var _player_in_range := false
+var _prompt: Label
+var _sign: Label
+
+func _ready() -> void:
+	body_entered.connect(_on_body_entered)
+	body_exited.connect(_on_body_exited)
+	_sign = _make_label(sign_text if sign_text != "" else action.to_upper(), -44.0, 20)
+	_sign.visible = true
+	_prompt = _make_label("[E] " + _action_verb(), -26.0, 24)
+	_prompt.visible = false
+
+func _action_verb() -> String:
+	match action:
+		"projects":
+			return "Projects"
+		"explore":
+			return "Explore"
+		"leaderboard":
+			return "Leaderboard"
+	return "Open"
+
+func _make_label(text: String, y: float, size: int) -> Label:
+	var l := Label.new()
+	l.text = text
+	l.add_theme_font_override("font", MONOCRAFT)
+	l.add_theme_font_size_override("font_size", size)
+	l.add_theme_color_override("font_color", COLOR_ACCENT)
+	l.add_theme_color_override("font_outline_color", Color(0, 0, 0))
+	l.add_theme_constant_override("outline_size", 6)
+	l.scale = Vector2.ONE / 3.5
+	add_child(l)
+	l.reset_size()
+	l.position = Vector2(-l.size.x * l.scale.x / 2.0, y)
+	return l
 
 func _on_body_entered(body: Node2D) -> void:
-	player_in_range = true
-	label.visible = true
+	if body.has_method("player") and body.is_local:
+		_player_in_range = true
+		_prompt.visible = true
 
 func _on_body_exited(body: Node2D) -> void:
+	if body.has_method("player") and body.is_local:
+		_player_in_range = false
+		_prompt.visible = false
 
-	player_in_range = false
-	label.visible = false
-
-func _process(_delta):
-	if player_in_range and Input.is_action_just_pressed("interact"):
-		_enter_house()
-
-func _enter_house():
-	print("Entering house...")
-	# scene change, fade transition, etc.
+func _process(_delta: float) -> void:
+	if not _player_in_range or not Input.is_action_just_pressed("interact"):
+		return
+	if global.ui_blocked() or ChatHud.is_typing() or Dialogue.is_open:
+		return
+	match action:
+		"projects":
+			ProjectsHud.open()
+		"explore":
+			ExploreHud.open()
+		"leaderboard":
+			ExploreHud.open()
+			ExploreHud._show_board()

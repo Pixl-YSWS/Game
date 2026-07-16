@@ -17,6 +17,14 @@ var _next_button: Button
 var _page := 0
 var _open := false
 
+func _readable_theme() -> Theme:
+	var f := SystemFont.new()
+	f.font_names = PackedStringArray(["Sans-Serif", "Noto Sans", "DejaVu Sans", "Arial"])
+	var t: Theme = THEME.duplicate(true)
+	t.default_font = f
+	t.default_font_size = Settings.fs(20)
+	return t
+
 func _ready() -> void:
 	layer = 105
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -79,7 +87,8 @@ func close() -> void:
 func _build_ui() -> void:
 	_root = Control.new()
 	_root.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_root.theme = THEME
+	_root.theme = _readable_theme()
+	Settings.font_scale_changed.connect(func(): _root.theme = _readable_theme())
 	add_child(_root)
 
 	var backdrop := ColorRect.new()
@@ -107,7 +116,7 @@ func _build_ui() -> void:
 	wrap.add_child(plate)
 
 	var panel := PanelContainer.new()
-	panel.custom_minimum_size = Vector2(560, 340)
+	panel.custom_minimum_size = Vector2(640, 400)
 	wrap.add_child(panel)
 
 	var accents := Control.new()
