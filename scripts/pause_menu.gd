@@ -159,6 +159,20 @@ func _build_settings_ui() -> void:
 	voice_check.toggled.connect(Settings.set_voice_enabled)
 	body.add_child(voice_check)
 
+	var font_label := Label.new()
+	font_label.text = "UI font size  (%d%%)" % int(round(Settings.font_scale * 100))
+	font_label.theme_type_variation = &"InfoText"
+	body.add_child(font_label)
+	var font_slider := HSlider.new()
+	font_slider.min_value = 1.0
+	font_slider.max_value = 1.6
+	font_slider.step = 0.05
+	font_slider.value = Settings.font_scale
+	font_slider.value_changed.connect(func(v: float):
+		Settings.set_font_scale(v)
+		font_label.text = "UI font size  (%d%%)" % int(round(Settings.font_scale * 100)))
+	body.add_child(font_slider)
+
 	_name_section = VBoxContainer.new()
 	_name_section.add_theme_constant_override("separation", 8)
 	body.add_child(_name_section)

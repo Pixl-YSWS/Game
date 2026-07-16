@@ -21,7 +21,7 @@ func _rfont() -> SystemFont:
 
 func _readable(c: Control, size: int) -> void:
 	c.add_theme_font_override("font", _rfont())
-	c.add_theme_font_size_override("font_size", size)
+	c.add_theme_font_size_override("font_size", Settings.fs(size))
 
 func _ready() -> void:
 	layer = 104

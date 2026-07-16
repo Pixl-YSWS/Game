@@ -50,16 +50,19 @@ func _rfont() -> SystemFont:
 
 func _readable(c: Control, size: int) -> void:
 	c.add_theme_font_override("font", _rfont())
-	c.add_theme_font_size_override("font_size", size)
+	c.add_theme_font_size_override("font_size", Settings.fs(size))
 
 func _readable_theme() -> Theme:
 	var t := MAIN_THEME.duplicate(true)
 	t.default_font = _rfont()
-	t.default_font_size = 18
+	t.default_font_size = Settings.fs(20)
 	return t
 
 func _ready() -> void:
 	_root.theme = _readable_theme()
+	Settings.font_scale_changed.connect(func():
+		_root.theme = _readable_theme()
+		_last_sig = "")
 	_root.visible = false
 	%RefreshButton.pressed.connect(refresh)
 	_connect_button.pressed.connect(_on_connect)

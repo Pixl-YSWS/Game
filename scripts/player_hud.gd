@@ -17,6 +17,17 @@ var _hours_label: Label
 var _players := {}
 var _list_root: Control
 var _list_box: VBoxContainer
+var _scaled: Array = []
+
+func _ssize(c: Control, base: int) -> void:
+	c.add_theme_font_size_override("font_size", Settings.fs(base))
+	_scaled.append([c, base])
+
+func _apply_font_scale() -> void:
+	for entry in _scaled:
+		var c: Control = entry[0]
+		if is_instance_valid(c):
+			c.add_theme_font_size_override("font_size", Settings.fs(entry[1]))
 
 func _ready() -> void:
 	layer = 95
@@ -26,6 +37,7 @@ func _ready() -> void:
 	NetworkManager.scene_init.connect(_on_scene_init)
 	NetworkManager.player_joined.connect(_on_player_joined)
 	NetworkManager.player_left.connect(_on_player_left)
+	Settings.font_scale_changed.connect(_apply_font_scale)
 	var wallet_timer := Timer.new()
 	wallet_timer.wait_time = 45.0
 	wallet_timer.autostart = true
@@ -96,14 +108,14 @@ func _build_ui() -> void:
 	pixels_row.add_child(coin)
 
 	_pixels_label = Label.new()
-	_pixels_label.add_theme_font_size_override("font_size", 26)
+	_ssize(_pixels_label, 26)
 	_pixels_label.add_theme_color_override("font_color", COLOR_ACCENT)
 	_pixels_label.text = "— pixels"
 	pixels_row.add_child(_pixels_label)
 
 	_hours_label = Label.new()
 	_hours_label.theme_type_variation = &"SubText"
-	_hours_label.add_theme_font_size_override("font_size", 16)
+	_ssize(_hours_label, 17)
 	_hours_label.text = "0h approved"
 	wallet_box.add_child(_hours_label)
 
@@ -123,7 +135,7 @@ func _build_ui() -> void:
 
 	_name_label = Label.new()
 	_name_label.theme_type_variation = &"SubText"
-	_name_label.add_theme_font_size_override("font_size", 15)
+	_ssize(_name_label, 16)
 	_name_label.text = NetworkManager.display_name if NetworkManager.display_name != "" else "Player"
 	_name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	card_margin.add_child(_name_label)
@@ -147,7 +159,7 @@ func _build_ui() -> void:
 	row.add_child(dot)
 
 	_online_label = Label.new()
-	_online_label.add_theme_font_size_override("font_size", 15)
+	_ssize(_online_label, 16)
 	_online_label.text = "1 online  [Tab]"
 	row.add_child(_online_label)
 
@@ -170,7 +182,7 @@ func _build_ui() -> void:
 	friends_row.add_child(friends_dot)
 
 	var friends_label := Label.new()
-	friends_label.add_theme_font_size_override("font_size", 15)
+	_ssize(friends_label, 16)
 	friends_label.text = "Friends  [F]"
 	friends_row.add_child(friends_label)
 
@@ -192,7 +204,7 @@ func _build_ui() -> void:
 	inbox_row.add_child(_inbox_dot)
 
 	_inbox_label = Label.new()
-	_inbox_label.add_theme_font_size_override("font_size", 15)
+	_ssize(_inbox_label, 16)
 	inbox_row.add_child(_inbox_label)
 
 	_update_inbox(InboxHud.unread_count)
@@ -216,7 +228,7 @@ func _build_ui() -> void:
 	clock_row.add_child(_clock_dot)
 
 	_clock_label = Label.new()
-	_clock_label.add_theme_font_size_override("font_size", 15)
+	_ssize(_clock_label, 16)
 	clock_row.add_child(_clock_label)
 
 	_update_clock()

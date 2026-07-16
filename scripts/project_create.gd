@@ -45,11 +45,12 @@ func _ht_font() -> SystemFont:
 func _readable_theme() -> Theme:
 	var t := MAIN_THEME.duplicate(true)
 	t.default_font = _ht_font()
-	t.default_font_size = 18
+	t.default_font_size = Settings.fs(20)
 	return t
 
 func _ready() -> void:
 	theme = _readable_theme()
+	Settings.font_scale_changed.connect(func(): theme = _readable_theme())
 	visible = false
 	_cancel_button.pressed.connect(func(): cancelled.emit())
 	_create_button.pressed.connect(_submit)
@@ -267,7 +268,7 @@ func _populate(ht_projects: Array, linked: Array) -> void:
 		var secs := int(p.get("seconds", 0))
 		b.text = "%s\n%.1fh" % [nm if nm != "" else "?", secs / 3600.0]
 		b.add_theme_font_override("font", _ht_font())
-		b.add_theme_font_size_override("font_size", 15)
+		b.add_theme_font_size_override("font_size", Settings.fs(16))
 		b.set_meta("ht_name", nm)
 		b.button_pressed = linked.has(nm)
 		_grid.add_child(b)

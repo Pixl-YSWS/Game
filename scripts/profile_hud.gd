@@ -18,7 +18,7 @@ func _readable_theme() -> Theme:
 	f.font_names = PackedStringArray(["Sans-Serif", "Noto Sans", "DejaVu Sans", "Arial"])
 	var t: Theme = THEME.duplicate(true)
 	t.default_font = f
-	t.default_font_size = 17
+	t.default_font_size = Settings.fs(20)
 	return t
 
 func _ready() -> void:
@@ -59,6 +59,7 @@ func _build_ui() -> void:
 	_root = Control.new()
 	_root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_root.theme = _readable_theme()
+	Settings.font_scale_changed.connect(func(): _root.theme = _readable_theme())
 	add_child(_root)
 
 	var backdrop := ColorRect.new()
