@@ -26,12 +26,22 @@ func _ready() -> void:
 	if is_local:
 		$NameLabel.text = "You"
 		skin = NetworkManager.local_skin
+		_apply_zoom()
+		Settings.zoom_changed.connect(_apply_zoom)
 	else:
 		$NameLabel.text = player_name
 		$CollisionShape2D.disabled = true
 	set_skin(skin)
 	$AnimatedSprite2D.play("front_idle")
 	_layout_name_label()
+
+func _apply_zoom() -> void:
+	if not has_node("Camera2d"):
+		return
+	$Camera2d.zoom = Vector2.ONE * 3.5 * Settings.zoom_level
+	_layout_name_label()
+	if _bubble != null:
+		_bubble.scale = Vector2.ONE / _bubble_zoom()
 
 func _layout_name_label() -> void:
 	var nl: Label = $NameLabel

@@ -1,6 +1,7 @@
 extends Node
 
 signal font_scale_changed
+signal zoom_changed
 
 const PATH := "user://settings.json"
 
@@ -8,6 +9,7 @@ var music_enabled := true
 var music_volume := 0.6
 var voice_enabled := true
 var font_scale := 1.0
+var zoom_level := 1.0
 
 func _ready() -> void:
 	_load()
@@ -26,6 +28,7 @@ func _load() -> void:
 	music_volume = float(data.get("music_volume", music_volume))
 	voice_enabled = bool(data.get("voice_enabled", voice_enabled))
 	font_scale = clampf(float(data.get("font_scale", font_scale)), 1.0, 1.6)
+	zoom_level = clampf(float(data.get("zoom_level", zoom_level)), 0.6, 1.4)
 
 func save() -> void:
 	var f := FileAccess.open(PATH, FileAccess.WRITE)
@@ -36,6 +39,7 @@ func save() -> void:
 		"music_volume": music_volume,
 		"voice_enabled": voice_enabled,
 		"font_scale": font_scale,
+		"zoom_level": zoom_level,
 	}))
 	f.close()
 
@@ -60,3 +64,11 @@ func set_font_scale(v: float) -> void:
 
 func fs(base: int) -> int:
 	return int(round(base * font_scale))
+
+func set_zoom_level(v: float) -> void:
+	zoom_level = clampf(v, 0.6, 1.4)
+	save()
+	zoom_changed.emit()
+
+func reset_zoom() -> void:
+	set_zoom_level(1.0)

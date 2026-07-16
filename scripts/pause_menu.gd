@@ -177,6 +177,33 @@ func _build_settings_ui() -> void:
 		font_label.text = "UI font size  (%d%%)" % int(round(Settings.font_scale * 100)))
 	body.add_child(font_slider)
 
+	var zoom_label := Label.new()
+	zoom_label.text = "Camera zoom  (%d%%)" % int(round(Settings.zoom_level * 100))
+	zoom_label.theme_type_variation = &"InfoText"
+	body.add_child(zoom_label)
+	var zoom_row := HBoxContainer.new()
+	zoom_row.add_theme_constant_override("separation", 10)
+	body.add_child(zoom_row)
+	var zoom_slider := HSlider.new()
+	zoom_slider.min_value = 0.6
+	zoom_slider.max_value = 1.4
+	zoom_slider.step = 0.05
+	zoom_slider.value = Settings.zoom_level
+	zoom_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	zoom_slider.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	zoom_slider.value_changed.connect(func(v: float):
+		Settings.set_zoom_level(v)
+		zoom_label.text = "Camera zoom  (%d%%)" % int(round(Settings.zoom_level * 100)))
+	zoom_row.add_child(zoom_slider)
+	var zoom_reset := Button.new()
+	zoom_reset.theme_type_variation = &"GreyButton"
+	zoom_reset.text = "Reset"
+	zoom_reset.pressed.connect(func():
+		Settings.reset_zoom()
+		zoom_slider.set_value_no_signal(1.0)
+		zoom_label.text = "Camera zoom  (100%)")
+	zoom_row.add_child(zoom_reset)
+
 	_name_section = VBoxContainer.new()
 	_name_section.add_theme_constant_override("separation", 8)
 	body.add_child(_name_section)
