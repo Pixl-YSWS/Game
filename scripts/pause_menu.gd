@@ -89,30 +89,34 @@ func _build_ui() -> void:
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_root.add_child(center)
 
-	var modal := _make_modal("MENU", 400)
+	var modal := _make_modal("MENU", 500)
 	center.add_child(modal["root"])
 	var body: VBoxContainer = modal["body"]
+	body.add_theme_constant_override("separation", 12)
 
-	_resume_button = Button.new()
-	_resume_button.text = "Resume"
+	_resume_button = _big_button("Resume")
 	_resume_button.pressed.connect(resume_game)
 	body.add_child(_resume_button)
 
-	var settings_button := Button.new()
-	settings_button.text = "Settings"
+	var settings_button := _big_button("Settings")
 	settings_button.pressed.connect(open_settings)
 	body.add_child(settings_button)
 
-	var character_button := Button.new()
-	character_button.text = "Customise Look"
+	var character_button := _big_button("Customise Look")
 	character_button.pressed.connect(_on_character)
 	body.add_child(character_button)
 
-	var menu_button := Button.new()
-	menu_button.text = "Quit to Main Menu"
+	var menu_button := _big_button("Quit to Main Menu")
 	menu_button.theme_type_variation = &"GreyButton"
 	menu_button.pressed.connect(_quit_to_menu)
 	body.add_child(menu_button)
+
+func _big_button(text: String) -> Button:
+	var b := Button.new()
+	b.text = text
+	b.custom_minimum_size = Vector2(0, 56)
+	b.add_theme_font_size_override("font_size", 22)
+	return b
 
 func _build_settings_ui() -> void:
 	_settings_root = Control.new()
@@ -131,7 +135,7 @@ func _build_settings_ui() -> void:
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_settings_root.add_child(center)
 
-	var modal := _make_modal("SETTINGS", 400)
+	var modal := _make_modal("SETTINGS", 500)
 	center.add_child(modal["root"])
 	var body: VBoxContainer = modal["body"]
 
