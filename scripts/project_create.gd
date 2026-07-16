@@ -54,6 +54,8 @@ func _ready() -> void:
 	_create_button.pressed.connect(_submit)
 	_thumb_button.pressed.connect(_choose_thumb)
 	_thumb_paste.pressed.connect(_paste_thumb)
+	_thumb_button.tooltip_text = "Opens the file picker. If it can't reach your files, copy an image and press Paste, or drag one onto the window."
+	get_window().files_dropped.connect(_on_files_dropped)
 	var group := ButtonGroup.new()
 	for i in LEVEL_LABELS.size():
 		var b := Button.new()
@@ -146,6 +148,15 @@ func _choose_thumb() -> void:
 		_upload_thumb_file(path))
 	fd.canceled.connect(func(): fd.queue_free())
 	fd.popup_centered(Vector2i(700, 500))
+
+func _on_files_dropped(files: PackedStringArray) -> void:
+	if not visible or _uploading:
+		return
+	for f in files:
+		if f.get_extension().to_lower() in ["png", "jpg", "jpeg", "webp", "gif"]:
+			_upload_thumb_file(f)
+			return
+	_show_error("Drop a PNG, JPG, WEBP or GIF image.")
 
 func _upload_thumb_file(path: String) -> void:
 	var bytes := FileAccess.get_file_as_bytes(path)
