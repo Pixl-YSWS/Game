@@ -12,6 +12,8 @@ var _clock_dot: ColorRect
 var _clock_label: Label
 var _inbox_dot: ColorRect
 var _inbox_label: Label
+var _pixels_label: Label
+var _hours_label: Label
 var _players := {}
 var _list_root: Control
 var _list_box: VBoxContainer
@@ -24,6 +26,12 @@ func _ready() -> void:
 	NetworkManager.scene_init.connect(_on_scene_init)
 	NetworkManager.player_joined.connect(_on_player_joined)
 	NetworkManager.player_left.connect(_on_player_left)
+	var wallet_timer := Timer.new()
+	wallet_timer.wait_time = 45.0
+	wallet_timer.autostart = true
+	wallet_timer.timeout.connect(_fetch_wallet)
+	add_child(wallet_timer)
+	_fetch_wallet()
 
 func _process(_delta: float) -> void:
 	var in_game := _in_gameplay() and not global.ui_blocked()
@@ -55,6 +63,49 @@ func _build_ui() -> void:
 	column.add_theme_constant_override("separation", 6)
 	column.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_root.add_child(column)
+
+	var wallet_card := PanelContainer.new()
+	wallet_card.theme_type_variation = &"HudPanel"
+	wallet_card.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	wallet_card.custom_minimum_size = Vector2(200, 0)
+	wallet_card.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	column.add_child(wallet_card)
+
+	var wallet_margin := MarginContainer.new()
+	wallet_margin.add_theme_constant_override("margin_left", 10)
+	wallet_margin.add_theme_constant_override("margin_right", 10)
+	wallet_margin.add_theme_constant_override("margin_top", 6)
+	wallet_margin.add_theme_constant_override("margin_bottom", 6)
+	wallet_card.add_child(wallet_margin)
+
+	var wallet_box := VBoxContainer.new()
+	wallet_box.add_theme_constant_override("separation", 1)
+	wallet_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	wallet_margin.add_child(wallet_box)
+
+	var pixels_row := HBoxContainer.new()
+	pixels_row.add_theme_constant_override("separation", 8)
+	pixels_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	wallet_box.add_child(pixels_row)
+
+	var coin := ColorRect.new()
+	coin.color = COLOR_ACCENT
+	coin.custom_minimum_size = Vector2(14, 14)
+	coin.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	coin.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	pixels_row.add_child(coin)
+
+	_pixels_label = Label.new()
+	_pixels_label.add_theme_font_size_override("font_size", 26)
+	_pixels_label.add_theme_color_override("font_color", COLOR_ACCENT)
+	_pixels_label.text = "— pixels"
+	pixels_row.add_child(_pixels_label)
+
+	_hours_label = Label.new()
+	_hours_label.theme_type_variation = &"SubText"
+	_hours_label.add_theme_font_size_override("font_size", 16)
+	_hours_label.text = "0h approved"
+	wallet_box.add_child(_hours_label)
 
 	var card := PanelContainer.new()
 	card.theme_type_variation = &"HudPanel"
@@ -191,6 +242,34 @@ func _update_clock() -> void:
 	_clock_dot.color = phase["color"]
 	_clock_label.text = "%s %02d:%02d  •  %s" % [phase["name"], td.hour, td.minute, phase["next"]]
 
+func _fetch_wallet() -> void:
+	if NetworkManager.session_token == "":
+		return
+	var req := HTTPRequest.new()
+	add_child(req)
+	var url := NetworkManager.SERVER_HTTP_URL + "/api/profile/wallet?token=" + NetworkManager.session_token.uri_encode()
+	req.request_completed.connect(func(_result, code, _headers, data):
+		req.queue_free()
+		if code != 200:
+			return
+		var json = JSON.parse_string(data.get_string_from_utf8()) if data.size() > 0 else null
+		if typeof(json) != TYPE_DICTIONARY or not json.get("ok", false):
+			return
+		_set_wallet(float(json.get("pixels", 0)), float(json.get("approvedHours", 0)))
+	)
+	req.request(url, PackedStringArray(), HTTPClient.METHOD_GET)
+
+func _set_wallet(pixels: float, hours: float) -> void:
+	if _pixels_label == null:
+		return
+	_pixels_label.text = "%s pixels" % _fmt_amount(pixels)
+	_hours_label.text = "%sh approved" % _fmt_amount(hours)
+
+func _fmt_amount(v: float) -> String:
+	if absf(v - roundf(v)) < 0.05:
+		return str(int(round(v)))
+	return "%.1f" % v
+
 func _build_list_ui() -> void:
 	_list_root = Control.new()
 	_list_root.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -277,6 +356,7 @@ func _refresh_list() -> void:
 
 func _on_logged_in(display_name: String) -> void:
 	_name_label.text = display_name if display_name != "" else "Player"
+	_fetch_wallet()
 
 func _on_scene_init(your_id: String, _pos: Vector2, others: Array, _spawn_at_default: bool) -> void:
 	_players.clear()
@@ -285,6 +365,7 @@ func _on_scene_init(your_id: String, _pos: Vector2, others: Array, _spawn_at_def
 		if uid != your_id:
 			_players[uid] = String(p.get("displayName", "Player"))
 	_update_online()
+	_fetch_wallet()
 
 func _on_player_joined(user_id: String, name: String, _pos: Vector2, _dir: String, _skin: String) -> void:
 	_players[user_id] = name

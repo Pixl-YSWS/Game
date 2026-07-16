@@ -103,7 +103,7 @@ func _update_thumb_status() -> void:
 		_thumb_status.text = "Uploading…"
 		_thumb_status.remove_theme_color_override("font_color")
 	elif _thumb_url == "":
-		_thumb_status.text = "No image (optional)"
+		_thumb_status.text = "No thumbnail yet (required to ship)"
 		_thumb_status.remove_theme_color_override("font_color")
 	else:
 		_thumb_status.text = "Image added ✔"

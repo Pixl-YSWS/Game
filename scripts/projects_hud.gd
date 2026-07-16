@@ -7,6 +7,7 @@ const PROJECT_JOURNAL := preload("res://scenes/project_journal.tscn")
 const STATUS_BADGES := {
 	"draft": ["draft", Color(0.72, 0.67, 0.58)],
 	"shipped": ["in review", Color(1, 0.819608, 0.4)],
+	"second_review": ["in review", Color(1, 0.819608, 0.4)],
 	"approved": ["approved", Color(0.45, 0.85, 0.5)],
 	"needs_changes": ["needs changes", Color(1, 0.419608, 0.419608)],
 }
@@ -247,7 +248,7 @@ func _project_row(p: Dictionary) -> Control:
 		badge.text = "[BANNED]"
 		badge.add_theme_color_override("font_color", Color(0.92, 0.26, 0.32))
 	elif rejected:
-		badge.text = "[REJECTED]"
+		badge.text = "[changes requested]"
 		badge.add_theme_color_override("font_color", Color(1, 0.419608, 0.419608))
 	else:
 		var badge_info: Array = STATUS_BADGES.get(status, STATUS_BADGES["draft"])
@@ -292,7 +293,7 @@ func _project_row(p: Dictionary) -> Control:
 		var credited: Variant = p.get("approved_hours")
 		var txt := "Approved ✔"
 		if credited != null:
-			txt += " · %.1fh credited" % float(credited)
+			txt += " · %.1f pixels credited" % float(credited)
 		if note != "":
 			txt += "\nReviewer: " + note
 		approved_label.text = txt
@@ -304,7 +305,7 @@ func _project_row(p: Dictionary) -> Control:
 	if rejected and not banned:
 		var reason := String(p.get("reject_reason", "")).strip_edges()
 		var by := String(p.get("reject_by", "")).strip_edges()
-		var head := "Rejected by " + by if by != "" else "Rejected"
+		var head := "Changes requested by " + by if by != "" else "Changes requested"
 		var reject_label := Label.new()
 		reject_label.theme_type_variation = &"InfoText"
 		reject_label.text = (head + ": " + reason if reason != "" else head) + "\nFix it and ship again — contact the Pixl team if you think this is a mistake."
@@ -323,6 +324,8 @@ func _project_row(p: Dictionary) -> Control:
 			missing.append("a GitHub repo link")
 		if String(p.get("demo_url", "")).strip_edges() == "":
 			missing.append("a demo link")
+		if String(p.get("image_url", "")).strip_edges() == "":
+			missing.append("a thumbnail")
 		if not missing.is_empty():
 			ship.disabled = true
 			ship.tooltip_text = "Add %s first." % " and ".join(missing)
@@ -570,6 +573,8 @@ func _submit_ship() -> void:
 					msg = "Add a GitHub repo link first."
 				"demo_required":
 					msg = "Add a demo link first."
+				"image_required":
+					msg = "Add a thumbnail image first."
 				"repo_not_found":
 					msg = "Your GitHub repo link 404s — is the repo public?"
 				"demo_unreachable":
