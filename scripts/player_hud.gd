@@ -147,7 +147,7 @@ func _build_ui() -> void:
 	row.add_child(dot)
 
 	_online_label = Label.new()
-	_online_label.add_theme_font_size_override("font_size", 11)
+	_online_label.add_theme_font_size_override("font_size", 15)
 	_online_label.text = "1 online  [Tab]"
 	row.add_child(_online_label)
 
@@ -170,7 +170,7 @@ func _build_ui() -> void:
 	friends_row.add_child(friends_dot)
 
 	var friends_label := Label.new()
-	friends_label.add_theme_font_size_override("font_size", 11)
+	friends_label.add_theme_font_size_override("font_size", 15)
 	friends_label.text = "Friends  [F]"
 	friends_row.add_child(friends_label)
 
@@ -192,7 +192,7 @@ func _build_ui() -> void:
 	inbox_row.add_child(_inbox_dot)
 
 	_inbox_label = Label.new()
-	_inbox_label.add_theme_font_size_override("font_size", 11)
+	_inbox_label.add_theme_font_size_override("font_size", 15)
 	inbox_row.add_child(_inbox_label)
 
 	_update_inbox(InboxHud.unread_count)
@@ -216,7 +216,7 @@ func _build_ui() -> void:
 	clock_row.add_child(_clock_dot)
 
 	_clock_label = Label.new()
-	_clock_label.add_theme_font_size_override("font_size", 11)
+	_clock_label.add_theme_font_size_override("font_size", 15)
 	clock_row.add_child(_clock_label)
 
 	_update_clock()
@@ -225,6 +225,66 @@ func _build_ui() -> void:
 	clock_timer.autostart = true
 	clock_timer.timeout.connect(_update_clock)
 	add_child(clock_timer)
+
+	var controls_card := PanelContainer.new()
+	controls_card.theme_type_variation = &"HudPanel"
+	controls_card.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	controls_card.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	controls_card.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	column.add_child(controls_card)
+
+	var controls_margin := MarginContainer.new()
+	controls_margin.add_theme_constant_override("margin_left", 10)
+	controls_margin.add_theme_constant_override("margin_right", 10)
+	controls_margin.add_theme_constant_override("margin_top", 6)
+	controls_margin.add_theme_constant_override("margin_bottom", 6)
+	controls_card.add_child(controls_margin)
+
+	var controls_box := VBoxContainer.new()
+	controls_box.add_theme_constant_override("separation", 5)
+	controls_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	controls_margin.add_child(controls_box)
+
+	var controls_title := Label.new()
+	controls_title.text = "CONTROLS"
+	controls_title.add_theme_font_size_override("font_size", 14)
+	controls_title.add_theme_color_override("font_color", Color(0.62, 0.58, 0.5))
+	controls_box.add_child(controls_title)
+
+	var controls_grid := GridContainer.new()
+	controls_grid.columns = 2
+	controls_grid.add_theme_constant_override("h_separation", 18)
+	controls_grid.add_theme_constant_override("v_separation", 5)
+	controls_grid.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	controls_box.add_child(controls_grid)
+
+	var controls := [
+		["Move", "WASD"], ["Run", "Shift"],
+		["Interact", "E"], ["Chat", "Enter"],
+		["Players", "Tab"], ["Friends", "F"],
+		["Inbox", "N"], ["Projects", "H"],
+		["Explore", "E"], ["Emotes", "T"],
+		["Guide", "F1"], ["Close", "Esc"],
+	]
+	for c in controls:
+		controls_grid.add_child(_control_cell(String(c[0]), String(c[1])))
+
+func _control_cell(action: String, key: String) -> Control:
+	var cell := HBoxContainer.new()
+	cell.add_theme_constant_override("separation", 7)
+	cell.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var key_label := Label.new()
+	key_label.text = key
+	key_label.add_theme_font_size_override("font_size", 16)
+	key_label.add_theme_color_override("font_color", COLOR_ACCENT)
+	key_label.custom_minimum_size = Vector2(58, 0)
+	cell.add_child(key_label)
+	var action_label := Label.new()
+	action_label.text = action
+	action_label.theme_type_variation = &"SubText"
+	action_label.add_theme_font_size_override("font_size", 16)
+	cell.add_child(action_label)
+	return cell
 
 func _update_inbox(unread: int) -> void:
 	if unread > 0:
