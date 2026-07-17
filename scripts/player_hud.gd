@@ -197,6 +197,29 @@ func _build_ui() -> void:
 	friends_label.text = "Friends  [F]"
 	friends_row.add_child(friends_label)
 
+	var shop_chip := PanelContainer.new()
+	shop_chip.theme_type_variation = &"HudPanel"
+	shop_chip.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	shop_chip.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	shop_chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	column.add_child(shop_chip)
+
+	var shop_row := HBoxContainer.new()
+	shop_row.add_theme_constant_override("separation", 7)
+	shop_chip.add_child(shop_row)
+
+	var shop_dot := ColorRect.new()
+	shop_dot.color = Color(1, 0.419608, 0.419608)
+	shop_dot.custom_minimum_size = Vector2(8, 8)
+	shop_dot.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	shop_dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	shop_row.add_child(shop_dot)
+
+	var shop_label := Label.new()
+	_ssize(shop_label, 16)
+	shop_label.text = "Shop  [B]"
+	shop_row.add_child(shop_label)
+
 	var inbox_chip := PanelContainer.new()
 	inbox_chip.theme_type_variation = &"HudPanel"
 	inbox_chip.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST

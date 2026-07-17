@@ -41,6 +41,7 @@ ProfileHud="*res://scripts/profile_hud.gd"
 FriendsHud="*res://scripts/friends_hud.gd"
 MinimapHud="*res://scripts/minimap_hud.gd"
 ExploreHud="*res://scripts/explore_hud.gd"
+ShopHud="*res://scripts/shop_hud.gd"
 
 [display]
 

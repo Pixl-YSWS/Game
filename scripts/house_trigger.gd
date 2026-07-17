@@ -3,7 +3,7 @@ extends Area2D
 const MONOCRAFT := preload("res://assets/fonts/Monocraft.ttf")
 const COLOR_ACCENT := Color(1, 0.819608, 0.4)
 
-@export_enum("projects", "explore", "leaderboard") var action: String = "projects"
+@export_enum("projects", "explore", "leaderboard", "shop") var action: String = "projects"
 @export var sign_text: String = ""
 
 var _player_in_range := false
@@ -26,6 +26,8 @@ func _action_verb() -> String:
 			return "Explore"
 		"leaderboard":
 			return "Leaderboard"
+		"shop":
+			return "Shop"
 	return "Open"
 
 func _make_label(text: String, y: float, size: int) -> Label:
@@ -65,3 +67,5 @@ func _process(_delta: float) -> void:
 		"leaderboard":
 			ExploreHud.open()
 			ExploreHud._show_board()
+		"shop":
+			ShopHud.open()
