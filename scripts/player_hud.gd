@@ -109,9 +109,11 @@ func _build_ui() -> void:
 	pixels_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	wallet_box.add_child(pixels_row)
 
-	var coin := ColorRect.new()
-	coin.color = COLOR_ACCENT
-	coin.custom_minimum_size = Vector2(14, 14)
+	var coin := TextureRect.new()
+	coin.texture = load("res://assets/ui/pixel_currency_red.png")
+	coin.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	coin.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	coin.custom_minimum_size = Vector2(30, 30)
 	coin.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	coin.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	pixels_row.add_child(coin)

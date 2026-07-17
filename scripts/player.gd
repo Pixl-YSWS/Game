@@ -35,10 +35,21 @@ func _ready() -> void:
 	$AnimatedSprite2D.play("front_idle")
 	_layout_name_label()
 
+func _unhandled_input(event: InputEvent) -> void:
+	if not is_local:
+		return
+	if event is InputEventMouseButton and event.pressed and event.ctrl_pressed:
+		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
+			Settings.set_zoom_level(Settings.zoom_level + 0.05)
+			get_viewport().set_input_as_handled()
+		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+			Settings.set_zoom_level(Settings.zoom_level - 0.05)
+			get_viewport().set_input_as_handled()
+
 func _apply_zoom() -> void:
 	if not has_node("Camera2d"):
 		return
-	$Camera2d.zoom = Vector2.ONE * 3.5 * Settings.zoom_level
+	$Camera2d.zoom = Vector2.ONE * 4.0 * Settings.zoom_level
 	_layout_name_label()
 	if _bubble != null:
 		_bubble.scale = Vector2.ONE / _bubble_zoom()

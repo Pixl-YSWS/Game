@@ -1,7 +1,8 @@
-[gd_scene format=3 uid="uid://dv6e2uxkej2n7"]
+[gd_scene load_steps=3 format=3 uid="uid://dv6e2uxkej2n7"]
 
 [ext_resource type="Theme" uid="uid://bv3yjmmciab5v" path="res://themes/main_theme.tres" id="1_nw41r"]
 [ext_resource type="Script" uid="uid://dnli4mn0oyso2" path="res://scripts/login.gd" id="1_pymad"]
+[ext_resource type="Texture2D" path="res://assets/ui/pixl_wordmark.png" id="2_logo"]
 
 [node name="Login" type="Control" unique_id=2039546782]
 layout_mode = 3
@@ -34,12 +35,13 @@ grow_vertical = 2
 custom_minimum_size = Vector2(320, 0)
 layout_mode = 2
 
-[node name="TitleLabel" type="Label" parent="CenterContainer/VBoxContainer" unique_id=424695268]
+[node name="TitleLogo" type="TextureRect" parent="CenterContainer/VBoxContainer" unique_id=424695268]
+custom_minimum_size = Vector2(300, 93)
 layout_mode = 2
 size_flags_horizontal = 4
-theme_type_variation = &"TitleText"
-text = "Pixl"
-horizontal_alignment = 1
+texture = ExtResource("2_logo")
+expand_mode = 1
+stretch_mode = 5
 
 [node name="StatusLabel" type="Label" parent="CenterContainer/VBoxContainer" unique_id=1483478206]
 layout_mode = 2

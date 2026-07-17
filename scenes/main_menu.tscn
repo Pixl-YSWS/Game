@@ -1,7 +1,8 @@
-[gd_scene load_steps=3 format=3 uid="uid://bko40f8bhcrgr"]
+[gd_scene load_steps=4 format=3 uid="uid://bko40f8bhcrgr"]
 
 [ext_resource type="Theme" uid="uid://bv3yjmmciab5v" path="res://themes/main_theme.tres" id="1_ekxnf"]
 [ext_resource type="Script" uid="uid://cp8p63bbkw3k" path="res://scripts/main_menu.gd" id="1_l6cm7"]
+[ext_resource type="Texture2D" path="res://assets/ui/pixl_wordmark.png" id="2_logo"]
 
 [node name="MainMenu" type="Control"]
 layout_mode = 3
@@ -34,16 +35,13 @@ grow_vertical = 2
 custom_minimum_size = Vector2(400, 0)
 layout_mode = 2
 
-[node name="TitlePlate" type="PanelContainer" parent="CenterContainer/VBoxContainer"]
+[node name="TitleLogo" type="TextureRect" parent="CenterContainer/VBoxContainer"]
+custom_minimum_size = Vector2(320, 100)
 layout_mode = 2
 size_flags_horizontal = 4
-theme_type_variation = &"TitlePlate"
-
-[node name="TitleLabel" type="Label" parent="CenterContainer/VBoxContainer/TitlePlate"]
-layout_mode = 2
-theme_type_variation = &"TitlePlateText"
-text = "PIXL"
-horizontal_alignment = 1
+texture = ExtResource("2_logo")
+expand_mode = 1
+stretch_mode = 5
 
 [node name="Subtitle" type="Label" parent="CenterContainer/VBoxContainer"]
 layout_mode = 2

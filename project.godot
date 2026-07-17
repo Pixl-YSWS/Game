@@ -21,13 +21,6 @@ config/icon="res://icon.svg"
 
 driver/enable_input=true
 
-[display]
-
-window/size/viewport_width=1280
-window/size/viewport_height=720
-window/stretch/mode="canvas_items"
-window/stretch/aspect="expand"
-
 [autoload]
 
 global="*uid://c53v2w31qfgbo"
@@ -48,6 +41,13 @@ ProfileHud="*res://scripts/profile_hud.gd"
 FriendsHud="*res://scripts/friends_hud.gd"
 MinimapHud="*res://scripts/minimap_hud.gd"
 ExploreHud="*res://scripts/explore_hud.gd"
+
+[display]
+
+window/size/viewport_width=1600
+window/size/viewport_height=900
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
 
 [editor_plugins]
 

@@ -27,7 +27,7 @@ shape = SubResource("CircleShape2D_g2els")
 modulate = Color(0, 0, 0, 1)
 self_modulate = Color(0, 0, 0, 1)
 position = Vector2(2, 4)
-zoom = Vector2(3.5, 3.5)
+zoom = Vector2(4, 4)
 position_smoothing_speed = 1.0
 
 [node name="NameLabel" type="Label" parent="." unique_id=1331379137]
