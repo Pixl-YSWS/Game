@@ -587,6 +587,10 @@ func _submit_ship() -> void:
 		_ship_error.text = "Tell reviewers what changed since the last approval."
 		_ship_error.visible = true
 		return
+	if _ship_is_update and notes.length() < 100:
+		_ship_error.text = "Update notes need at least 100 characters — walk reviewers through what's new (%d/100)." % notes.length()
+		_ship_error.visible = true
+		return
 	_shipping = true
 	_ship_button.disabled = true
 	_ship_error.visible = false
@@ -606,6 +610,8 @@ func _submit_ship() -> void:
 					msg = "This project was permanently banned and can't be shipped. Contact the Pixl team."
 				"update_notes_required":
 					msg = "Tell reviewers what changed since the last approval."
+				"update_notes_too_short":
+					msg = "Update notes need at least 100 characters — walk reviewers through what's new."
 				"repo_required":
 					msg = "Add a GitHub repo link first."
 				"demo_required":

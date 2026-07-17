@@ -26,6 +26,7 @@ const LEVEL_TIPS := [
 @onready var _thumb_paste: Button = %ThumbPaste
 @onready var _thumb_status: Label = %ThumbStatus
 @onready var _ai_check: CheckBox = %AiCheck
+@onready var _ai_notes: TextEdit = %AiNotes
 
 var _submitting := false
 var _edit_id := 0
@@ -57,6 +58,7 @@ func _ready() -> void:
 	_thumb_button.pressed.connect(_choose_thumb)
 	_thumb_paste.pressed.connect(_paste_thumb)
 	_thumb_button.tooltip_text = "Opens the file picker. If it can't reach your files, copy an image and press Paste, or drag one onto the window."
+	_ai_check.toggled.connect(func(on: bool): _ai_notes.visible = on)
 	get_window().files_dropped.connect(_on_files_dropped)
 	var group := ButtonGroup.new()
 	for i in LEVEL_LABELS.size():
@@ -107,6 +109,8 @@ func _fill(project: Dictionary, ht_projects: Array) -> void:
 	_level_buttons[_level - 1].button_pressed = true
 	_thumb_url = String(project.get("image_url", ""))
 	_ai_check.button_pressed = bool(project.get("used_ai", false))
+	_ai_notes.text = String(project.get("ai_notes", ""))
+	_ai_notes.visible = _ai_check.button_pressed
 	_update_thumb_status()
 	_populate(ht_projects, project.get("hackatime_projects", []))
 
@@ -307,6 +311,10 @@ func _submit() -> void:
 		_show_error("Repo link must be a GitHub repository (github.com/owner/repo).")
 		_repo.grab_focus()
 		return
+	if _ai_check.button_pressed and _ai_notes.text.strip_edges().length() < 10:
+		_show_error("You said you used AI — tell reviewers which AI and what you used it for.")
+		_ai_notes.grab_focus()
+		return
 	_error.visible = false
 	var selected: Array = []
 	for cb in _grid.get_children():
@@ -320,6 +328,7 @@ func _submit() -> void:
 		"imageUrl": _thumb_url,
 		"level": _level,
 		"usedAi": _ai_check.button_pressed,
+		"aiNotes": _ai_notes.text.strip_edges(),
 		"hackatimeProjects": selected,
 	}
 	if _edit_id != 0:

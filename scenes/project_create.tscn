@@ -186,6 +186,14 @@ layout_mode = 2
 tooltip_text = "Reviewers care about what you did with the output, so be honest. Only you and reviewers see this."
 text = "I used AI on this project"
 
+[node name="AiNotes" type="TextEdit" parent="Center/Wrap/Card/Margin/Panel"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(0, 70)
+layout_mode = 2
+placeholder_text = "Which AI, and what did you use it for? (e.g. \"Claude for debugging the collision code, Copilot autocomplete\")"
+wrap_mode = 1
+
 [node name="ErrorLabel" type="Label" parent="Center/Wrap/Card/Margin/Panel"]
 unique_name_in_owner = true
 visible = false
