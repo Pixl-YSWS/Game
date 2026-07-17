@@ -1,6 +1,6 @@
 extends CanvasLayer
 
-const GAMEPLAY_SCENES := ["village", "open_world", "house_interior"]
+const GAMEPLAY_SCENES := ["village", "open_world", "house_interior", "shop_interior"]
 const MAX_LINES := 9
 const LINE_TTL := 11.0
 const FADE_TIME := 0.6

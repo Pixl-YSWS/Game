@@ -2661,6 +2661,7 @@ z_index = 13
 position = Vector2(-64, -31)
 collision_mask = 2
 script = ExtResource("44_ci1yp")
+target = "shop"
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="DoorTrigger2" unique_id=1265632936]
 position = Vector2(2, 6)
@@ -2676,7 +2677,7 @@ theme_override_colors/font_color = Color(0.77315557, 0.55160576, 0.26933688, 1)
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_constants/outline_size = 2
 theme_override_font_sizes/font_size = 11
-text = "Press E to enter"
+text = "Press E to shop"
 
 [node name="PlayerSpawn" type="Marker2D" parent="." unique_id=332008319]
 position = Vector2(60, -81)

@@ -1,7 +1,7 @@
 extends CanvasLayer
 
 const THEME := preload("res://themes/main_theme.tres")
-const GAMEPLAY_SCENES := ["village", "open_world", "house_interior"]
+const GAMEPLAY_SCENES := ["village", "open_world", "house_interior", "shop_interior"]
 
 const COLOR_GOLD := Color(1, 0.819608, 0.4)
 const COLOR_TEAL := Color(0.44, 0.85, 0.85)

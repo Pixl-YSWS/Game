@@ -1,7 +1,7 @@
 extends CanvasLayer
 
 const DIR := "res://assets/emotes/"
-const GAMEPLAY_SCENES := ["village", "open_world", "house_interior"]
+const GAMEPLAY_SCENES := ["village", "open_world", "house_interior", "shop_interior"]
 const EMOTES := [
 	{"key": "happy", "file": "emote_faceHappy.png"},
 	{"key": "laugh", "file": "emote_laugh.png"},

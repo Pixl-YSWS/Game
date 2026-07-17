@@ -1,6 +1,6 @@
 extends CanvasLayer
 
-const GAMEPLAY_SCENES := ["village", "open_world", "house_interior"]
+const GAMEPLAY_SCENES := ["village", "open_world", "house_interior", "shop_interior"]
 const PROJECT_CREATE := preload("res://scenes/project_create.tscn")
 const PROJECT_JOURNAL := preload("res://scenes/project_journal.tscn")
 const MAIN_THEME := preload("res://themes/main_theme.tres")
