@@ -12,7 +12,6 @@ const COLOR_PANEL_EDGE := Color(0.05, 0.03, 0.015)
 var _root: Control
 var _pixels_label: Label
 var _bubble_label: Label
-var _msg_panel: PanelContainer
 var _list: VBoxContainer
 var _detail_name: Label
 var _detail_price: Label
@@ -37,6 +36,7 @@ func open() -> void:
 		_build_ui()
 	_selected = 0
 	_set_items(_items)
+	_say(_greeting())
 	_root.visible = true
 	global.push_ui_blocker()
 	_fetch_wallet()
@@ -46,6 +46,15 @@ func close() -> void:
 	if is_open():
 		_root.visible = false
 		global.pop_ui_blocker()
+
+func _greeting() -> String:
+	return "HEY %s!\nPICK ONE." % _short_name()
+
+func _short_name() -> String:
+	var n := NetworkManager.display_name.strip_edges()
+	if n == "":
+		return "YOU"
+	return n.split(" ")[0].to_upper()
 
 func _in_gameplay() -> bool:
 	var cur := get_tree().current_scene
@@ -83,10 +92,10 @@ func _say(text: String) -> void:
 	_bubble_token += 1
 	var token := _bubble_token
 	_bubble_label.text = text
-	_msg_panel.visible = true
-	get_tree().create_timer(2.0).timeout.connect(func():
-		if token == _bubble_token:
-			_msg_panel.visible = false)
+	if text != _greeting():
+		get_tree().create_timer(2.0).timeout.connect(func():
+			if token == _bubble_token and is_open():
+				_bubble_label.text = _greeting())
 
 func _flat(color: Color, border := Color.TRANSPARENT, border_w := 0) -> StyleBoxFlat:
 	var sb := StyleBoxFlat.new()
@@ -177,10 +186,25 @@ func _build_ui() -> void:
 	var sign_box := VBoxContainer.new()
 	sign_box.add_theme_constant_override("separation", 0)
 	sign_pad.add_child(sign_box)
-	var sign_title := _label(sign_box, "SHOP", 40, Color(0.85, 0.22, 0.25))
+	var sign_title := _label(sign_box, "STICKERS", 40, Color(0.85, 0.22, 0.25))
 	sign_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	var sign_sub := _label(sign_box, "PIXL  ·  MADE WITH <3", 15, Color(0.25, 0.18, 0.12))
 	sign_sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+
+	var shelf := _rect(_root, Color(0.55, 0.36, 0.20))
+	shelf.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+	shelf.offset_left = 70.0
+	shelf.offset_top = 176.0
+	shelf.offset_right = 300.0
+	shelf.offset_bottom = 184.0
+	var sticker_colors := [Color(0.9, 0.3, 0.3), Color(0.3, 0.55, 0.9), Color(0.35, 0.75, 0.4), Color(0.95, 0.8, 0.35), Color(0.65, 0.4, 0.85)]
+	for i in sticker_colors.size():
+		var sticker := _rect(_root, sticker_colors[i])
+		sticker.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+		sticker.offset_left = 82.0 + i * 44.0
+		sticker.offset_top = 148.0
+		sticker.offset_right = 106.0 + i * 44.0
+		sticker.offset_bottom = 172.0
 
 	var wallet := PanelContainer.new()
 	wallet.theme_type_variation = &"HudPanel"
@@ -213,22 +237,37 @@ func _build_ui() -> void:
 	_pixels_label = _label(wallet_row, "—", 30, COLOR_GOLD)
 	_label(wallet_box, "PIXELS", 14, COLOR_MUTED)
 
-	_msg_panel = PanelContainer.new()
-	_msg_panel.add_theme_stylebox_override("panel", _flat(Color(0.94, 0.90, 0.80), Color(0.1, 0.06, 0.03), 3))
-	_msg_panel.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
-	_msg_panel.anchor_top = 0.56
-	_msg_panel.anchor_bottom = 0.56
-	_msg_panel.offset_left = 60.0
-	_msg_panel.offset_top = -60.0
-	_msg_panel.visible = false
-	_root.add_child(_msg_panel)
-	var msg_pad := MarginContainer.new()
-	msg_pad.add_theme_constant_override("margin_left", 12)
-	msg_pad.add_theme_constant_override("margin_right", 12)
-	msg_pad.add_theme_constant_override("margin_top", 7)
-	msg_pad.add_theme_constant_override("margin_bottom", 7)
-	_msg_panel.add_child(msg_pad)
-	_bubble_label = _label(msg_pad, "", 17, Color(0.15, 0.10, 0.06))
+	var keeper := TextureRect.new()
+	var atlas := AtlasTexture.new()
+	atlas.atlas = load("res://assets/npcs/cheetah_char.png")
+	atlas.region = Rect2(0, 288, 32, 32)
+	keeper.texture = atlas
+	keeper.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	keeper.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	keeper.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	keeper.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+	keeper.anchor_top = 0.56
+	keeper.anchor_bottom = 0.56
+	keeper.offset_left = 110.0
+	keeper.offset_right = 280.0
+	keeper.offset_top = -170.0
+	_root.add_child(keeper)
+
+	var bubble := PanelContainer.new()
+	bubble.add_theme_stylebox_override("panel", _flat(Color(0.94, 0.90, 0.80), Color(0.1, 0.06, 0.03), 3))
+	bubble.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+	bubble.anchor_top = 0.56
+	bubble.anchor_bottom = 0.56
+	bubble.offset_left = 60.0
+	bubble.offset_top = -252.0
+	_root.add_child(bubble)
+	var bubble_pad := MarginContainer.new()
+	bubble_pad.add_theme_constant_override("margin_left", 12)
+	bubble_pad.add_theme_constant_override("margin_right", 12)
+	bubble_pad.add_theme_constant_override("margin_top", 7)
+	bubble_pad.add_theme_constant_override("margin_bottom", 7)
+	bubble.add_child(bubble_pad)
+	_bubble_label = _label(bubble_pad, "HEY!", 17, Color(0.15, 0.10, 0.06))
 
 	var detail := PanelContainer.new()
 	detail.add_theme_stylebox_override("panel", _flat(Color(0.98, 0.95, 0.87), Color(0.1, 0.06, 0.03), 4))
@@ -285,7 +324,7 @@ func _build_ui() -> void:
 	var panel_box := VBoxContainer.new()
 	panel_box.add_theme_constant_override("separation", 6)
 	panel_pad.add_child(panel_box)
-	_label(panel_box, "GOODS", 22, COLOR_GOLD)
+	_label(panel_box, "STICKERS & GOODS", 22, COLOR_GOLD)
 	_label(panel_box, "— — — — —", 14, Color(0.45, 0.36, 0.24))
 	var spacer := Control.new()
 	spacer.custom_minimum_size = Vector2(0, 4)
