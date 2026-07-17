@@ -9,21 +9,29 @@ const COLOR_MUTED := Color(0.78, 0.72, 0.58)
 const COLOR_PANEL := Color(0.16, 0.10, 0.055)
 const COLOR_PANEL_EDGE := Color(0.05, 0.03, 0.015)
 
-const ITEMS := [
-	{"name": "PIXEL STICKER", "price": 25, "desc": "Red pixel-heart sticker. Priva wants one."},
-	{"name": "HOLO STICKER", "price": 60, "desc": "Holographic, shimmery. Looks great on a laptop."},
-	{"name": "LETTER PATCH", "price": 120, "desc": "Iron-on patch. The real-deal collectible."},
-	{"name": "NAME GLOW", "price": 200, "desc": "Your name shines gold above your head."},
-	{"name": "HOUSE PAINT", "price": 260, "desc": "Fresh colors for your house interior."},
-	{"name": "MYSTERY CRATE", "price": 500, "desc": "Nobody knows what's inside. Not even us."},
+const DEFAULT_ITEMS := [
+	{"name": "PIXEL STICKER", "price": 25, "description": "Red pixel-heart sticker. Priva wants one.", "image_url": "", "options": []},
+	{"name": "HOLO STICKER", "price": 60, "description": "Holographic, shimmery. Looks great on a laptop.", "image_url": "", "options": []},
+	{"name": "LETTER PATCH", "price": 120, "description": "Iron-on patch. The real-deal collectible.", "image_url": "", "options": []},
+	{"name": "NAME GLOW", "price": 200, "description": "Your name shines gold above your head.", "image_url": "", "options": []},
+	{"name": "HOUSE PAINT", "price": 260, "description": "Fresh colors for your house interior.", "image_url": "", "options": ["RED", "BLUE", "GREEN", "PURPLE"]},
+	{"name": "MYSTERY CRATE", "price": 500, "description": "Nobody knows what's inside. Not even us.", "image_url": "", "options": []},
 ]
 
 var _root: Control
 var _pixels_label: Label
 var _bubble_label: Label
+var _list: VBoxContainer
+var _detail_name: Label
+var _detail_price: Label
+var _detail_desc: Label
+var _detail_options: Label
+var _detail_image: TextureRect
+var _items: Array = []
 var _rows: Array = []
 var _selected := 0
 var _bubble_token := 0
+var _image_cache := {}
 
 func _ready() -> void:
 	layer = 96
@@ -35,16 +43,20 @@ func open() -> void:
 	if _root == null:
 		_build_ui()
 	_selected = 0
-	_update_rows()
-	_say("HEY %s!\nPICK ONE." % _short_name())
+	_set_items(DEFAULT_ITEMS if _items.is_empty() else _items)
+	_say(_greeting())
 	_root.visible = true
 	global.push_ui_blocker()
 	_fetch_wallet()
+	_fetch_items()
 
 func close() -> void:
 	if is_open():
 		_root.visible = false
 		global.pop_ui_blocker()
+
+func _greeting() -> String:
+	return "HEY %s!\nPICK ONE." % _short_name()
 
 func _short_name() -> String:
 	var n := NetworkManager.display_name.strip_edges()
@@ -64,11 +76,11 @@ func _unhandled_input(event: InputEvent) -> void:
 			KEY_ESCAPE, KEY_X:
 				close()
 			KEY_UP, KEY_W:
-				_selected = (_selected - 1 + ITEMS.size()) % ITEMS.size()
-				_update_rows()
+				_selected = (_selected - 1 + _items.size()) % maxi(_items.size(), 1)
+				_update_selection()
 			KEY_DOWN, KEY_S:
-				_selected = (_selected + 1) % ITEMS.size()
-				_update_rows()
+				_selected = (_selected + 1) % maxi(_items.size(), 1)
+				_update_selection()
 			KEY_Z, KEY_ENTER:
 				_say("NOT FOR SALE YET!\nCOME BACK SOON.")
 			_:
@@ -85,11 +97,10 @@ func _say(text: String) -> void:
 	_bubble_token += 1
 	var token := _bubble_token
 	_bubble_label.text = text
-	if text != "HEY %s!\nPICK ONE." % _short_name():
-		var timer := get_tree().create_timer(2.0)
-		timer.timeout.connect(func():
+	if text != _greeting():
+		get_tree().create_timer(2.0).timeout.connect(func():
 			if token == _bubble_token and is_open():
-				_bubble_label.text = "HEY %s!\nPICK ONE." % _short_name())
+				_bubble_label.text = _greeting())
 
 func _flat(color: Color, border := Color.TRANSPARENT, border_w := 0) -> StyleBoxFlat:
 	var sb := StyleBoxFlat.new()
@@ -104,6 +115,13 @@ func _rect(parent: Control, color: Color) -> ColorRect:
 	r.color = color
 	r.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	parent.add_child(r)
+	return r
+
+func _band(parent: Control, color: Color, top: float, bottom: float) -> ColorRect:
+	var r := _rect(parent, color)
+	r.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	r.anchor_top = top
+	r.anchor_bottom = bottom
 	return r
 
 func _label(parent: Node, text: String, size: int, color: Color) -> Label:
@@ -122,7 +140,7 @@ func _build_ui() -> void:
 	add_child(_root)
 
 	var wall := _rect(_root, Color(0.84, 0.65, 0.41))
-	wall.set_anchors_preset(Control.PRESET_FULL_RECT)
+	wall.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
 	var planks := _rect(_root, Color(0.93, 0.86, 0.70))
 	planks.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
@@ -133,43 +151,34 @@ func _build_ui() -> void:
 		seam.offset_top = 34.0 + i * 34.0
 		seam.offset_bottom = 37.0 + i * 34.0
 
-	var floor_rect := _rect(_root, Color(0.80, 0.60, 0.36))
-	floor_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
-	floor_rect.anchor_top = 0.66
-	floor_rect.offset_top = 0.0
-
-	var counter_face := _rect(_root, Color(0.33, 0.19, 0.11))
-	counter_face.set_anchors_preset(Control.PRESET_FULL_RECT)
-	counter_face.anchor_top = 0.56
-	counter_face.anchor_bottom = 0.66
-	var counter_top := _rect(_root, Color(0.47, 0.29, 0.17))
-	counter_top.set_anchors_preset(Control.PRESET_FULL_RECT)
-	counter_top.anchor_top = 0.56
-	counter_top.anchor_bottom = 0.56
+	_band(_root, Color(0.80, 0.60, 0.36), 0.66, 1.0)
+	_band(_root, Color(0.33, 0.19, 0.11), 0.56, 0.66)
+	var counter_top := _band(_root, Color(0.47, 0.29, 0.17), 0.56, 0.56)
 	counter_top.offset_bottom = 12.0
 	for i in 40:
 		var stud := _rect(_root, Color(0.62, 0.30, 0.22))
-		stud.set_anchors_preset(Control.PRESET_TOP_LEFT)
+		stud.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
 		stud.anchor_top = 0.60
-		stud.position = Vector2(24.0 + i * 84.0, 0)
-		stud.custom_minimum_size = Vector2(6, 6)
-		stud.size = Vector2(6, 6)
+		stud.anchor_bottom = 0.60
+		stud.offset_left = 24.0 + i * 84.0
+		stud.offset_right = 30.0 + i * 84.0
+		stud.offset_bottom = 6.0
 
 	var register := _rect(_root, Color(0.12, 0.08, 0.05))
-	register.set_anchors_preset(Control.PRESET_TOP_LEFT)
-	register.anchor_left = 0.38
+	register.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+	register.anchor_left = 0.40
+	register.anchor_right = 0.40
 	register.anchor_top = 0.56
+	register.anchor_bottom = 0.56
 	register.offset_top = -26.0
-	register.size = Vector2(64, 26)
+	register.offset_right = 64.0
 	var register_key := _rect(register, Color(0.9, 0.3, 0.3))
 	register_key.position = Vector2(8, 6)
 	register_key.size = Vector2(8, 6)
 
 	var sign := PanelContainer.new()
 	sign.add_theme_stylebox_override("panel", _flat(Color(0.97, 0.94, 0.88), Color(0.1, 0.06, 0.03), 4))
-	sign.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	sign.anchor_left = 0.5
-	sign.anchor_right = 0.5
+	sign.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
 	sign.offset_top = 18.0
 	sign.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_root.add_child(sign)
@@ -188,21 +197,26 @@ func _build_ui() -> void:
 	sign_sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 
 	var shelf := _rect(_root, Color(0.55, 0.36, 0.20))
-	shelf.set_anchors_preset(Control.PRESET_TOP_LEFT)
-	shelf.position = Vector2(70, 176)
-	shelf.size = Vector2(230, 8)
+	shelf.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+	shelf.offset_left = 70.0
+	shelf.offset_top = 176.0
+	shelf.offset_right = 300.0
+	shelf.offset_bottom = 184.0
 	var sticker_colors := [Color(0.9, 0.3, 0.3), Color(0.3, 0.55, 0.9), Color(0.35, 0.75, 0.4), Color(0.95, 0.8, 0.35), Color(0.65, 0.4, 0.85)]
 	for i in sticker_colors.size():
 		var sticker := _rect(_root, sticker_colors[i])
-		sticker.set_anchors_preset(Control.PRESET_TOP_LEFT)
-		sticker.position = Vector2(82 + i * 44.0, 148)
-		sticker.size = Vector2(24, 24)
+		sticker.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+		sticker.offset_left = 82.0 + i * 44.0
+		sticker.offset_top = 148.0
+		sticker.offset_right = 106.0 + i * 44.0
+		sticker.offset_bottom = 172.0
 
 	var wallet := PanelContainer.new()
 	wallet.theme_type_variation = &"HudPanel"
 	wallet.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	wallet.set_anchors_preset(Control.PRESET_TOP_LEFT)
-	wallet.position = Vector2(16, 14)
+	wallet.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+	wallet.offset_left = 16.0
+	wallet.offset_top = 14.0
 	_root.add_child(wallet)
 	var wallet_pad := MarginContainer.new()
 	wallet_pad.add_theme_constant_override("margin_left", 12)
@@ -236,19 +250,21 @@ func _build_ui() -> void:
 	keeper.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	keeper.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	keeper.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	keeper.set_anchors_preset(Control.PRESET_TOP_LEFT)
-	keeper.anchor_left = 0.17
+	keeper.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
 	keeper.anchor_top = 0.56
-	keeper.offset_top = -150.0
-	keeper.size = Vector2(150, 150)
+	keeper.anchor_bottom = 0.56
+	keeper.offset_left = 110.0
+	keeper.offset_right = 280.0
+	keeper.offset_top = -170.0
 	_root.add_child(keeper)
 
 	var bubble := PanelContainer.new()
 	bubble.add_theme_stylebox_override("panel", _flat(Color(0.94, 0.90, 0.80), Color(0.1, 0.06, 0.03), 3))
-	bubble.set_anchors_preset(Control.PRESET_TOP_LEFT)
-	bubble.anchor_left = 0.24
+	bubble.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
 	bubble.anchor_top = 0.56
-	bubble.offset_top = -210.0
+	bubble.anchor_bottom = 0.56
+	bubble.offset_left = 60.0
+	bubble.offset_top = -252.0
 	_root.add_child(bubble)
 	var bubble_pad := MarginContainer.new()
 	bubble_pad.add_theme_constant_override("margin_left", 12)
@@ -258,11 +274,47 @@ func _build_ui() -> void:
 	bubble.add_child(bubble_pad)
 	_bubble_label = _label(bubble_pad, "HEY!", 17, Color(0.15, 0.10, 0.06))
 
+	var detail := PanelContainer.new()
+	detail.add_theme_stylebox_override("panel", _flat(Color(0.98, 0.95, 0.87), Color(0.1, 0.06, 0.03), 4))
+	detail.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+	detail.offset_left = 330.0
+	detail.offset_top = 150.0
+	detail.offset_right = 990.0
+	detail.offset_bottom = 470.0
+	_root.add_child(detail)
+	var detail_pad := MarginContainer.new()
+	detail_pad.add_theme_constant_override("margin_left", 22)
+	detail_pad.add_theme_constant_override("margin_right", 22)
+	detail_pad.add_theme_constant_override("margin_top", 16)
+	detail_pad.add_theme_constant_override("margin_bottom", 16)
+	detail.add_child(detail_pad)
+	var detail_row := HBoxContainer.new()
+	detail_row.add_theme_constant_override("separation", 20)
+	detail_pad.add_child(detail_row)
+
+	_detail_image = TextureRect.new()
+	_detail_image.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_detail_image.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_detail_image.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_detail_image.custom_minimum_size = Vector2(200, 200)
+	_detail_image.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	detail_row.add_child(_detail_image)
+
+	var detail_box := VBoxContainer.new()
+	detail_box.add_theme_constant_override("separation", 8)
+	detail_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	detail_row.add_child(detail_box)
+	_detail_name = _label(detail_box, "", 32, Color(0.62, 0.16, 0.19))
+	_detail_price = _label(detail_box, "", 24, Color(0.15, 0.45, 0.45))
+	_detail_desc = _label(detail_box, "", 19, Color(0.25, 0.18, 0.12))
+	_detail_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_detail_desc.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_detail_options = _label(detail_box, "", 17, Color(0.42, 0.30, 0.16))
+	_detail_options.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+
 	var panel := PanelContainer.new()
 	panel.add_theme_stylebox_override("panel", _flat(COLOR_PANEL, COLOR_PANEL_EDGE, 4))
-	panel.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	panel.anchor_left = 1.0
-	panel.anchor_right = 1.0
+	panel.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
 	panel.offset_left = -560.0
 	panel.offset_right = -18.0
 	panel.offset_top = 14.0
@@ -273,20 +325,40 @@ func _build_ui() -> void:
 	panel_pad.add_theme_constant_override("margin_top", 14)
 	panel_pad.add_theme_constant_override("margin_bottom", 16)
 	panel.add_child(panel_pad)
-	var list := VBoxContainer.new()
-	list.add_theme_constant_override("separation", 6)
-	panel_pad.add_child(list)
-	_label(list, "STICKERS & GOODS", 22, COLOR_GOLD)
-	_label(list, "— — — — —", 14, Color(0.45, 0.36, 0.24))
+	var panel_box := VBoxContainer.new()
+	panel_box.add_theme_constant_override("separation", 6)
+	panel_pad.add_child(panel_box)
+	_label(panel_box, "STICKERS & GOODS", 22, COLOR_GOLD)
+	_label(panel_box, "— — — — —", 14, Color(0.45, 0.36, 0.24))
 	var spacer := Control.new()
 	spacer.custom_minimum_size = Vector2(0, 4)
-	list.add_child(spacer)
+	panel_box.add_child(spacer)
+	_list = VBoxContainer.new()
+	_list.add_theme_constant_override("separation", 6)
+	panel_box.add_child(_list)
 
+	var bar := _rect(_root, Color(0.05, 0.035, 0.02))
+	bar.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+	bar.offset_top = -52.0
+	var bar_row := HBoxContainer.new()
+	bar_row.add_theme_constant_override("separation", 40)
+	bar_row.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	bar_row.offset_left = 26.0
+	bar.add_child(bar_row)
+	for hint in ["↑↓ BROWSE", "Z BUY", "X LEAVE SHOP"]:
+		var h := _label(bar_row, hint, 19, Color(0.92, 0.88, 0.78))
+		h.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+
+func _set_items(items: Array) -> void:
+	_items = items
+	_selected = clampi(_selected, 0, maxi(_items.size() - 1, 0))
+	for child in _list.get_children():
+		child.queue_free()
 	_rows.clear()
-	for i in ITEMS.size():
-		var item: Dictionary = ITEMS[i]
+	for i in _items.size():
+		var item: Dictionary = _items[i]
 		var row := PanelContainer.new()
-		list.add_child(row)
+		_list.add_child(row)
 		var row_pad := MarginContainer.new()
 		row_pad.add_theme_constant_override("margin_left", 12)
 		row_pad.add_theme_constant_override("margin_right", 10)
@@ -301,26 +373,12 @@ func _build_ui() -> void:
 		var name_label := _label(name_row, String(item["name"]), 20, Color(0.95, 0.90, 0.75))
 		name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		_label(name_row, "%d PX" % int(item["price"]), 20, COLOR_TEAL)
-		var desc := _label(row_box, String(item["desc"]), 15, COLOR_MUTED)
-		desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		var desc := _label(row_box, String(item.get("description", "")), 15, COLOR_MUTED)
+		desc.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 		_rows.append({"panel": row, "name": name_label, "item": item})
+	_update_selection()
 
-	var bar := _rect(_root, Color(0.05, 0.035, 0.02))
-	bar.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-	bar.anchor_top = 1.0
-	bar.offset_top = -52.0
-	var bar_row := HBoxContainer.new()
-	bar_row.add_theme_constant_override("separation", 40)
-	bar_row.set_anchors_preset(Control.PRESET_FULL_RECT)
-	bar_row.offset_left = 26.0
-	bar.add_child(bar_row)
-	for hint in ["↑↓ BROWSE", "Z BUY", "X LEAVE SHOP"]:
-		var h := _label(bar_row, hint, 19, Color(0.92, 0.88, 0.78))
-		h.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-
-	_update_rows()
-
-func _update_rows() -> void:
+func _update_selection() -> void:
 	for i in _rows.size():
 		var row: Dictionary = _rows[i]
 		var panel: PanelContainer = row["panel"]
@@ -337,6 +395,74 @@ func _update_rows() -> void:
 			panel.add_theme_stylebox_override("panel", _flat(Color(0, 0, 0, 0)))
 			name_label.text = String(item["name"])
 			name_label.add_theme_color_override("font_color", Color(0.95, 0.90, 0.75))
+	_update_detail()
+
+func _update_detail() -> void:
+	if _items.is_empty() or _detail_name == null:
+		return
+	var item: Dictionary = _items[_selected]
+	_detail_name.text = String(item["name"])
+	_detail_price.text = "%d PIXELS" % int(item["price"])
+	_detail_desc.text = String(item.get("description", ""))
+	var options: Array = item.get("options", [])
+	if options.is_empty():
+		_detail_options.text = ""
+	else:
+		var parts: Array = []
+		for o in options:
+			parts.append(String(o).to_upper())
+		_detail_options.text = "OPTIONS:  " + "  /  ".join(parts)
+	_show_detail_image(String(item.get("image_url", "")))
+
+func _show_detail_image(url: String) -> void:
+	if url == "":
+		var atlas := AtlasTexture.new()
+		atlas.atlas = load("res://assets/ui/pixel_currency_red.png")
+		atlas.region = Rect2(0, 0, 350, 350)
+		_detail_image.texture = atlas
+		return
+	if _image_cache.has(url):
+		_detail_image.texture = _image_cache[url]
+		return
+	var req := HTTPRequest.new()
+	add_child(req)
+	req.request_completed.connect(func(_result, code, _headers, data):
+		req.queue_free()
+		if code != 200 or data.size() == 0:
+			return
+		var img := Image.new()
+		var err := img.load_png_from_buffer(data)
+		if err != OK:
+			err = img.load_jpg_from_buffer(data)
+		if err != OK:
+			err = img.load_webp_from_buffer(data)
+		if err != OK:
+			return
+		var tex := ImageTexture.create_from_image(img)
+		_image_cache[url] = tex
+		if is_open() and _items.size() > _selected and String(_items[_selected].get("image_url", "")) == url:
+			_detail_image.texture = tex
+	)
+	req.request(url)
+
+func _fetch_items() -> void:
+	if NetworkManager.session_token == "":
+		return
+	var req := HTTPRequest.new()
+	add_child(req)
+	var url := NetworkManager.SERVER_HTTP_URL + "/api/shop/items?token=" + NetworkManager.session_token.uri_encode()
+	req.request_completed.connect(func(_result, code, _headers, data):
+		req.queue_free()
+		if code != 200 or not is_open():
+			return
+		var json = JSON.parse_string(data.get_string_from_utf8()) if data.size() > 0 else null
+		if typeof(json) != TYPE_DICTIONARY or not json.get("ok", false):
+			return
+		var items: Array = json.get("items", [])
+		if not items.is_empty():
+			_set_items(items)
+	)
+	req.request(url, PackedStringArray(), HTTPClient.METHOD_GET)
 
 func _fetch_wallet() -> void:
 	if NetworkManager.session_token == "" or _pixels_label == null:
