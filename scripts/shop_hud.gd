@@ -9,15 +9,6 @@ const COLOR_MUTED := Color(0.78, 0.72, 0.58)
 const COLOR_PANEL := Color(0.16, 0.10, 0.055)
 const COLOR_PANEL_EDGE := Color(0.05, 0.03, 0.015)
 
-const DEFAULT_ITEMS := [
-	{"name": "PIXEL STICKER", "price": 25, "description": "Red pixel-heart sticker. Priva wants one.", "image_url": "", "options": []},
-	{"name": "HOLO STICKER", "price": 60, "description": "Holographic, shimmery. Looks great on a laptop.", "image_url": "", "options": []},
-	{"name": "LETTER PATCH", "price": 120, "description": "Iron-on patch. The real-deal collectible.", "image_url": "", "options": []},
-	{"name": "NAME GLOW", "price": 200, "description": "Your name shines gold above your head.", "image_url": "", "options": []},
-	{"name": "HOUSE PAINT", "price": 260, "description": "Fresh colors for your house interior.", "image_url": "", "options": ["RED", "BLUE", "GREEN", "PURPLE"]},
-	{"name": "MYSTERY CRATE", "price": 500, "description": "Nobody knows what's inside. Not even us.", "image_url": "", "options": []},
-]
-
 var _root: Control
 var _pixels_label: Label
 var _bubble_label: Label
@@ -27,6 +18,7 @@ var _detail_price: Label
 var _detail_desc: Label
 var _detail_options: Label
 var _detail_image: TextureRect
+var _detail_panel: PanelContainer
 var _items: Array = []
 var _rows: Array = []
 var _selected := 0
@@ -43,7 +35,7 @@ func open() -> void:
 	if _root == null:
 		_build_ui()
 	_selected = 0
-	_set_items(DEFAULT_ITEMS if _items.is_empty() else _items)
+	_set_items(_items)
 	_say(_greeting())
 	_root.visible = true
 	global.push_ui_blocker()
@@ -76,13 +68,16 @@ func _unhandled_input(event: InputEvent) -> void:
 			KEY_ESCAPE, KEY_X:
 				close()
 			KEY_UP, KEY_W:
-				_selected = (_selected - 1 + _items.size()) % maxi(_items.size(), 1)
-				_update_selection()
+				if not _items.is_empty():
+					_selected = (_selected - 1 + _items.size()) % _items.size()
+					_update_selection()
 			KEY_DOWN, KEY_S:
-				_selected = (_selected + 1) % maxi(_items.size(), 1)
-				_update_selection()
+				if not _items.is_empty():
+					_selected = (_selected + 1) % _items.size()
+					_update_selection()
 			KEY_Z, KEY_ENTER:
-				_say("NOT FOR SALE YET!\nCOME BACK SOON.")
+				if not _items.is_empty():
+					_say("NOT FOR SALE YET!\nCOME BACK SOON.")
 			_:
 				return
 		get_viewport().set_input_as_handled()
@@ -282,6 +277,7 @@ func _build_ui() -> void:
 	detail.offset_right = 990.0
 	detail.offset_bottom = 470.0
 	_root.add_child(detail)
+	_detail_panel = detail
 	var detail_pad := MarginContainer.new()
 	detail_pad.add_theme_constant_override("margin_left", 22)
 	detail_pad.add_theme_constant_override("margin_right", 22)
@@ -355,6 +351,12 @@ func _set_items(items: Array) -> void:
 	for child in _list.get_children():
 		child.queue_free()
 	_rows.clear()
+	if _detail_panel != null:
+		_detail_panel.visible = not _items.is_empty()
+	if _items.is_empty():
+		var empty := _label(_list, "NOTHING IN STOCK.\nCHECK BACK SOON!", 18, COLOR_MUTED)
+		empty.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		return
 	for i in _items.size():
 		var item: Dictionary = _items[i]
 		var row := PanelContainer.new()
@@ -458,9 +460,7 @@ func _fetch_items() -> void:
 		var json = JSON.parse_string(data.get_string_from_utf8()) if data.size() > 0 else null
 		if typeof(json) != TYPE_DICTIONARY or not json.get("ok", false):
 			return
-		var items: Array = json.get("items", [])
-		if not items.is_empty():
-			_set_items(items)
+		_set_items(json.get("items", []))
 	)
 	req.request(url, PackedStringArray(), HTTPClient.METHOD_GET)
 
