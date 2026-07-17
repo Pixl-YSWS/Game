@@ -7,23 +7,13 @@ func _ready() -> void:
 	$TileMapLayer2.modulate = Color(1.05, 0.85, 0.62)
 	$TileMapLayer4.modulate = Color(1.0, 0.95, 0.85)
 	super._ready()
-	_spawn_keeper()
+	_spawn_counter_trigger()
 	await get_tree().create_timer(0.3).timeout
 	can_transition = true
 
-func _spawn_keeper() -> void:
-	var keeper := Sprite2D.new()
-	var atlas := AtlasTexture.new()
-	atlas.atlas = load("res://assets/npcs/cheetah_char.png")
-	atlas.region = Rect2(0, 288, 32, 32)
-	keeper.texture = atlas
-	keeper.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	keeper.position = Vector2(34, -58)
-	keeper.z_index = 10
-	add_child(keeper)
-
+func _spawn_counter_trigger() -> void:
 	var trigger := Area2D.new()
-	trigger.position = keeper.position
+	trigger.position = Vector2(34, -58)
 	trigger.collision_mask = 2
 	trigger.set_script(load("res://scripts/house_trigger.gd"))
 	trigger.action = "shop"
