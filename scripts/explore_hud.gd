@@ -21,6 +21,15 @@ var _browse_search: LineEdit
 var _player_view: VBoxContainer
 var _player_info: Label
 var _projects_list: VBoxContainer
+var _card_title: Label
+var _card_portrait: TextureRect
+var _card_lvl_label: Label
+var _card_lvl_bar: ProgressBar
+var _card_px_label: Label
+var _card_class_label: Label
+var _card_foot_portrait: TextureRect
+var _card_foot_name: Label
+var _card_foot_sub: Label
 var _project_view: VBoxContainer
 var _project_meta: RichTextLabel
 var _entries_list: VBoxContainer
@@ -276,8 +285,136 @@ func _build_player_view() -> VBoxContainer:
 	_player_info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header.add_child(_player_info)
 
-	_projects_list = _make_list(view)
+	var split := HBoxContainer.new()
+	split.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	split.add_theme_constant_override("separation", 16)
+	view.add_child(split)
+
+	split.add_child(_build_player_card())
+	_projects_list = _make_list_in(split)
 	return view
+
+func _card_panel(bg: Color, border := Color(0.13, 0.11, 0.09)) -> PanelContainer:
+	var p := PanelContainer.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = bg
+	sb.border_color = border
+	sb.set_border_width_all(2)
+	sb.set_content_margin_all(8)
+	p.add_theme_stylebox_override("panel", sb)
+	return p
+
+func _card_text(parent: Node, text: String, size: int, color: Color) -> Label:
+	var l := Label.new()
+	l.text = text
+	l.add_theme_color_override("font_color", color)
+	l.add_theme_font_size_override("font_size", Settings.fs(size))
+	parent.add_child(l)
+	return l
+
+func _build_player_card() -> Control:
+	var ink := Color(0.13, 0.11, 0.09)
+	var card := _card_panel(Color(0.93, 0.91, 0.84))
+	card.custom_minimum_size = Vector2(330, 0)
+	card.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 10)
+	card.add_child(box)
+
+	var title_bar := _card_panel(Color(0.85, 0.36, 0.42))
+	box.add_child(title_bar)
+	_card_title = Label.new()
+	_card_title.add_theme_color_override("font_color", Color(0.98, 0.96, 0.92))
+	_card_title.add_theme_font_size_override("font_size", Settings.fs(22))
+	title_bar.add_child(_card_title)
+
+	var frame := _card_panel(Color(0.10, 0.10, 0.09))
+	box.add_child(frame)
+	var frame_box := VBoxContainer.new()
+	frame_box.add_theme_constant_override("separation", 4)
+	frame.add_child(frame_box)
+	var chip := _card_panel(Color(0.92, 0.72, 0.18))
+	chip.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	frame_box.add_child(chip)
+	_card_text(chip, "LET'S GO!", 13, ink)
+	var portrait_center := CenterContainer.new()
+	frame_box.add_child(portrait_center)
+	_card_portrait = TextureRect.new()
+	_card_portrait.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_card_portrait.custom_minimum_size = Vector2(160, 160)
+	_card_portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_card_portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	portrait_center.add_child(_card_portrait)
+
+	_card_text(box, "CHARACTER UNLOCKED", 15, ink)
+
+	var lvl_row := HBoxContainer.new()
+	lvl_row.add_theme_constant_override("separation", 10)
+	box.add_child(lvl_row)
+	_card_lvl_label = _card_text(lvl_row, "LVL 1", 15, ink)
+	_card_lvl_bar = ProgressBar.new()
+	_card_lvl_bar.show_percentage = false
+	_card_lvl_bar.custom_minimum_size = Vector2(0, 16)
+	_card_lvl_bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_card_lvl_bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var bar_bg := StyleBoxFlat.new()
+	bar_bg.bg_color = Color(0.98, 0.97, 0.94)
+	bar_bg.border_color = ink
+	bar_bg.set_border_width_all(2)
+	var bar_fill := StyleBoxFlat.new()
+	bar_fill.bg_color = Color(0.30, 0.72, 0.28)
+	_card_lvl_bar.add_theme_stylebox_override("background", bar_bg)
+	_card_lvl_bar.add_theme_stylebox_override("fill", bar_fill)
+	lvl_row.add_child(_card_lvl_bar)
+
+	var px_row := HBoxContainer.new()
+	px_row.add_theme_constant_override("separation", 8)
+	box.add_child(px_row)
+	var coin := TextureRect.new()
+	coin.texture = load("res://assets/ui/pixel_currency_red.png")
+	coin.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	coin.custom_minimum_size = Vector2(22, 22)
+	coin.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	coin.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	px_row.add_child(coin)
+	_card_px_label = _card_text(px_row, "x 0", 15, ink)
+
+	_card_class_label = _card_text(box, "CLASS ROOKIE", 15, ink)
+
+	var divider := ColorRect.new()
+	divider.color = ink
+	divider.custom_minimum_size = Vector2(0, 2)
+	box.add_child(divider)
+
+	var foot := HBoxContainer.new()
+	foot.add_theme_constant_override("separation", 8)
+	box.add_child(foot)
+	_card_foot_portrait = TextureRect.new()
+	_card_foot_portrait.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_card_foot_portrait.custom_minimum_size = Vector2(30, 30)
+	_card_foot_portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_card_foot_portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	foot.add_child(_card_foot_portrait)
+	var foot_box := VBoxContainer.new()
+	foot_box.add_theme_constant_override("separation", 0)
+	foot.add_child(foot_box)
+	_card_foot_name = _card_text(foot_box, "", 15, ink)
+	_card_foot_sub = _card_text(foot_box, "", 12, Color(0.45, 0.42, 0.36))
+
+	return card
+
+func _make_list_in(parent: Control) -> VBoxContainer:
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	parent.add_child(scroll)
+	var list := VBoxContainer.new()
+	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	list.add_theme_constant_override("separation", 8)
+	scroll.add_child(list)
+	return list
 
 func _build_project_view() -> VBoxContainer:
 	var view := VBoxContainer.new()
@@ -446,7 +583,17 @@ func _show_player(p: Dictionary) -> void:
 	_board_view.visible = false
 	_player_view.visible = true
 	_project_view.visible = false
-	_player_info.text = "joined %s" % String(p.get("created_at", "")).substr(0, 10)
+	_player_info.text = ""
+	var portrait := SkinUtil.portrait(String(p.get("skin", "cvc:1")))
+	_card_title.text = pname.to_upper().left(18)
+	_card_portrait.texture = portrait
+	_card_foot_portrait.texture = portrait
+	_card_foot_name.text = pname.to_upper().left(18)
+	_card_foot_sub.text = "joined %s" % String(p.get("created_at", "")).substr(0, 10)
+	_card_px_label.text = "x …"
+	_card_lvl_label.text = "LVL …"
+	_card_lvl_bar.value = 0
+	_card_class_label.text = "CLASS …"
 	_clear(_projects_list)
 	_projects_list.add_child(_muted("Loading…"))
 	_api("/api/explore/players/" + String(p.get("id", "")), _on_player)
@@ -525,11 +672,47 @@ func _on_player(code: int, json: Variant) -> void:
 		_projects_list.add_child(_muted("Couldn't load this player."))
 		return
 	var projects: Array = json.get("projects", [])
+	var player: Dictionary = json.get("player", {})
+	var px := int(player.get("pixels", 0))
+	var lvl := 1 + int(sqrt(maxf(float(px), 0.0) / 10.0))
+	var low := 10.0 * float((lvl - 1) * (lvl - 1))
+	var high := 10.0 * float(lvl * lvl)
+	_card_px_label.text = "x %s" % _thousands(px)
+	_card_lvl_label.text = "LVL %d" % lvl
+	_card_lvl_bar.value = clampf((float(px) - low) / maxf(high - low, 1.0) * 100.0, 4.0, 100.0)
+	var approved := 0
+	for pr in projects:
+		if String(pr.get("status", "")) == "approved":
+			approved += 1
+	var cls := "ROOKIE"
+	if approved >= 6:
+		cls = "LEGEND"
+	elif approved >= 3:
+		cls = "SHIPPER"
+	elif approved >= 1:
+		cls = "BUILDER"
+	_card_class_label.text = "CLASS %s" % cls
+	_card_foot_sub.text = "joined %s · %d project%s" % [
+		String(player.get("created_at", "")).substr(0, 10),
+		projects.size(),
+		"" if projects.size() == 1 else "s",
+	]
 	if projects.is_empty():
 		_projects_list.add_child(_muted("No projects yet."))
 		return
 	for pr in projects:
 		_projects_list.add_child(_project_row(pr))
+
+func _thousands(n: int) -> String:
+	var s := str(n)
+	var out := ""
+	var count := 0
+	for i in range(s.length() - 1, -1, -1):
+		out = s[i] + out
+		count += 1
+		if count % 3 == 0 and i > 0:
+			out = "," + out
+	return out
 
 func _project_row(pr: Dictionary, show_owner := false) -> Control:
 	var panel := PanelContainer.new()
