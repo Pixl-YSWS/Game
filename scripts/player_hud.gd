@@ -17,6 +17,7 @@ var _hours_label: Label
 var _event_card: PanelContainer
 var _event_label: Label
 var _players := {}
+var _your_id := ""
 var _list_root: Control
 var _list_box: VBoxContainer
 var _tx_root: Control
@@ -576,10 +577,10 @@ func _refresh_list() -> void:
 		child.queue_free()
 	var entries: Array = []
 	for uid in _players:
-		entries.append([String(_players[uid]), false])
+		entries.append([String(_players[uid]), false, String(uid)])
 	entries.sort_custom(func(a, b): return String(a[0]).naturalnocasecmp_to(String(b[0])) < 0)
 	var me := NetworkManager.display_name if NetworkManager.display_name != "" else "Player"
-	entries.push_front([me, true])
+	entries.push_front([me, true, _your_id])
 	for entry in entries:
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 8)
@@ -595,6 +596,17 @@ func _refresh_list() -> void:
 		label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(label)
+		var pid := String(entry[2])
+		var pname := String(entry[0])
+		if pid != "":
+			var view := Button.new()
+			view.theme_type_variation = &"StepButton"
+			view.text = "View"
+			_ssize(view, 14)
+			view.pressed.connect(func():
+				_list_root.visible = false
+				ExploreHud.open_player({"id": pid, "display_name": pname, "skin": "cvc:1"}))
+			row.add_child(view)
 		_list_box.add_child(row)
 
 func _on_logged_in(display_name: String) -> void:
@@ -602,6 +614,7 @@ func _on_logged_in(display_name: String) -> void:
 	_fetch_wallet()
 
 func _on_scene_init(your_id: String, _pos: Vector2, others: Array, _spawn_at_default: bool) -> void:
+	_your_id = your_id
 	_players.clear()
 	for p in others:
 		var uid := String(p["userId"])

@@ -93,6 +93,13 @@ func close() -> void:
 	global.pop_ui_blocker()
 	_root.visible = false
 
+func open_player(p: Dictionary) -> void:
+	if not _open:
+		_open = true
+		global.push_ui_blocker()
+		_root.visible = true
+	_show_player(p)
+
 func _build_ui() -> void:
 	_root = Control.new()
 	_root.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -674,9 +681,16 @@ func _on_player(code: int, json: Variant) -> void:
 		return
 	var projects: Array = json.get("projects", [])
 	var player: Dictionary = json.get("player", {})
+	var pname := String(player.get("display_name", _card_title.text))
+	_card_title.text = pname.to_upper().left(18)
+	_card_foot_name.text = pname.to_upper().left(18)
 	var avatar_v: Variant = player.get("avatar_url")
 	if typeof(avatar_v) == TYPE_STRING and String(avatar_v) != "":
 		_load_card_photo(String(avatar_v), bool(player.get("card_pixelate", true)))
+	else:
+		var portrait := SkinUtil.portrait(String(player.get("skin", "cvc:1")))
+		_card_portrait.texture = portrait
+		_card_foot_portrait.texture = portrait
 	var px := int(player.get("pixels", 0))
 	var lvl := 1 + int(sqrt(maxf(float(px), 0.0) / 10.0))
 	var low := 10.0 * float((lvl - 1) * (lvl - 1))
