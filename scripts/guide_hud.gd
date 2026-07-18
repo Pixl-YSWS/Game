@@ -233,17 +233,34 @@ func _build_pages() -> void:
 		_hint("Lobbies from the main menu get you a private world with its own code.")
 	]))
 	_pages.append(_page_body([
-		_para("NPCs hand out sidequests — build apps, websites and hardware for them, and they reward you with pixels and real prizes."),
+		_para("Ship projects, earn pixels. Create a project with H, link your Hackatime, journal as you build, then Ship it for review."),
+		_para("Approved hours pay out in pixels at $4-7/hr — your rate climbs as you level up (1 hour approved = 1 XP, level shows in the top-left)."),
 		_spacer(),
 		_row("H  /  Pip", "Open Projects"),
 		_spacer(),
-		_hint("Create a project and link your Hackatime projects — the more hours you put in, the more you earn.")
+		_hint("Reviewers check your repo, demo and journal — real work only, AI use must be declared.")
+	]))
+	_pages.append(_page_body([
+		_para("Spend pixels in the Shop — stickers, licenses, plushies, hardware, all real."),
+		_row("B", "Open the shop (or walk into the shop house)"),
+		_spacer(),
+		_para("Sidequests are themed challenges from NPCs with special rewards on top."),
+		_row("J", "Quest log — see every sidequest and who unlocks it"),
+	]))
+	_pages.append(_page_body([
+		_para("Explore what everyone's making — player cards, projects and the leaderboard."),
+		_row("E", "Explore (players / projects / leaderboard)"),
+		_spacer(),
+		_hint("Your player card shows your level, pixels and photo — set the photo in Settings from the pause menu.")
 	]))
 	_pages.append(_page_body([
 		_row("N", "Inbox"),
 		_row("H", "Projects / Hackatime"),
+		_row("B", "Shop"),
+		_row("J", "Quest log"),
+		_row("E", "Explore"),
 		_row("F1", "This guide"),
-		_row("Esc", "Pause"),
+		_row("Esc", "Pause / settings"),
 		_spacer(),
 		_para("That's everything. Go say hi!")
 	]))

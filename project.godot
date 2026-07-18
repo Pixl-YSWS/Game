@@ -42,6 +42,7 @@ FriendsHud="*res://scripts/friends_hud.gd"
 MinimapHud="*res://scripts/minimap_hud.gd"
 ExploreHud="*res://scripts/explore_hud.gd"
 ShopHud="*res://scripts/shop_hud.gd"
+QuestHud="*res://scripts/quest_hud.gd"
 
 [display]
 

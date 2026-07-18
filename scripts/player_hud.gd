@@ -249,6 +249,29 @@ func _build_ui() -> void:
 	shop_label.text = "Shop  [B]"
 	shop_row.add_child(shop_label)
 
+	var quest_chip := PanelContainer.new()
+	quest_chip.theme_type_variation = &"HudPanel"
+	quest_chip.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	quest_chip.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	quest_chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	column.add_child(quest_chip)
+
+	var quest_row := HBoxContainer.new()
+	quest_row.add_theme_constant_override("separation", 7)
+	quest_chip.add_child(quest_row)
+
+	var quest_dot := ColorRect.new()
+	quest_dot.color = COLOR_ACCENT
+	quest_dot.custom_minimum_size = Vector2(8, 8)
+	quest_dot.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	quest_dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	quest_row.add_child(quest_dot)
+
+	var quest_label := Label.new()
+	_ssize(quest_label, 16)
+	quest_label.text = "Quests  [J]"
+	quest_row.add_child(quest_label)
+
 	var inbox_chip := PanelContainer.new()
 	inbox_chip.theme_type_variation = &"HudPanel"
 	inbox_chip.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
