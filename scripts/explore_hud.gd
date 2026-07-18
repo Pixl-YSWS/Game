@@ -643,36 +643,100 @@ func _on_players(code: int, json: Variant) -> void:
 	if players.is_empty():
 		_players_list.add_child(_muted("No players found."))
 		return
+	var grid := GridContainer.new()
+	grid.columns = 3
+	grid.add_theme_constant_override("h_separation", 14)
+	grid.add_theme_constant_override("v_separation", 14)
+	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_players_list.add_child(grid)
 	for p in players:
-		_players_list.add_child(_player_row(p))
+		grid.add_child(_player_card_tile(p))
 
-func _player_row(p: Dictionary) -> Control:
-	var panel := PanelContainer.new()
-	panel.theme_type_variation = &"RowPanel"
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 12)
-	panel.add_child(row)
+func _player_card_tile(p: Dictionary) -> Control:
+	var ink := Color(0.13, 0.11, 0.09)
+	var card := _card_panel(Color(0.93, 0.91, 0.84))
+	card.custom_minimum_size = Vector2(236, 0)
+	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	card.mouse_filter = Control.MOUSE_FILTER_STOP
+	card.gui_input.connect(func(event: InputEvent):
+		if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+			_show_player(p))
 
-	var main := VBoxContainer.new()
-	main.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	main.add_theme_constant_override("separation", 2)
-	row.add_child(main)
-	var name_label := Label.new()
-	name_label.text = String(p.get("display_name", "?"))
-	name_label.clip_text = true
-	main.add_child(name_label)
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 6)
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	card.add_child(box)
+
+	var title_bar := _card_panel(Color(0.85, 0.36, 0.42))
+	title_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(title_bar)
+	var title := Label.new()
+	title.text = String(p.get("display_name", "?")).to_upper().left(16)
+	title.clip_text = true
+	title.add_theme_color_override("font_color", Color(0.98, 0.96, 0.92))
+	title.add_theme_font_size_override("font_size", Settings.fs(15))
+	title_bar.add_child(title)
+
+	var frame := _card_panel(Color(0.10, 0.10, 0.09))
+	frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(frame)
+	var center := CenterContainer.new()
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	frame.add_child(center)
+	var portrait := TextureRect.new()
+	portrait.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	portrait.custom_minimum_size = Vector2(96, 96)
+	portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	portrait.texture = SkinUtil.portrait(String(p.get("skin", "cvc:1")))
+	center.add_child(portrait)
+	_tile_photo(portrait, p)
+
 	var meta := Label.new()
-	meta.theme_type_variation = &"InfoText"
 	var count := int(p.get("project_count", 0))
 	meta.text = "joined %s · %d project%s" % [String(p.get("created_at", "")).substr(0, 10), count, "" if count == 1 else "s"]
-	main.add_child(meta)
+	meta.clip_text = true
+	meta.add_theme_color_override("font_color", ink)
+	meta.add_theme_font_size_override("font_size", Settings.fs(12))
+	box.add_child(meta)
+	return card
 
-	var view_btn := Button.new()
-	view_btn.theme_type_variation = &"StepButton"
-	view_btn.text = "View"
-	view_btn.pressed.connect(_show_player.bind(p))
-	row.add_child(view_btn)
-	return panel
+func _tile_photo(rect: TextureRect, p: Dictionary) -> void:
+	var avatar_v: Variant = p.get("avatar_url")
+	var slack_v: Variant = p.get("slack_id")
+	var avatar := String(avatar_v) if typeof(avatar_v) == TYPE_STRING else ""
+	var slack_id := String(slack_v) if typeof(slack_v) == TYPE_STRING else ""
+	var pixelate := bool(p.get("card_pixelate", true))
+	var url := ""
+	var client_pix := false
+	if pixelate and slack_id != "" and (avatar == "" or avatar.contains("slack")):
+		url = NetworkManager.SERVER_HTTP_URL + "/api/pixify?user=" + slack_id.uri_encode() + "&size=32&token=" + NetworkManager.session_token.uri_encode()
+	elif avatar != "":
+		url = avatar
+		client_pix = pixelate
+	if url == "":
+		return
+	var req := HTTPRequest.new()
+	add_child(req)
+	req.request_completed.connect(func(_result, code, _headers, data):
+		req.queue_free()
+		if code != 200 or data.size() == 0 or not is_instance_valid(rect):
+			return
+		var img := Image.new()
+		var err := img.load_png_from_buffer(data)
+		if err != OK:
+			err = img.load_jpg_from_buffer(data)
+		if err != OK:
+			err = img.load_webp_from_buffer(data)
+		if err != OK:
+			return
+		if client_pix:
+			var target := 40
+			img.resize(target, maxi(1, int(round(float(img.get_height()) * float(target) / maxf(float(img.get_width()), 1.0)))), Image.INTERPOLATE_NEAREST)
+		rect.texture = ImageTexture.create_from_image(img)
+	)
+	req.request(url)
 
 func _on_player(code: int, json: Variant) -> void:
 	_clear(_projects_list)
