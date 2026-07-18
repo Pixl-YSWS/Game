@@ -283,7 +283,7 @@ async function showProject(id) {
       : `<div class="journal">${entries.map((e) => `
           <div class="journal-entry panel">
             <div class="jmeta"><span>${Pixl.timeAgo(e.created_at)}</span>${e.hours ? `<span class="teal">${Number(e.hours).toFixed(1)}h logged</span>` : ""}</div>
-            <div class="jbody">${Pixl.esc(e.content)}</div>
+            <div class="jbody">${Pixl.bbcode(e.content)}</div>
           </div>`).join("")}</div>`}`;
 }
 

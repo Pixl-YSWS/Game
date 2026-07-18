@@ -111,6 +111,70 @@ const Pixl = (() => {
     }
   }
 
+  // Godot RichTextLabel BBCode subset → HTML.
+  // https://docs.godotengine.org/en/latest/tutorials/ui/bbcode_in_richtextlabel.html
+  function bbSafeColor(v) {
+    return /^(#[0-9a-fA-F]{3,8}|[a-zA-Z]{2,24})$/.test(v) ? v : "";
+  }
+
+  function bbSafeUrl(v) {
+    return /^https?:\/\/[^"'\s]+$/i.test(v) ? v : "";
+  }
+
+  function bbChars(cls, inner) {
+    if (inner.includes("<")) return `<span class="${cls}">${inner}</span>`;
+    const chars = inner.match(/&[^;\s]{1,10};|[\s\S]/g) || [];
+    return `<span class="${cls}">${chars.map((c, i) =>
+      `<span class="bb-char" style="animation-delay:-${(i * 0.09).toFixed(2)}s">${c}</span>`,
+    ).join("")}</span>`;
+  }
+
+  const BB_RULES = [
+    [/\[b\]([\s\S]*?)\[\/b\]/g, "<b>$1</b>"],
+    [/\[i\]([\s\S]*?)\[\/i\]/g, "<i>$1</i>"],
+    [/\[u\]([\s\S]*?)\[\/u\]/g, "<u>$1</u>"],
+    [/\[s\]([\s\S]*?)\[\/s\]/g, "<s>$1</s>"],
+    [/\[code\]([\s\S]*?)\[\/code\]/g, '<span class="bb-code">$1</span>'],
+    [/\[center\]([\s\S]*?)\[\/center\]/g, '<span style="display:block;text-align:center">$1</span>'],
+    [/\[right\]([\s\S]*?)\[\/right\]/g, '<span style="display:block;text-align:right">$1</span>'],
+    [/\[left\]([\s\S]*?)\[\/left\]/g, '<span style="display:block;text-align:left">$1</span>'],
+    [/\[color=([^\]]+)\]([\s\S]*?)\[\/color\]/g,
+      (_m, c, inner) => bbSafeColor(c) ? `<span style="color:${bbSafeColor(c)}">${inner}</span>` : inner],
+    [/\[bgcolor=([^\]]+)\]([\s\S]*?)\[\/bgcolor\]/g,
+      (_m, c, inner) => bbSafeColor(c) ? `<span style="background:${bbSafeColor(c)}">${inner}</span>` : inner],
+    [/\[font_size=(\d{1,3})\]([\s\S]*?)\[\/font_size\]/g,
+      (_m, n, inner) => `<span style="font-size:${Math.min(Math.max(Number(n), 8), 64)}px">${inner}</span>`],
+    [/\[url\](https?:\/\/[^\[\s]+)\[\/url\]/g,
+      (_m, u) => bbSafeUrl(u) ? `<a href="${u}" target="_blank" rel="noopener">${u}</a>` : u],
+    [/\[url=([^\]]+)\]([\s\S]*?)\[\/url\]/g,
+      (_m, u, inner) => bbSafeUrl(u) ? `<a href="${bbSafeUrl(u)}" target="_blank" rel="noopener">${inner}</a>` : inner],
+    [/\[img(?:[^\]]*)\](https?:\/\/[^\[\s]+)\[\/img\]/g,
+      (_m, u) => bbSafeUrl(u) ? `<img class="bb-img" src="${u}" alt="" loading="lazy" onerror="this.remove()">` : ""],
+    [/\[wave(?:[^\]]*)\]([\s\S]*?)\[\/wave\]/g, (_m, inner) => bbChars("bb-wave", inner)],
+    [/\[shake(?:[^\]]*)\]([\s\S]*?)\[\/shake\]/g, (_m, inner) => bbChars("bb-shake", inner)],
+    [/\[rainbow(?:[^\]]*)\]([\s\S]*?)\[\/rainbow\]/g, (_m, inner) => bbChars("bb-rainbow", inner)],
+    [/\[tornado(?:[^\]]*)\]([\s\S]*?)\[\/tornado\]/g, (_m, inner) => bbChars("bb-wave", inner)],
+    [/\[pulse(?:[^\]]*)\]([\s\S]*?)\[\/pulse\]/g, '<span class="bb-pulse">$1</span>'],
+    [/\[fade(?:[^\]]*)\]([\s\S]*?)\[\/fade\]/g, '<span style="opacity:.55">$1</span>'],
+  ];
+
+  function bbcode(src) {
+    let s = esc(src);
+    for (let pass = 0; pass < 4; pass++) {
+      const before = s;
+      for (const [re, rep] of BB_RULES) s = s.replace(re, rep);
+      if (s === before) break;
+    }
+    return s.replace(/\[lb\]/g, "&#91;").replace(/\[rb\]/g, "&#93;");
+  }
+
+  function bbstrip(src) {
+    return String(src ?? "")
+      .replace(/\[\/?(?!lb\]|rb\])[a-zA-Z][^\]]*\]/g, "")
+      .replace(/\[lb\]/g, "[")
+      .replace(/\[rb\]/g, "]");
+  }
+
   function timeAgo(iso) {
     const s = (Date.now() - new Date(iso).getTime()) / 1000;
     if (!isFinite(s)) return "";
@@ -140,5 +204,5 @@ const Pixl = (() => {
     document.addEventListener("DOMContentLoaded", gate);
   }
 
-  return { API, token, api, apiUrl, esc, toast, mountTopbar, loadWallet, timeAgo, countdown, hours, hasToken: !!token };
+  return { API, token, api, apiUrl, esc, bbcode, bbstrip, toast, mountTopbar, loadWallet, timeAgo, countdown, hours, hasToken: !!token };
 })();
