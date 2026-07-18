@@ -494,8 +494,6 @@ func _set_events(events: Array) -> void:
 				parts.append("%s: %d/%d ships (+%d%%)" % [ev_name, int(e.get("progress", 0)), int(e.get("target", 0)), int(e.get("bonus_pct", 0))])
 			"bounty":
 				parts.append("%s: +%d px bounty" % [ev_name, int(e.get("reward", 0))])
-			"double_streak":
-				parts.append("%s: streak days x%d" % [ev_name, int(e.get("per_day", 2))])
 			_:
 				parts.append(ev_name)
 	if parts.is_empty():

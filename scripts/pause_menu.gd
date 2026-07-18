@@ -10,6 +10,10 @@ var _resume_button: Button
 var _settings_root: Control
 var _is_paused := false
 var _name_section: VBoxContainer
+var _card_section: VBoxContainer
+var _card_pixfy: CheckButton
+var _card_status: Label
+var _card_dialog: FileDialog
 var _name_edit: LineEdit
 var _name_save: Button
 var _name_status: Label
@@ -231,6 +235,44 @@ func _build_settings_ui() -> void:
 	_name_status.visible = false
 	_name_section.add_child(_name_status)
 
+	_card_section = VBoxContainer.new()
+	_card_section.add_theme_constant_override("separation", 8)
+	body.add_child(_card_section)
+
+	var card_label := Label.new()
+	card_label.text = "Player card photo"
+	card_label.theme_type_variation = &"InfoText"
+	_card_section.add_child(card_label)
+
+	var card_row := HBoxContainer.new()
+	card_row.add_theme_constant_override("separation", 8)
+	_card_section.add_child(card_row)
+
+	var upload_btn := Button.new()
+	upload_btn.text = "Upload photo"
+	upload_btn.pressed.connect(_pick_card_photo)
+	card_row.add_child(upload_btn)
+
+	_card_pixfy = CheckButton.new()
+	_card_pixfy.text = "Pixfy it"
+	_card_pixfy.button_pressed = true
+	_card_pixfy.toggled.connect(_on_pixfy_toggled)
+	card_row.add_child(_card_pixfy)
+
+	_card_status = Label.new()
+	_card_status.add_theme_font_size_override("font_size", 13)
+	_card_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_card_status.visible = false
+	_card_section.add_child(_card_status)
+
+	_card_dialog = FileDialog.new()
+	_card_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
+	_card_dialog.access = FileDialog.ACCESS_FILESYSTEM
+	_card_dialog.use_native_dialog = true
+	_card_dialog.filters = PackedStringArray(["*.png,*.jpg,*.jpeg,*.webp ; Images"])
+	_card_dialog.file_selected.connect(_upload_card_photo)
+	add_child(_card_dialog)
+
 	var spacer := Control.new()
 	spacer.custom_minimum_size = Vector2(0, 6)
 	body.add_child(spacer)
@@ -244,12 +286,78 @@ func _build_settings_ui() -> void:
 func open_settings() -> void:
 	_root.visible = false
 	_name_section.visible = NetworkManager.session_token != ""
+	_card_section.visible = NetworkManager.session_token != ""
 	_name_edit.text = NetworkManager.display_name
 	_name_status.visible = false
+	_card_status.visible = false
 	_name_saving = false
 	_name_save.disabled = false
 	_name_save.text = "Save"
 	_settings_root.visible = true
+	if NetworkManager.session_token != "":
+		_card_api(HTTPClient.METHOD_GET, "/api/profile/card", "", func(code, json):
+			if code == 200 and typeof(json) == TYPE_DICTIONARY and json.get("ok", false):
+				_card_pixfy.set_pressed_no_signal(bool(json.get("pixelate", true))))
+
+func _pick_card_photo() -> void:
+	_card_dialog.popup_centered(Vector2i(800, 600))
+
+func _upload_card_photo(path: String) -> void:
+	var bytes := FileAccess.get_file_as_bytes(path)
+	if bytes.size() == 0:
+		_card_note("Couldn't read that file.", false)
+		return
+	if bytes.size() > 7_500_000:
+		_card_note("That image is too big — keep it under 7 MB.", false)
+		return
+	var ext := path.get_extension().to_lower()
+	var mime := "image/png"
+	if ext == "jpg" or ext == "jpeg":
+		mime = "image/jpeg"
+	elif ext == "webp":
+		mime = "image/webp"
+	_card_note("Uploading…", true)
+	var req := HTTPRequest.new()
+	add_child(req)
+	var url := NetworkManager.SERVER_HTTP_URL + "/api/uploads?token=" + NetworkManager.session_token.uri_encode()
+	req.request_completed.connect(func(_r, code, _h, data):
+		req.queue_free()
+		var json = JSON.parse_string(data.get_string_from_utf8()) if data.size() > 0 else null
+		if code != 200 or typeof(json) != TYPE_DICTIONARY or not json.get("ok", false):
+			_card_note("Upload failed — try again.", false)
+			return
+		_card_api(HTTPClient.METHOD_POST, "/api/profile/card-image", JSON.stringify({"url": String(json.get("url", ""))}), func(code2, json2):
+			if code2 == 200 and typeof(json2) == TYPE_DICTIONARY and json2.get("ok", false):
+				_card_note("Photo saved! It shows on your player card.", true)
+			else:
+				_card_note("Couldn't save the photo — try again.", false))
+	)
+	req.request_raw(url, PackedStringArray(["Content-Type: " + mime]), HTTPClient.METHOD_POST, bytes)
+
+func _on_pixfy_toggled(on: bool) -> void:
+	_card_api(HTTPClient.METHOD_POST, "/api/profile/card-pixelate", JSON.stringify({"pixelate": on}), func(code, json):
+		if code == 200 and typeof(json) == TYPE_DICTIONARY and json.get("ok", false):
+			_card_note("Pixfy on — pixel-art style." if on else "Pixfy off — original photo.", true)
+		else:
+			_card_note("Couldn't save that — try again.", false))
+
+func _card_note(text: String, ok: bool) -> void:
+	_card_status.text = text
+	_card_status.add_theme_color_override("font_color", Color(0.45, 0.85, 0.5) if ok else Color(1, 0.42, 0.42))
+	_card_status.visible = true
+
+func _card_api(method: int, path: String, body: String, cb: Callable) -> void:
+	if NetworkManager.session_token == "":
+		return
+	var req := HTTPRequest.new()
+	add_child(req)
+	var url := NetworkManager.SERVER_HTTP_URL + path + "?token=" + NetworkManager.session_token.uri_encode()
+	req.request_completed.connect(func(_r, code, _h, data):
+		req.queue_free()
+		var json = JSON.parse_string(data.get_string_from_utf8()) if data.size() > 0 else null
+		cb.call(code, json)
+	)
+	req.request(url, PackedStringArray(["Content-Type: application/json"]), method, body)
 
 func _close_settings() -> void:
 	_settings_root.visible = false

@@ -302,21 +302,6 @@ func _project_row(p: Dictionary) -> Control:
 		_readable(meta, 18)
 		main.add_child(meta)
 
-	var streak := int(p.get("streak", 0))
-	var best_streak := int(p.get("best_streak", 0))
-	if best_streak > 0:
-		var bonus := 1.0 + float(mini(best_streak, 50)) / 100.0
-		var streak_label := Label.new()
-		streak_label.theme_type_variation = &"InfoText"
-		if streak > 0:
-			streak_label.text = "Streak: %d day%s · journal daily to grow it · payout x%.2f" % [streak, "" if streak == 1 else "s", bonus]
-		else:
-			streak_label.text = "Streak lost — journal today to restart · best %d · payout x%.2f" % [best_streak, bonus]
-		streak_label.add_theme_color_override("font_color", Color(1.0, 0.72, 0.3))
-		streak_label.clip_text = true
-		_readable(streak_label, 18)
-		main.add_child(streak_label)
-
 	if banned:
 		var ban_reason := String(p.get("ban_reason", "")).strip_edges()
 		var ban_by := String(p.get("ban_by", "")).strip_edges()

@@ -36,6 +36,7 @@ var _entries_list: VBoxContainer
 var _open := false
 var _current_player: Dictionary = {}
 var _from_browse := false
+var _card_photo_url := ""
 
 func _readable_theme() -> Theme:
 	var f := SystemFont.new()
@@ -673,6 +674,9 @@ func _on_player(code: int, json: Variant) -> void:
 		return
 	var projects: Array = json.get("projects", [])
 	var player: Dictionary = json.get("player", {})
+	var avatar_v: Variant = player.get("avatar_url")
+	if typeof(avatar_v) == TYPE_STRING and String(avatar_v) != "":
+		_load_card_photo(String(avatar_v), bool(player.get("card_pixelate", true)))
 	var px := int(player.get("pixels", 0))
 	var lvl := 1 + int(sqrt(maxf(float(px), 0.0) / 10.0))
 	var low := 10.0 * float((lvl - 1) * (lvl - 1))
@@ -702,6 +706,35 @@ func _on_player(code: int, json: Variant) -> void:
 		return
 	for pr in projects:
 		_projects_list.add_child(_project_row(pr))
+
+func _load_card_photo(url: String, pixelate: bool) -> void:
+	_card_photo_url = url
+	var req := HTTPRequest.new()
+	add_child(req)
+	req.request_completed.connect(func(_result, code, _headers, data):
+		req.queue_free()
+		if code != 200 or url != _card_photo_url or data.size() == 0:
+			return
+		var img := Image.new()
+		var err := img.load_png_from_buffer(data)
+		if err != OK:
+			err = img.load_jpg_from_buffer(data)
+		if err != OK:
+			err = img.load_webp_from_buffer(data)
+		if err != OK:
+			return
+		if pixelate:
+			var w := img.get_width()
+			var h := img.get_height()
+			var target := 56
+			img.resize(target, maxi(1, int(round(float(h) * float(target) / maxf(float(w), 1.0)))), Image.INTERPOLATE_NEAREST)
+		var tex := ImageTexture.create_from_image(img)
+		if _card_portrait != null:
+			_card_portrait.texture = tex
+		if _card_foot_portrait != null:
+			_card_foot_portrait.texture = tex
+	)
+	req.request(url)
 
 func _thousands(n: int) -> String:
 	var s := str(n)
