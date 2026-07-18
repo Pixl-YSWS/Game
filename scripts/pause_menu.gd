@@ -14,6 +14,7 @@ var _card_section: VBoxContainer
 var _card_pixfy: CheckButton
 var _card_status: Label
 var _card_dialog: FileDialog
+var _card_web_cb
 var _name_edit: LineEdit
 var _name_save: Button
 var _name_status: Label
@@ -300,15 +301,68 @@ func open_settings() -> void:
 				_card_pixfy.set_pressed_no_signal(bool(json.get("pixelate", true))))
 
 func _pick_card_photo() -> void:
-	_card_dialog.popup_centered(Vector2i(800, 600))
+	if OS.has_feature("web"):
+		_card_web_pick()
+		return
+	var filters := PackedStringArray(["*.png, *.jpg, *.jpeg, *.webp ; Images"])
+	var start_dir := OS.get_system_dir(OS.SYSTEM_DIR_PICTURES)
+	if start_dir == "":
+		start_dir = OS.get_environment("HOME")
+	var native_cb := func(ok: bool, paths: PackedStringArray, _filter: int):
+		if ok and not paths.is_empty():
+			_upload_card_photo(paths[0])
+	if DisplayServer.has_method("file_dialog_show"):
+		var err: int = DisplayServer.file_dialog_show(
+			"Choose a card photo", start_dir, "", false,
+			DisplayServer.FILE_DIALOG_MODE_OPEN_FILE, filters, native_cb)
+		if err == OK:
+			return
+	if start_dir != "":
+		_card_dialog.current_dir = start_dir
+	_card_dialog.popup_centered(Vector2i(700, 500))
+
+func _card_web_pick() -> void:
+	_card_web_cb = JavaScriptBridge.create_callback(_on_card_web_bytes)
+	var window = JavaScriptBridge.get_interface("window")
+	window.godotCardCallback = _card_web_cb
+	JavaScriptBridge.eval("""
+	(function(){
+		var input = document.createElement('input');
+		input.type = 'file';
+		input.accept = 'image/png,image/jpeg,image/webp';
+		input.style.display = 'none';
+		input.onchange = function(e){
+			var f = e.target.files && e.target.files[0];
+			if(!f){ return; }
+			var r = new FileReader();
+			r.onload = function(){
+				var s = String(r.result);
+				var b64 = s.indexOf(',') >= 0 ? s.split(',')[1] : s;
+				window.godotCardCallback(b64, f.type || 'image/png');
+			};
+			r.readAsDataURL(f);
+		};
+		document.body.appendChild(input);
+		input.click();
+		setTimeout(function(){ input.remove(); }, 60000);
+	})();
+	""", true)
+
+func _on_card_web_bytes(args: Array) -> void:
+	if args.size() < 1:
+		return
+	var b64 := String(args[0])
+	var mime := String(args[1]) if args.size() > 1 else "image/png"
+	var bytes := Marshalls.base64_to_raw(b64)
+	if bytes.is_empty():
+		_card_note("Couldn't read that image.", false)
+		return
+	_upload_card_bytes(bytes, mime)
 
 func _upload_card_photo(path: String) -> void:
 	var bytes := FileAccess.get_file_as_bytes(path)
 	if bytes.size() == 0:
 		_card_note("Couldn't read that file.", false)
-		return
-	if bytes.size() > 7_500_000:
-		_card_note("That image is too big — keep it under 7 MB.", false)
 		return
 	var ext := path.get_extension().to_lower()
 	var mime := "image/png"
@@ -316,6 +370,12 @@ func _upload_card_photo(path: String) -> void:
 		mime = "image/jpeg"
 	elif ext == "webp":
 		mime = "image/webp"
+	_upload_card_bytes(bytes, mime)
+
+func _upload_card_bytes(bytes: PackedByteArray, mime: String) -> void:
+	if bytes.size() > 7_500_000:
+		_card_note("That image is too big — keep it under 7 MB.", false)
+		return
 	_card_note("Uploading…", true)
 	var req := HTTPRequest.new()
 	add_child(req)
