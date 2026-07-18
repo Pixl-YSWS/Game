@@ -51,7 +51,7 @@ theme_type_variation = &"TitlePlateText"
 text = "PROJECTS"
 
 [node name="Panel" type="PanelContainer" parent="Root/CenterContainer/Wrap"]
-custom_minimum_size = Vector2(560, 0)
+custom_minimum_size = Vector2(820, 0)
 layout_mode = 2
 
 [node name="Accents" type="Control" parent="Root/CenterContainer/Wrap/Panel"]
@@ -144,7 +144,7 @@ theme_type_variation = &"SmallButton"
 text = "Connect"
 
 [node name="Scroll" type="ScrollContainer" parent="Root/CenterContainer/Wrap/Panel/Margin/Body"]
-custom_minimum_size = Vector2(0, 240)
+custom_minimum_size = Vector2(0, 560)
 layout_mode = 2
 horizontal_scroll_mode = 0
 

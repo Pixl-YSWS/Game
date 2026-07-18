@@ -47,7 +47,7 @@ theme_type_variation = &"TitlePlateText"
 text = "JOURNAL"
 
 [node name="Card" type="PanelContainer" parent="Center/Wrap"]
-custom_minimum_size = Vector2(720, 0)
+custom_minimum_size = Vector2(820, 0)
 layout_mode = 2
 
 [node name="Accents" type="Control" parent="Center/Wrap/Card"]
@@ -117,7 +117,7 @@ layout_mode = 2
 theme_override_constants/separation = 12
 
 [node name="Scroll" type="ScrollContainer" parent="Center/Wrap/Card/Margin/Panel"]
-custom_minimum_size = Vector2(0, 240)
+custom_minimum_size = Vector2(0, 420)
 layout_mode = 2
 horizontal_scroll_mode = 0
 

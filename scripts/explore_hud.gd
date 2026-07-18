@@ -124,7 +124,7 @@ func _build_ui() -> void:
 	wrap.add_child(plate)
 
 	var panel := PanelContainer.new()
-	panel.custom_minimum_size = Vector2(720, 540)
+	panel.custom_minimum_size = Vector2(820, 660)
 	wrap.add_child(panel)
 
 	var accents := Control.new()

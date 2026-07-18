@@ -47,7 +47,7 @@ theme_type_variation = &"TitlePlateText"
 text = "NEW PROJECT"
 
 [node name="Card" type="PanelContainer" parent="Center/Wrap"]
-custom_minimum_size = Vector2(640, 0)
+custom_minimum_size = Vector2(820, 0)
 layout_mode = 2
 
 [node name="Accents" type="Control" parent="Center/Wrap/Card"]
