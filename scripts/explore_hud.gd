@@ -685,8 +685,15 @@ func _on_player(code: int, json: Variant) -> void:
 	_card_title.text = pname.to_upper().left(18)
 	_card_foot_name.text = pname.to_upper().left(18)
 	var avatar_v: Variant = player.get("avatar_url")
-	if typeof(avatar_v) == TYPE_STRING and String(avatar_v) != "":
-		_load_card_photo(String(avatar_v), bool(player.get("card_pixelate", true)))
+	var slack_v: Variant = player.get("slack_id")
+	var avatar := String(avatar_v) if typeof(avatar_v) == TYPE_STRING else ""
+	var slack_id := String(slack_v) if typeof(slack_v) == TYPE_STRING else ""
+	var pixelate := bool(player.get("card_pixelate", true))
+	if pixelate and slack_id != "" and (avatar == "" or avatar.contains("slack")):
+		var pixify := NetworkManager.SERVER_HTTP_URL + "/api/pixify?user=" + slack_id.uri_encode() + "&size=48&token=" + NetworkManager.session_token.uri_encode()
+		_load_card_photo(pixify, false, avatar)
+	elif avatar != "":
+		_load_card_photo(avatar, pixelate)
 	else:
 		var portrait := SkinUtil.portrait(String(player.get("skin", "cvc:1")))
 		_card_portrait.texture = portrait
@@ -721,13 +728,17 @@ func _on_player(code: int, json: Variant) -> void:
 	for pr in projects:
 		_projects_list.add_child(_project_row(pr))
 
-func _load_card_photo(url: String, pixelate: bool) -> void:
+func _load_card_photo(url: String, pixelate: bool, fallback_url := "") -> void:
 	_card_photo_url = url
 	var req := HTTPRequest.new()
 	add_child(req)
 	req.request_completed.connect(func(_result, code, _headers, data):
 		req.queue_free()
-		if code != 200 or url != _card_photo_url or data.size() == 0:
+		if url != _card_photo_url:
+			return
+		if code != 200 or data.size() == 0:
+			if fallback_url != "":
+				_load_card_photo(fallback_url, true)
 			return
 		var img := Image.new()
 		var err := img.load_png_from_buffer(data)
