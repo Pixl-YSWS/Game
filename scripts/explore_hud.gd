@@ -699,12 +699,14 @@ func _on_player(code: int, json: Variant) -> void:
 		_card_portrait.texture = portrait
 		_card_foot_portrait.texture = portrait
 	var px := int(player.get("pixels", 0))
-	var lvl := 1 + int(sqrt(maxf(float(px), 0.0) / 10.0))
-	var low := 10.0 * float((lvl - 1) * (lvl - 1))
-	var high := 10.0 * float(lvl * lvl)
+	var xp := float(player.get("xp_hours", 0))
+	var lvl := int(player.get("level", 0))
 	_card_px_label.text = "x %s" % _thousands(px)
 	_card_lvl_label.text = "LVL %d" % lvl
-	_card_lvl_bar.value = clampf((float(px) - low) / maxf(high - low, 1.0) * 100.0, 4.0, 100.0)
+	if lvl >= 10:
+		_card_lvl_bar.value = 100.0
+	else:
+		_card_lvl_bar.value = clampf(fmod(xp, 10.0) * 10.0, 4.0, 100.0)
 	var approved := 0
 	for pr in projects:
 		if String(pr.get("status", "")) == "approved":
