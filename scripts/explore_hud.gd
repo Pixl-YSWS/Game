@@ -360,6 +360,28 @@ func _on_board(code: int, json: Variant) -> void:
 	if code != 200 or typeof(json) != TYPE_DICTIONARY or not json.get("ok", false):
 		_board_list.add_child(_muted("Couldn't load the leaderboard."))
 		return
+	var sprint: Variant = json.get("sprint")
+	if typeof(sprint) == TYPE_DICTIONARY:
+		var sprint_head := Label.new()
+		sprint_head.text = "EVENT: %s" % String(sprint.get("name", "Sprint")).to_upper()
+		sprint_head.add_theme_color_override("font_color", COLOR_ACCENT)
+		_board_list.add_child(sprint_head)
+		var sprint_players: Array = sprint.get("players", [])
+		if sprint_players.is_empty():
+			_board_list.add_child(_muted("Nobody has scored yet — ship during the event!"))
+		else:
+			for sp in sprint_players:
+				_board_list.add_child(_board_row(sp))
+		var yours := int(sprint.get("your_pixels", 0))
+		var me_sprint := Label.new()
+		me_sprint.theme_type_variation = &"InfoText"
+		me_sprint.text = "You this event: %d px" % yours
+		me_sprint.add_theme_color_override("font_color", COLOR_ACCENT)
+		_board_list.add_child(me_sprint)
+		var all_head := Label.new()
+		all_head.theme_type_variation = &"InfoText"
+		all_head.text = "ALL-TIME"
+		_board_list.add_child(all_head)
 	var players: Array = json.get("players", [])
 	if players.is_empty():
 		_board_list.add_child(_muted("Nobody has pixels yet — ship something!"))

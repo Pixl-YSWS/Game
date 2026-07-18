@@ -14,6 +14,8 @@ var _inbox_dot: ColorRect
 var _inbox_label: Label
 var _pixels_label: Label
 var _hours_label: Label
+var _event_card: PanelContainer
+var _event_label: Label
 var _players := {}
 var _list_root: Control
 var _list_box: VBoxContainer
@@ -46,6 +48,12 @@ func _ready() -> void:
 	wallet_timer.timeout.connect(_fetch_wallet)
 	add_child(wallet_timer)
 	_fetch_wallet()
+	var event_timer := Timer.new()
+	event_timer.wait_time = 120.0
+	event_timer.autostart = true
+	event_timer.timeout.connect(_fetch_events)
+	add_child(event_timer)
+	_fetch_events()
 
 func _process(_delta: float) -> void:
 	var in_game := _in_gameplay() and not global.ui_blocked()
@@ -80,6 +88,26 @@ func _build_ui() -> void:
 	column.add_theme_constant_override("separation", 6)
 	column.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_root.add_child(column)
+
+	_event_card = PanelContainer.new()
+	_event_card.theme_type_variation = &"HudPanel"
+	_event_card.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_event_card.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_event_card.visible = false
+	_event_card.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	_event_card.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_event_card.offset_top = 10.0
+	_root.add_child(_event_card)
+	var event_margin := MarginContainer.new()
+	event_margin.add_theme_constant_override("margin_left", 14)
+	event_margin.add_theme_constant_override("margin_right", 14)
+	event_margin.add_theme_constant_override("margin_top", 5)
+	event_margin.add_theme_constant_override("margin_bottom", 5)
+	_event_card.add_child(event_margin)
+	_event_label = Label.new()
+	_event_label.add_theme_color_override("font_color", COLOR_ACCENT)
+	_ssize(_event_label, 15)
+	event_margin.add_child(_event_label)
 
 	var wallet_card := PanelContainer.new()
 	wallet_card.theme_type_variation = &"HudPanel"
@@ -435,6 +463,46 @@ func _fetch_wallet() -> void:
 		_set_wallet(float(json.get("pixels", 0)), float(json.get("approvedHours", 0)))
 	)
 	req.request(url, PackedStringArray(), HTTPClient.METHOD_GET)
+
+func _fetch_events() -> void:
+	if NetworkManager.session_token == "":
+		return
+	var req := HTTPRequest.new()
+	add_child(req)
+	var url := NetworkManager.SERVER_HTTP_URL + "/api/events/active?token=" + NetworkManager.session_token.uri_encode()
+	req.request_completed.connect(func(_result, code, _headers, data):
+		req.queue_free()
+		if code != 200:
+			return
+		var json = JSON.parse_string(data.get_string_from_utf8()) if data.size() > 0 else null
+		if typeof(json) != TYPE_DICTIONARY or not json.get("ok", false):
+			return
+		_set_events(json.get("events", []))
+	)
+	req.request(url, PackedStringArray(), HTTPClient.METHOD_GET)
+
+func _set_events(events: Array) -> void:
+	if _event_label == null:
+		return
+	var parts := PackedStringArray()
+	for e in events:
+		var ev_name := String(e.get("name", ""))
+		if ev_name == "":
+			continue
+		match String(e.get("type", "")):
+			"community_goal":
+				parts.append("%s: %d/%d ships (+%d%%)" % [ev_name, int(e.get("progress", 0)), int(e.get("target", 0)), int(e.get("bonus_pct", 0))])
+			"bounty":
+				parts.append("%s: +%d px bounty" % [ev_name, int(e.get("reward", 0))])
+			"double_streak":
+				parts.append("%s: streak days x%d" % [ev_name, int(e.get("per_day", 2))])
+			_:
+				parts.append(ev_name)
+	if parts.is_empty():
+		_event_card.visible = false
+		return
+	_event_label.text = "EVENT  " + "  ·  ".join(parts)
+	_event_card.visible = true
 
 func _set_wallet(pixels: float, hours: float) -> void:
 	if _pixels_label == null:

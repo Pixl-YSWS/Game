@@ -103,7 +103,7 @@ func _build_ui() -> void:
 	wrap.add_child(plate)
 
 	var panel := PanelContainer.new()
-	panel.custom_minimum_size = Vector2(500, 0)
+	panel.custom_minimum_size = Vector2(820, 0)
 	wrap.add_child(panel)
 
 	var accents := Control.new()
@@ -137,7 +137,7 @@ func _build_ui() -> void:
 	margin.add_child(body)
 
 	var scroll := ScrollContainer.new()
-	scroll.custom_minimum_size = Vector2(0, 300)
+	scroll.custom_minimum_size = Vector2(0, 560)
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	body.add_child(scroll)
 	_list = VBoxContainer.new()

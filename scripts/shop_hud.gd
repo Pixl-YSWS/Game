@@ -374,6 +374,8 @@ func _set_items(items: Array) -> void:
 		row_box.add_child(name_row)
 		var name_label := _label(name_row, String(item["name"]), 20, Color(0.95, 0.90, 0.75))
 		name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		if bool(item.get("limited", false)):
+			_label(name_row, "LIMITED!", 16, Color(0.92, 0.35, 0.25))
 		_label(name_row, "%d PX" % int(item["price"]), 20, COLOR_TEAL)
 		var desc := _label(row_box, String(item.get("description", "")), 15, COLOR_MUTED)
 		desc.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
@@ -404,6 +406,8 @@ func _update_detail() -> void:
 		return
 	var item: Dictionary = _items[_selected]
 	_detail_name.text = String(item["name"])
+	if bool(item.get("limited", false)):
+		_detail_name.text += "  [LIMITED!]"
 	_detail_price.text = "%d PIXELS" % int(item["price"])
 	_detail_desc.text = String(item.get("description", ""))
 	var options: Array = item.get("options", [])
