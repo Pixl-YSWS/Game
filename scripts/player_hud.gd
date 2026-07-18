@@ -623,7 +623,6 @@ func _refresh_list() -> void:
 		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(label)
 		var pid := String(entry[2])
-		var pname := String(entry[0])
 		if pid != "":
 			var view := Button.new()
 			view.theme_type_variation = &"StepButton"
@@ -631,7 +630,7 @@ func _refresh_list() -> void:
 			_ssize(view, 14)
 			view.pressed.connect(func():
 				_list_root.visible = false
-				ExploreHud.open_player({"id": pid, "display_name": pname, "skin": "cvc:1"}))
+				WebPages.open("explore#player=" + pid))
 			row.add_child(view)
 		_list_box.add_child(row)
 

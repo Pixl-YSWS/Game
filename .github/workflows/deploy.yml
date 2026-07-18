@@ -50,6 +50,16 @@ jobs:
       - name: Add Vercel config (cross-origin isolation headers for threads)
         run: cp vercel.json build/vercel.json
 
+      - name: Add web pages (shop / explore / quests / hackatime)
+        run: |
+          set -euo pipefail
+          cp -r web/. build/
+          rm -f build/.gdignore
+          mkdir -p build/fonts build/img
+          cp assets/fonts/Monocraft.ttf build/fonts/Monocraft.ttf
+          cp assets/npcs/cheetah_char.png build/img/cheetah_char.png
+          cp assets/ui/pixel_currency_red.png build/img/pixel.png
+
       - name: Deploy to Vercel
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}

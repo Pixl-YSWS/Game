@@ -63,9 +63,8 @@ func _process(_delta: float) -> void:
 		"projects":
 			ProjectsHud.open()
 		"explore":
-			ExploreHud.open()
+			WebPages.open("explore")
 		"leaderboard":
-			ExploreHud.open()
-			ExploreHud._show_board()
+			WebPages.open("explore#leaderboard")
 		"shop":
-			ShopHud.open()
+			WebPages.open("shop")

@@ -210,7 +210,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		if opens_projects:
 			ProjectsHud.open()
 		elif opens_explore:
-			ExploreHud.open()
+			WebPages.open("explore")
 		elif quest_project:
 			_start_project_quest()
 		else:
