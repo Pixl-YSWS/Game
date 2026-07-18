@@ -152,6 +152,9 @@ func _build_ui() -> void:
 	body.add_child(close_button)
 
 func refresh() -> void:
+	for child in _list.get_children():
+		child.queue_free()
+	_list.add_child(_muted("Loading your messages…"))
 	_api(HTTPClient.METHOD_GET, "/api/notifications", _on_list)
 
 func _poll_unread() -> void:
