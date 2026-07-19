@@ -119,6 +119,10 @@
   .jbody img, .jbody .bb-img { max-width: 100%; max-height: 260px; }
   .composer { padding: 16px; display: flex; flex-direction: column; gap: 10px; }
   .composer-foot { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .j-hint { font-size: 12.5px; }
+  .j-hint.bad { color: var(--bad); }
+  .j-hint.ok { color: var(--good); }
+  .composer-foot .btn:last-child { margin-left: auto; }
   .composer-foot input.field { width: 90px; }
   .danger-zone { margin-top: 30px; padding: 14px 18px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
   .btn.red { background: #c04444; color: #fff; }
@@ -308,7 +312,7 @@ function formHtml(p) {
       </div>
       <div class="form-row">
         <label>DESCRIPTION</label>
-        <textarea class="field" id="f-desc" maxlength="2000" placeholder="What it is, what it does… (bbcode works)">${Pixl.esc(p.description || "")}</textarea>
+        <textarea class="field" id="f-desc" maxlength="2000" placeholder="What it is, what it does… (Markdown supported)">${Pixl.esc(p.description || "")}</textarea>
       </div>
       <div class="two-col">
         <div class="form-row">
@@ -507,6 +511,7 @@ async function renderProject(id) {
           <input type="file" id="j-img-file" accept="image/png,image/jpeg,image/webp,image/gif" hidden>
           <span class="faint" style="font-size:12px">hours:</span>
           <input class="field" id="j-hours" type="number" min="0" max="100" step="0.5" value="0">
+          <span class="j-hint faint" id="j-hint"></span>
           <button class="btn" id="j-post">POST ENTRY</button>
         </div>
       </div>
@@ -543,7 +548,25 @@ async function renderProject(id) {
   });
   $("j-post").addEventListener("click", () => postJournal(p.id));
   $("p-delete").addEventListener("click", () => deleteProject(p));
+  $("j-content").addEventListener("input", updateJournalHint);
+  $("j-hours").addEventListener("input", updateJournalHint);
+  updateJournalHint();
   loadJournal(p.id);
+}
+
+function journalNeed(hours) {
+  return hours > 0 ? Math.max(100, Math.round(hours * 100)) : 0;
+}
+
+function updateJournalHint() {
+  const hint = $("j-hint");
+  if (!hint) return;
+  const len = $("j-content").value.trim().length;
+  const need = journalNeed(Number($("j-hours").value) || 0);
+  if (need === 0) { hint.textContent = len ? `${len} chars` : ""; hint.classList.remove("bad", "ok"); return; }
+  hint.textContent = `${len} / ${need} chars`;
+  hint.classList.toggle("bad", len < need);
+  hint.classList.toggle("ok", len >= need);
 }
 
 function lockForm() {

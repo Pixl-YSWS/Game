@@ -277,6 +277,7 @@ async function showProject(id) {
         <div class="muted" style="font-size:14px">by ${owner ? `<a href="#player=${Pixl.esc(owner.id)}">${Pixl.esc(owner.display_name)}</a>` : "?"} · started ${Pixl.timeAgo(p.created_at)}${p.shipped_at ? ` · shipped ${Pixl.timeAgo(p.shipped_at)}` : ""}</div>
       </div>
     </div>
+    ${p.description ? `<div class="jbody md" style="margin-top:16px;font-size:16px">${Pixl.markdown(p.description)}</div>` : ""}
     <div class="section-h">DEVLOG · ${entries.length} ENTR${entries.length === 1 ? "Y" : "IES"}</div>
     ${entries.length === 0
       ? `<div class="empty-note">NO JOURNAL ENTRIES YET.</div>`
