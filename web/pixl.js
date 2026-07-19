@@ -197,6 +197,69 @@ const Pixl = (() => {
       .replace(/\[rb\]/g, "]");
   }
 
+  // Safe Markdown subset for journals — escapes first, then renders headings,
+  // bold/italic/strike, inline code + fenced blocks, links, images, lists,
+  // blockquotes and rules. URLs are restricted to http(s).
+  function mdInline(raw) {
+    return esc(raw)
+      .replace(/`([^`]+)`/g, "<code>$1</code>")
+      .replace(/!\[([^\]]*)\]\((https?:\/\/[^)\s]+)\)/g,
+        (_m, a, u) => (bbSafeUrl(u) ? `<img class="md-img" src="${u}" alt="${a}" loading="lazy" onerror="this.remove()">` : ""))
+      .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g,
+        (_m, t, u) => (bbSafeUrl(u) ? `<a href="${u}" target="_blank" rel="noopener">${t}</a>` : t))
+      .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+      .replace(/__([^_]+)__/g, "<strong>$1</strong>")
+      .replace(/(^|[^*])\*([^*\s][^*]*?)\*/g, "$1<em>$2</em>")
+      .replace(/~~([^~]+)~~/g, "<s>$1</s>");
+  }
+
+  function markdown(src) {
+    const lines = String(src ?? "").split(/\r?\n/);
+    let html = "";
+    let list = null;
+    const closeList = () => { if (list) { html += `</${list}>`; list = null; } };
+    for (let i = 0; i < lines.length; ) {
+      const line = lines[i];
+      if (/^```/.test(line)) {
+        closeList();
+        const buf = [];
+        i++;
+        while (i < lines.length && !/^```/.test(lines[i])) buf.push(lines[i++]);
+        i++;
+        html += `<pre class="md-pre"><code>${esc(buf.join("\n"))}</code></pre>`;
+        continue;
+      }
+      const h = line.match(/^(#{1,6})\s+(.*)$/);
+      if (h) { closeList(); html += `<h${h[1].length} class="md-h">${mdInline(h[2])}</h${h[1].length}>`; i++; continue; }
+      if (/^\s*([-*_])\1\1+\s*$/.test(line)) { closeList(); html += `<hr class="md-hr">`; i++; continue; }
+      if (/^>\s?/.test(line)) {
+        closeList();
+        const q = [];
+        while (i < lines.length && /^>\s?/.test(lines[i])) q.push(lines[i++].replace(/^>\s?/, ""));
+        html += `<blockquote class="md-quote">${mdInline(q.join(" "))}</blockquote>`;
+        continue;
+      }
+      if (/^\s*[-*+]\s+/.test(line)) {
+        if (list !== "ul") { closeList(); html += `<ul class="md-list">`; list = "ul"; }
+        html += `<li>${mdInline(line.replace(/^\s*[-*+]\s+/, ""))}</li>`; i++; continue;
+      }
+      if (/^\s*\d+\.\s+/.test(line)) {
+        if (list !== "ol") { closeList(); html += `<ol class="md-list">`; list = "ol"; }
+        html += `<li>${mdInline(line.replace(/^\s*\d+\.\s+/, ""))}</li>`; i++; continue;
+      }
+      if (/^\s*$/.test(line)) { closeList(); i++; continue; }
+      closeList();
+      const para = [line];
+      i++;
+      while (i < lines.length && !/^\s*$/.test(lines[i]) &&
+        !/^(#{1,6}\s|```|>\s?|\s*[-*+]\s+|\s*\d+\.\s+)/.test(lines[i]) &&
+        !/^\s*([-*_])\1\1+\s*$/.test(lines[i])) para.push(lines[i++]);
+      html += `<p class="md-p">${para.map(mdInline).join("<br>")}</p>`;
+    }
+    closeList();
+    return html;
+  }
+
   function timeAgo(iso) {
     const s = (Date.now() - new Date(iso).getTime()) / 1000;
     if (!isFinite(s)) return "";
@@ -226,5 +289,5 @@ const Pixl = (() => {
     document.addEventListener("DOMContentLoaded", gate);
   }
 
-  return { API, token, api, apiUrl, send, upload, esc, bbcode, bbstrip, toast, mountTopbar, loadWallet, timeAgo, countdown, hours, hasToken: !!token };
+  return { API, token, api, apiUrl, send, upload, esc, bbcode, bbstrip, markdown, toast, mountTopbar, loadWallet, timeAgo, countdown, hours, hasToken: !!token };
 })();

@@ -115,7 +115,7 @@
   .journal-entry .jmeta { font-size: 13px; color: var(--faint); margin-bottom: 8px; display: flex; gap: 12px; align-items: center; }
   .journal-entry .jdel { margin-left: auto; cursor: pointer; background: none; border: none; color: var(--faint); font-size: 13px; }
   .journal-entry .jdel:hover { color: var(--bad); }
-  .journal-entry .jbody { font-size: 15.5px; line-height: 1.7; white-space: pre-wrap; word-break: break-word; }
+  .journal-entry .jbody { font-size: 15.5px; word-break: break-word; }
   .jbody img, .jbody .bb-img { max-width: 100%; max-height: 260px; }
   .composer { padding: 16px; display: flex; flex-direction: column; gap: 10px; }
   .composer-foot { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
@@ -501,7 +501,7 @@ async function renderProject(id) {
 
       <div class="section-h">DEVLOG</div>
       <div class="composer panel">
-        <textarea class="field" id="j-content" maxlength="5000" placeholder="What did you build today? (bbcode works — paste an image to attach it)"></textarea>
+        <textarea class="field" id="j-content" maxlength="5000" placeholder="What did you build today? Markdown supported — **bold**, # headings, - lists, `code`, [links](url). Paste an image to attach it."></textarea>
         <div class="composer-foot">
           <button class="btn dark" id="j-img" type="button">🖼 ADD IMAGE</button>
           <input type="file" id="j-img-file" accept="image/png,image/jpeg,image/webp,image/gif" hidden>
@@ -537,7 +537,7 @@ async function renderProject(id) {
     Pixl.toast("Uploading image…");
     try {
       const url = await Pixl.upload(f);
-      $("j-content").value += ($("j-content").value ? "\n" : "") + `[img]${url}[/img]`;
+      $("j-content").value += ($("j-content").value ? "\n" : "") + `![](${url})`;
       Pixl.toast("Image attached!");
     } catch (e) { Pixl.toast(err(e.message), true); }
   });
@@ -610,7 +610,7 @@ async function loadJournal(id) {
           ${e.hours ? `<span class="teal">${Number(e.hours).toFixed(1)}h</span>` : ""}
           <button class="jdel" data-id="${e.id}">✕ delete</button>
         </div>
-        <div class="jbody">${Pixl.bbcode(e.content)}</div>
+        <div class="jbody md">${Pixl.markdown(e.content)}</div>
       </div>`).join("");
   list.querySelectorAll(".jdel").forEach((b) =>
     b.addEventListener("click", async () => {
@@ -659,7 +659,7 @@ document.addEventListener("paste", (e) => {
   if (document.activeElement === $("j-content")) {
     e.preventDefault();
     Pixl.upload(file).then((url) => {
-      $("j-content").value += ($("j-content").value ? "\n" : "") + `[img]${url}[/img]`;
+      $("j-content").value += ($("j-content").value ? "\n" : "") + `![](${url})`;
       Pixl.toast("Image attached!");
     }).catch((x) => Pixl.toast(err(x.message), true));
   } else if ($("f-thumb-preview")) {

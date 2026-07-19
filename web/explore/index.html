@@ -93,7 +93,7 @@
   .journal { display: flex; flex-direction: column; gap: 12px; max-width: 780px; }
   .journal-entry { padding: 16px 18px; }
   .journal-entry .jmeta { font-size: 13px; color: var(--faint); margin-bottom: 8px; display: flex; gap: 12px; }
-  .journal-entry .jbody { font-size: 15.5px; line-height: 1.7; color: var(--ink); white-space: pre-wrap; word-break: break-word; }
+  .journal-entry .jbody { font-size: 15.5px; color: var(--ink); word-break: break-word; }
 </style>
 </head>
 <body>
@@ -283,7 +283,7 @@ async function showProject(id) {
       : `<div class="journal">${entries.map((e) => `
           <div class="journal-entry panel">
             <div class="jmeta"><span>${Pixl.timeAgo(e.created_at)}</span>${e.hours ? `<span class="teal">${Number(e.hours).toFixed(1)}h logged</span>` : ""}</div>
-            <div class="jbody">${Pixl.bbcode(e.content)}</div>
+            <div class="jbody md">${Pixl.markdown(e.content)}</div>
           </div>`).join("")}</div>`}`;
 }
 
