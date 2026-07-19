@@ -61,7 +61,7 @@ func _process(_delta: float) -> void:
 		return
 	match action:
 		"projects":
-			ProjectsHud.open()
+			WebPages.open("projects")
 		"explore":
 			WebPages.open("explore")
 		"leaderboard":

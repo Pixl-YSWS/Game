@@ -29,12 +29,12 @@ func _unhandled_input(event: InputEvent) -> void:
 	if not _in_gameplay() or global.ui_blocked() or ChatHud.is_typing() or Dialogue.is_open:
 		return
 	match event.keycode:
+		KEY_H:
+			open("projects")
 		KEY_B:
 			open("shop")
 		KEY_J:
 			open("quests")
-		KEY_K:
-			open("hackatime")
 		_:
 			return
 	get_viewport().set_input_as_handled()

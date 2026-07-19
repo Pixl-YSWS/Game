@@ -233,11 +233,10 @@ func _build_pages() -> void:
 		_hint("Lobbies from the main menu get you a private world with its own code.")
 	]))
 	_pages.append(_page_body([
-		_para("Ship projects, earn pixels. Create a project with H, link your Hackatime, journal as you build, then Ship it for review."),
+		_para("Ship projects, earn pixels. Press H to open your Projects page in a browser tab — create a project, link your Hackatime, journal as you build, then Ship it for review."),
 		_para("Approved hours pay out in pixels at $4-7/hr — your rate climbs as you level up (1 hour approved = 1 XP, level shows in the top-left)."),
 		_spacer(),
-		_row("H  /  Pip", "Open Projects"),
-		_row("K", "Hackatime stats — opens in a new tab"),
+		_row("H  /  Pip", "Open Projects (new tab)"),
 		_spacer(),
 		_hint("Reviewers check your repo, demo and journal — real work only, AI use must be declared.")
 	]))
@@ -257,7 +256,6 @@ func _build_pages() -> void:
 	_pages.append(_page_body([
 		_row("N", "Inbox"),
 		_row("H", "Projects"),
-		_row("K", "Hackatime"),
 		_row("B", "Shop"),
 		_row("J", "Quest log"),
 		_row("E", "Explore"),

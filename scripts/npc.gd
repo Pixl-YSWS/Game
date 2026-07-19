@@ -208,7 +208,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("interact"):
 		get_viewport().set_input_as_handled()
 		if opens_projects:
-			ProjectsHud.open()
+			WebPages.open("projects")
 		elif opens_explore:
 			WebPages.open("explore")
 		elif quest_project:
@@ -237,7 +237,7 @@ func _start_project_quest() -> void:
 			projects = json.get("projects", [])
 		if projects.is_empty():
 			Dialogue.open(npc_name, quest_offer.split("\n"))
-			Dialogue.closed.connect(func(): ProjectsHud.open(), CONNECT_ONE_SHOT)
+			Dialogue.closed.connect(func(): WebPages.open("projects"), CONNECT_ONE_SHOT)
 		else:
 			Dialogue.open(npc_name, quest_done.split("\n"))
 		_update_prompt()

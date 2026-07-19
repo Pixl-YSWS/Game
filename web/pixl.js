@@ -71,11 +71,33 @@ const Pixl = (() => {
     setTimeout(() => t.remove(), 3200);
   }
 
+  async function send(method, path, body) {
+    const res = await fetch(apiUrl(path), {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    let json = null;
+    try { json = await res.json(); } catch {}
+    return { status: res.status, ...(json || {}) };
+  }
+
+  async function upload(file) {
+    const res = await fetch(apiUrl("/api/uploads"), {
+      method: "POST",
+      headers: { "Content-Type": file.type || "image/png" },
+      body: file,
+    });
+    const json = await res.json().catch(() => null);
+    if (!json || !json.ok || !json.url) throw new Error((json && json.error) || "upload_failed");
+    return json.url;
+  }
+
   const PAGES = [
     ["shop", "SHOP"],
     ["explore", "EXPLORE"],
     ["quests", "QUESTS"],
-    ["hackatime", "HACKATIME"],
+    ["projects", "PROJECTS"],
   ];
 
   function mountTopbar(active) {
@@ -204,5 +226,5 @@ const Pixl = (() => {
     document.addEventListener("DOMContentLoaded", gate);
   }
 
-  return { API, token, api, apiUrl, esc, bbcode, bbstrip, toast, mountTopbar, loadWallet, timeAgo, countdown, hours, hasToken: !!token };
+  return { API, token, api, apiUrl, send, upload, esc, bbcode, bbstrip, toast, mountTopbar, loadWallet, timeAgo, countdown, hours, hasToken: !!token };
 })();
