@@ -219,10 +219,10 @@ func _on_stats(code: int, json: Variant) -> void:
 	if stats.get("connected", false):
 		var hours := int(stats.get("totalSeconds", 0)) / 3600.0
 		_status.text = "HackTime: connected (%.1fh)" % hours
-		_connect_button.text = "Reconnect"
+		_connect_button.text = "Stats [K]"
 	else:
 		_status.text = "HackTime: not connected"
-		_connect_button.text = "Connect"
+		_connect_button.text = "Connect [K]"
 
 func _poll_projects() -> void:
 	if not _open or not _modal.visible:
@@ -640,12 +640,7 @@ func _muted(text: String) -> Label:
 	return l
 
 func _on_connect() -> void:
-	var url := NetworkManager.SERVER_HTTP_URL + "/hackatime/connect?token=" + NetworkManager.session_token.uri_encode()
-	if OS.has_feature("web"):
-		JavaScriptBridge.eval('window.open("%s","_blank")' % url, true)
-	else:
-		OS.shell_open(url)
-	_status.text = "HackTime: finishing in your browser…"
+	WebPages.open("hackatime")
 	_start_connect_poll()
 
 func _start_connect_poll() -> void:
