@@ -64,6 +64,8 @@
   .form-grid { display: flex; flex-direction: column; gap: 16px; padding: 24px; }
   .form-row { display: flex; flex-direction: column; gap: 7px; }
   .form-row label { font-size: 13px; color: var(--faint); letter-spacing: 0.5px; }
+  .open-link { font-size: 12px; color: var(--teal); margin-left: 6px; letter-spacing: 0; }
+  .open-link:hover { color: var(--gold); }
   .form-row input.field, .form-row textarea.field { font-size: 15.5px; }
   .form-row textarea.field { resize: vertical; min-height: 80px; line-height: 1.6; }
   .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
@@ -90,11 +92,21 @@
   .ht-pick .h { margin-left: auto; color: var(--teal); font-size: 14px; }
   .check-row { display: flex; align-items: center; gap: 10px; font-size: 15.5px; color: var(--ink); cursor: pointer; }
   .check-row input { accent-color: #ffd166; width: 18px; height: 18px; flex-shrink: 0; }
-  .update-block {
-    display: flex; flex-direction: column; gap: 13px;
-    padding: 15px 17px; border: 3px solid var(--stroke);
-    background: rgba(255,209,102,.06); box-shadow: inset 0 0 0 2px rgba(255,209,102,.15);
+  .disclosure {
+    display: flex; flex-direction: column; gap: 10px;
+    padding: 15px 17px; border: 3px solid var(--stroke); background: var(--panel-deep);
   }
+  .disclosure.update { background: rgba(255,209,102,.06); box-shadow: inset 0 0 0 2px rgba(255,209,102,.18); }
+  .disclosure-check { display: flex; align-items: center; gap: 10px; font-size: 15.5px; font-weight: 600; color: var(--ink); cursor: pointer; }
+  .disclosure.update > .disclosure-check:first-child { color: var(--gold); }
+  .disclosure-check input { accent-color: #ffd166; width: 18px; height: 18px; flex-shrink: 0; }
+  .disclosure-desc { font-size: 13.5px; line-height: 1.6; color: var(--faint); margin: -2px 0 2px; }
+  .ta-wrap { position: relative; }
+  .ta-count {
+    position: absolute; bottom: 8px; right: 12px;
+    font-size: 11.5px; color: var(--faint); pointer-events: none; background: var(--panel-deep); padding: 0 3px;
+  }
+  .ta-count.full { color: var(--bad); }
   .ship-list { display: flex; flex-direction: column; gap: 10px; font-size: 15.5px; }
   .ship-item { display: flex; gap: 10px; align-items: center; }
   .ship-item .ok { color: var(--good); }
@@ -165,6 +177,8 @@ const ERRORS = {
   project_banned: "This project is banned and can't be shipped.",
   cdn_not_configured: "Image uploads aren't configured on the server.",
   cdn_failed: "Image upload failed — try again.",
+  journal_too_short: "Log more detail — journals need ~100 characters per hour.",
+  not_in_review: "This project isn't in review.",
 };
 const err = (e) => ERRORS[e] || "Something went wrong — try again.";
 
@@ -298,11 +312,11 @@ function formHtml(p) {
       </div>
       <div class="two-col">
         <div class="form-row">
-          <label>GITHUB REPO</label>
+          <label>GITHUB REPO ${p.repo_url ? `<a class="open-link" href="${Pixl.esc(p.repo_url)}" target="_blank" rel="noopener">↗ open</a>` : ""}</label>
           <input class="field" id="f-repo" maxlength="500" value="${Pixl.esc(p.repo_url || "")}" placeholder="https://github.com/you/project">
         </div>
         <div class="form-row">
-          <label>DEMO / PLAYABLE LINK</label>
+          <label>DEMO / PLAYABLE LINK ${p.demo_url ? `<a class="open-link" href="${Pixl.esc(p.demo_url)}" target="_blank" rel="noopener">↗ open</a>` : ""}</label>
           <input class="field" id="f-demo" maxlength="500" value="${Pixl.esc(p.demo_url || "")}" placeholder="https://…">
         </div>
       </div>
@@ -377,11 +391,28 @@ function bindForm(p) {
     document.querySelectorAll(".level-btn").forEach((x) => x.classList.toggle("sel", x === b));
   });
   $("f-ai").addEventListener("change", () => { $("f-ai-notes-row").hidden = !$("f-ai").checked; });
+  wireCount("f-ai-notes", "f-ai-count", 500);
+  if ($("f-update")) {
+    $("f-update").addEventListener("change", () => { $("f-update-notes-row").hidden = !$("f-update").checked; });
+    wireCount("f-update-notes", "f-update-count", 2000);
+  }
   $("f-thumb-btn").addEventListener("click", () => $("f-thumb-file").click());
   $("f-thumb-file").addEventListener("change", () => {
     if ($("f-thumb-file").files[0]) setThumb($("f-thumb-file").files[0]);
   });
   $("f-save").addEventListener("click", () => saveProject(p));
+}
+
+function wireCount(taId, countId, max) {
+  const ta = $(taId), c = $(countId);
+  if (!ta || !c) return;
+  const upd = () => {
+    const n = ta.value.trim().length;
+    c.textContent = `${n} / ${max}`;
+    c.classList.toggle("full", n >= max);
+  };
+  ta.addEventListener("input", upd);
+  upd();
 }
 
 async function setThumb(file) {
@@ -426,7 +457,8 @@ async function renderProject(id) {
   $("new-btn").style.display = "none";
   const [label, cls] = statusInfo(p);
   const secs = linkedSeconds(p);
-  const canShip = ["draft", "needs_changes", "approved"].includes(p.status) || p.rejected_at;
+  const inReview = p.status === "shipped" || p.status === "second_review";
+  const canShip = !inReview && (["draft", "needs_changes", "approved"].includes(p.status) || p.rejected_at);
   const isUpdate = p.status === "approved" && !p.rejected_at;
   view.innerHTML = `
     <a class="btn dark back-btn" href="#">← ALL PROJECTS</a>
@@ -448,31 +480,23 @@ async function renderProject(id) {
           <div class="ship-item"><span class="${p.image_url ? "ok" : "no"}">${p.image_url ? "✔" : "✘"}</span> Thumbnail uploaded</div>
           <div class="ship-item"><span class="${secs >= 3600 ? "ok" : "no"}">${secs >= 3600 ? "✔" : "✘"}</span> ≥ 1h tracked on linked Hackatime projects <span class="teal">(${Pixl.hours(secs)})</span></div>
         </div>
-        ${isUpdate ? `
-        <div class="update-block">
-          <label class="check-row" style="color:var(--gold)">
-            <input type="checkbox" id="s-update" checked>
-            🔄 This is an update to an already-approved project
-          </label>
-          <div class="form-row" id="s-update-notes-row">
-            <label>WHAT CHANGED IN THIS UPDATE? * (min 100 chars)</label>
-            <textarea class="field" id="s-notes" maxlength="2000" placeholder="Describe the new work so reviewers only count the new hours."></textarea>
-          </div>
-          <label class="check-row">
-            <input type="checkbox" id="s-ysws">
-            I already submitted this project to another Hack Club YSWS
-          </label>
-        </div>` : `
+        ${!isUpdate ? `
         <label class="check-row">
           <input type="checkbox" id="s-ysws">
           I already submitted this project to another Hack Club YSWS
-        </label>`}
+        </label>` : ""}
+        ${inReview ? `
+        <div class="note-strip teal">⏳ This project is in the review queue — you can't edit it until it's reviewed. Unship it if you need to make changes.</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <button class="btn dark" id="s-ship" disabled>⏳ IN REVIEW</button>
+          <button class="btn" id="s-unship">↩ UNSHIP TO EDIT</button>
+        </div>` : `
         <div>
-          <button class="btn ${canShip ? "" : "dark"}" id="s-ship" ${canShip ? "" : "disabled"}>
-            ${p.status === "shipped" ? "⏳ IN REVIEW" : isUpdate ? "🚢 SHIP UPDATE" : "🚢 SHIP FOR REVIEW"}
+          <button class="btn" id="s-ship">
+            ${isUpdate ? "🚢 SHIP UPDATE" : "🚢 SHIP FOR REVIEW"}
           </button>
           <span class="faint" style="font-size:12px;margin-left:10px">Save your edits first — shipping uses what's saved.</span>
-        </div>
+        </div>`}
       </div>
 
       <div class="section-h">DEVLOG</div>
@@ -495,9 +519,17 @@ async function renderProject(id) {
     </div>`;
 
   bindForm(p);
-  if ($("s-update"))
-    $("s-update").addEventListener("change", () => { $("s-update-notes-row").hidden = !$("s-update").checked; });
-  $("s-ship").addEventListener("click", () => ship(p, isUpdate));
+  if (inReview) lockForm();
+  if ($("s-ship") && !inReview)
+    $("s-ship").addEventListener("click", () => {
+      const blockers = shipBlockers(p, isUpdate);
+      if (blockers.length) {
+        Pixl.toast("Can't ship yet — " + blockers.join("; ") + ".", true);
+        return;
+      }
+      ship(p, isUpdate);
+    });
+  if ($("s-unship")) $("s-unship").addEventListener("click", () => unship(p));
   $("j-img").addEventListener("click", () => $("j-img-file").click());
   $("j-img-file").addEventListener("change", async () => {
     const f = $("j-img-file").files[0];
@@ -514,9 +546,43 @@ async function renderProject(id) {
   loadJournal(p.id);
 }
 
+function lockForm() {
+  document.querySelectorAll(".editor input, .editor textarea, .editor select, #f-save, #f-thumb-btn, .level-btn")
+    .forEach((el) => {
+      if (el.id === "s-unship" || el.closest(".composer") || el.closest("#j-list") || el.closest(".danger-zone")) return;
+      el.disabled = true;
+    });
+  if ($("f-save")) $("f-save").textContent = "🔒 IN REVIEW — CAN'T EDIT";
+}
+
+async function unship(p) {
+  if (!confirm("Unship this project? It leaves the review queue and goes back to a draft so you can edit it. You'll need to ship it again.")) return;
+  $("s-unship").disabled = true;
+  const r = await Pixl.send("POST", `/api/projects/${p.id}/unship`);
+  $("s-unship").disabled = false;
+  if (!r.ok) return Pixl.toast(err(r.error), true);
+  Pixl.toast("Unshipped — it's a draft again, edit away.");
+  await loadProjects();
+  renderProject(p.id);
+}
+
+function shipBlockers(p, isUpdate) {
+  const b = [];
+  if (!p.repo_url) b.push("add a GitHub repo");
+  if (!p.demo_url) b.push("add a demo / playable link");
+  if (!p.image_url) b.push("upload a thumbnail");
+  if (linkedSeconds(p) < 3600) b.push("link a Hackatime project with ≥ 1h");
+  if (isUpdate) {
+    const notes = $("f-update") && $("f-update").checked ? $("f-update-notes").value.trim() : "";
+    if (notes.length < 100) b.push("describe what changed (100+ characters)");
+  }
+  if (["draft", "needs_changes", "approved"].includes(p.status) || p.rejected_at) {} else b.push("this project can't be shipped right now");
+  return b;
+}
+
 async function ship(p, isUpdate) {
-  const body = { otherYsws: $("s-ysws").checked };
-  if (isUpdate && $("s-update") && $("s-update").checked) body.updateNotes = $("s-notes").value.trim();
+  const body = { otherYsws: $("s-ysws") ? $("s-ysws").checked : false };
+  if (isUpdate && $("f-update") && $("f-update").checked) body.updateNotes = $("f-update-notes").value.trim();
   $("s-ship").disabled = true;
   Pixl.toast("Checking your repo and demo…");
   const r = await Pixl.send("POST", `/api/projects/${p.id}/ship`, body);
@@ -564,7 +630,11 @@ async function postJournal(id) {
     hours: Number($("j-hours").value) || 0,
   });
   $("j-post").disabled = false;
-  if (!r.ok) return Pixl.toast(err(r.error), true);
+  if (!r.ok) {
+    if (r.error === "journal_too_short")
+      return Pixl.toast(`Logging ${r.hours}h needs ≥ ${r.need} characters (you have ${content.length}).`, true);
+    return Pixl.toast(err(r.error), true);
+  }
   $("j-content").value = "";
   $("j-hours").value = "0";
   Pixl.toast("Entry posted!");

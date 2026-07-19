@@ -12,6 +12,7 @@ var _root: Control
 var _list: VBoxContainer
 var _open := false
 var _ui_font: SystemFont
+var _load_retried := false
 
 func _rfont() -> SystemFont:
 	if _ui_font == null:
@@ -152,6 +153,7 @@ func _build_ui() -> void:
 	body.add_child(close_button)
 
 func refresh() -> void:
+	_load_retried = false
 	for child in _list.get_children():
 		child.queue_free()
 	_list.add_child(_muted("Loading your messages…"))
@@ -175,7 +177,14 @@ func _on_list(code: int, json: Variant) -> void:
 	for child in _list.get_children():
 		child.queue_free()
 	if code != 200 or typeof(json) != TYPE_DICTIONARY or not json.get("ok", false):
-		_list.add_child(_muted("Couldn't load your inbox."))
+		if not _load_retried and _open:
+			_load_retried = true
+			_list.add_child(_muted("Loading your messages…"))
+			get_tree().create_timer(2.5).timeout.connect(func():
+				if _open:
+					_api(HTTPClient.METHOD_GET, "/api/notifications", _on_list))
+			return
+		_list.add_child(_muted("Couldn't load your inbox. Try reopening in a moment."))
 		return
 	var notes: Array = json.get("notifications", [])
 	if notes.is_empty():
