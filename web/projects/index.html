@@ -88,8 +88,13 @@
   .ht-pick label { display: flex; align-items: center; gap: 10px; font-size: 15px; color: var(--ink); cursor: pointer; letter-spacing: 0; padding: 3px 0; }
   .ht-pick input { accent-color: #ffd166; width: 17px; height: 17px; }
   .ht-pick .h { margin-left: auto; color: var(--teal); font-size: 14px; }
-  .check-row { display: flex; align-items: center; gap: 10px; font-size: 15.5px; }
-  .check-row input { accent-color: #ffd166; width: 18px; height: 18px; }
+  .check-row { display: flex; align-items: center; gap: 10px; font-size: 15.5px; color: var(--ink); cursor: pointer; }
+  .check-row input { accent-color: #ffd166; width: 18px; height: 18px; flex-shrink: 0; }
+  .update-block {
+    display: flex; flex-direction: column; gap: 13px;
+    padding: 15px 17px; border: 3px solid var(--stroke);
+    background: rgba(255,209,102,.06); box-shadow: inset 0 0 0 2px rgba(255,209,102,.15);
+  }
   .ship-list { display: flex; flex-direction: column; gap: 10px; font-size: 15.5px; }
   .ship-item { display: flex; gap: 10px; align-items: center; }
   .ship-item .ok { color: var(--good); }
@@ -419,14 +424,24 @@ async function renderProject(id) {
           <div class="ship-item"><span class="${secs >= 3600 ? "ok" : "no"}">${secs >= 3600 ? "✔" : "✘"}</span> ≥ 1h tracked on linked Hackatime projects <span class="teal">(${Pixl.hours(secs)})</span></div>
         </div>
         ${isUpdate ? `
-        <div class="form-row">
-          <label>WHAT CHANGED IN THIS UPDATE? * (min 100 chars)</label>
-          <textarea class="field" id="s-notes" maxlength="2000" placeholder="This re-ships an approved project — describe the new work so reviewers only count the new hours."></textarea>
-        </div>` : ""}
-        <div class="check-row">
+        <div class="update-block">
+          <label class="check-row" style="color:var(--gold)">
+            <input type="checkbox" id="s-update" checked>
+            🔄 This is an update to an already-approved project
+          </label>
+          <div class="form-row" id="s-update-notes-row">
+            <label>WHAT CHANGED IN THIS UPDATE? * (min 100 chars)</label>
+            <textarea class="field" id="s-notes" maxlength="2000" placeholder="Describe the new work so reviewers only count the new hours."></textarea>
+          </div>
+          <label class="check-row">
+            <input type="checkbox" id="s-ysws">
+            I already submitted this project to another Hack Club YSWS
+          </label>
+        </div>` : `
+        <label class="check-row">
           <input type="checkbox" id="s-ysws">
-          <label for="s-ysws" style="font-size:13px;color:var(--dim)">I already submitted this project to another Hack Club YSWS</label>
-        </div>
+          I already submitted this project to another Hack Club YSWS
+        </label>`}
         <div>
           <button class="btn ${canShip ? "" : "dark"}" id="s-ship" ${canShip ? "" : "disabled"}>
             ${p.status === "shipped" ? "⏳ IN REVIEW" : isUpdate ? "🚢 SHIP UPDATE" : "🚢 SHIP FOR REVIEW"}
@@ -455,6 +470,8 @@ async function renderProject(id) {
     </div>`;
 
   bindForm(p);
+  if ($("s-update"))
+    $("s-update").addEventListener("change", () => { $("s-update-notes-row").hidden = !$("s-update").checked; });
   $("s-ship").addEventListener("click", () => ship(p, isUpdate));
   $("j-img").addEventListener("click", () => $("j-img-file").click());
   $("j-img-file").addEventListener("change", async () => {
@@ -474,7 +491,7 @@ async function renderProject(id) {
 
 async function ship(p, isUpdate) {
   const body = { otherYsws: $("s-ysws").checked };
-  if (isUpdate) body.updateNotes = $("s-notes").value.trim();
+  if (isUpdate && $("s-update") && $("s-update").checked) body.updateNotes = $("s-notes").value.trim();
   $("s-ship").disabled = true;
   Pixl.toast("Checking your repo and demo…");
   const r = await Pixl.send("POST", `/api/projects/${p.id}/ship`, body);
