@@ -120,6 +120,36 @@
   .options-row { display: flex; gap: 8px; flex-wrap: wrap; }
   .afford-bar { height: 14px; border: 3px solid var(--stroke); background: var(--panel-deep); }
   .afford-bar > div { height: 100%; background: var(--gold); transition: width .3s steps(6); }
+  .trophy-head {
+    font-size: 20px; color: var(--gold); letter-spacing: 2px;
+    text-shadow: 2px 2px 0 var(--stroke); margin: 6px 0 16px;
+  }
+  .trophy-card { display: flex; flex-direction: column; gap: 10px; position: relative; overflow: hidden; }
+  .trophy-card.locked { filter: saturate(.55) brightness(.82); }
+  .trophy-card.claimable {
+    box-shadow: inset 0 0 0 2px var(--gold), inset 0 3px 0 rgba(255,232,178,.1), 0 7px 0 rgba(0,0,0,.45);
+    animation: trophy-glow 1.4s steps(2) infinite;
+  }
+  @keyframes trophy-glow {
+    50% { box-shadow: inset 0 0 0 3px var(--gold-soft), 0 0 24px rgba(255,209,102,.35), 0 7px 0 rgba(0,0,0,.45); }
+  }
+  .trophy-card.claimed { box-shadow: inset 0 0 0 2px var(--good), inset 0 3px 0 rgba(255,232,178,.08), 0 7px 0 rgba(0,0,0,.45); }
+  .trophy-img { background:
+    repeating-conic-gradient(rgba(255,209,102,.08) 0% 25%, transparent 0% 50%) 0 0 / 22px 22px,
+    radial-gradient(circle at 50% 40%, #4a3416, var(--panel-deep)); }
+  .trophy-tag {
+    position: absolute; top: -10px; right: 10px;
+    font-size: 11px; letter-spacing: 1px; padding: 4px 8px 3px;
+    border: 3px solid var(--stroke); background: var(--panel-deep); color: var(--dim);
+  }
+  .trophy-tag.ready { background: var(--gold); color: #2b1d12; animation: limited-blink 1s steps(2) infinite; }
+  .trophy-tag.claimed { background: #2f6b3a; color: #eafff0; }
+  .trophy-foot { margin-top: auto; }
+  .trophy-progress { height: 12px; border: 3px solid var(--stroke); background: var(--panel-deep); overflow: hidden; }
+  .trophy-progress > div { height: 100%; background: repeating-linear-gradient(90deg, var(--gold) 0 8px, var(--gold-soft) 8px 16px); transition: width .5s steps(8); }
+  .trophy-need { font-size: 12px; color: var(--faint); margin-top: 6px; }
+  .trophy-need.earned { color: var(--good); }
+  .trophy-claim { width: 100%; justify-content: center; }
   .marquee {
     overflow: hidden; white-space: nowrap;
     border-top: 4px solid var(--stroke); border-bottom: 4px solid var(--stroke);
@@ -164,6 +194,7 @@
   </div>
 
   <div class="spin" id="loading"></div>
+  <div id="trophies"></div>
   <div class="grid" id="items"></div>
   <div class="empty-note" id="empty" hidden>NOTHING IN STOCK.<br>CHECK BACK SOON!</div>
 
@@ -202,6 +233,14 @@ const $ = (id) => document.getElementById(id);
 let items = [];
 let wallet = null;
 let selected = null;
+let xp = 0;
+let claimedIds = new Set();
+
+function isTrophy(item) { return Number(item.unlock_xp) > 0; }
+function trophyState(item) {
+  if (claimedIds.has(item.id)) return "claimed";
+  return xp >= Number(item.unlock_xp) ? "claimable" : "locked";
+}
 
 const GREETS = [
   "HEY! WELCOME IN.",
@@ -238,16 +277,46 @@ function imgHtml(item, big = false) {
   return `<img src="${Pixl.esc(url)}" alt="" loading="lazy" onerror="this.outerHTML='<span class=ph>🎁</span>'">`;
 }
 
+function trophyCard(item) {
+  const state = trophyState(item);
+  const need = Number(item.unlock_xp);
+  const pct = Math.max(0, Math.min(100, (xp / Math.max(1, need)) * 100));
+  const badge = state === "claimed" ? `<div class="trophy-tag claimed">CLAIMED ✓</div>`
+    : state === "claimable" ? `<div class="trophy-tag ready">CLAIM ME!</div>`
+    : `<div class="trophy-tag">🔒 LEVEL ${need}</div>`;
+  const foot = state === "locked"
+    ? `<div class="trophy-progress"><div style="width:${pct}%"></div></div>
+       <div class="trophy-need">${Math.floor(xp)} / ${need} XP · keep shipping!</div>`
+    : state === "claimable"
+    ? `<button class="btn teal trophy-claim" data-claim="${item.id}">🏆 CLAIM</button>`
+    : `<div class="trophy-need earned">Yours forever. 🦈</div>`;
+  return `
+    <div class="card panel trophy-card ${state}" data-id="${item.id}" title="Level ${need} trophy">
+      ${badge}
+      <div class="item-img trophy-img">${imgHtml(item)}</div>
+      <div class="item-name">${Pixl.esc(item.name)}</div>
+      <div class="item-desc">${Pixl.esc(Pixl.bbstrip(item.description || ""))}</div>
+      <div class="trophy-foot">${foot}</div>
+    </div>`;
+}
+
 function render() {
   const q = $("search").value.trim().toLowerCase();
   const sort = $("sort").value;
-  let list = items.filter((i) =>
-    !q || String(i.name).toLowerCase().includes(q) || String(i.description || "").toLowerCase().includes(q));
+  const match = (i) => !q || String(i.name).toLowerCase().includes(q) || String(i.description || "").toLowerCase().includes(q);
+
+  const trophies = items.filter((i) => isTrophy(i) && match(i));
+  let list = items.filter((i) => !isTrophy(i) && match(i));
   if (sort === "cheap") list = [...list].sort((a, b) => a.price - b.price);
   else if (sort === "pricey") list = [...list].sort((a, b) => b.price - a.price);
   else if (sort === "name") list = [...list].sort((a, b) => String(a.name).localeCompare(String(b.name)));
 
-  $("empty").hidden = list.length > 0;
+  $("trophies").innerHTML = trophies.length === 0 ? "" :
+    `<div class="trophy-head">🏆 TROPHIES · EARNED, NOT BOUGHT</div>
+     <div class="grid">${trophies.map(trophyCard).join("")}</div>
+     <div class="divider"></div>`;
+
+  $("empty").hidden = list.length + trophies.length > 0;
   $("items").innerHTML = list.map((item, idx) => `
     <div class="card panel item-card ${item.limited ? "limited" : ""}" data-id="${item.id}" style="animation: toast-in .2s steps(4) both; animation-delay:${Math.min(idx * 30, 400)}ms">
       ${item.limited ? `<div class="limited-tag">LIMITED</div>` : ""}
@@ -260,8 +329,32 @@ function render() {
       </div>
     </div>`).join("");
 
+  for (const card of $("trophies").querySelectorAll(".card")) {
+    card.addEventListener("click", (e) => {
+      if (e.target.closest("[data-claim]")) return;
+      openDetail(Number(card.dataset.id));
+    });
+  }
+  for (const btn of $("trophies").querySelectorAll("[data-claim]")) {
+    btn.addEventListener("click", (e) => { e.stopPropagation(); claimTrophy(Number(btn.dataset.claim)); });
+  }
   for (const card of $("items").querySelectorAll(".card")) {
     card.addEventListener("click", () => openDetail(Number(card.dataset.id)));
+  }
+}
+
+async function claimTrophy(id) {
+  const r = await Pixl.send("POST", `/api/shop/claim/${id}`);
+  if (r.ok && r.claimed) {
+    claimedIds.add(id);
+    Pixl.toast("🏆 TROPHY CLAIMED! The team will reach out.");
+    say("A LEGEND CLAIMS THEIR PRIZE!", 4000);
+    render();
+    if (selected && selected.id === id) openDetail(id);
+  } else if (r.error === "not_eligible") {
+    Pixl.toast(`Not yet — you're at ${Math.floor(r.xp)} / ${r.need} XP.`, true);
+  } else {
+    Pixl.toast("Couldn't claim that right now.", true);
   }
 }
 
@@ -270,13 +363,34 @@ function openDetail(id) {
   if (!selected) return;
   $("detail-img").innerHTML = imgHtml(selected, true);
   $("detail-name").textContent = selected.name;
+  $("detail-desc").innerHTML = Pixl.bbcode(selected.description || "");
+  const options = Array.isArray(selected.options) ? selected.options : [];
+  $("detail-options").innerHTML = options.map((o) => `<span class="chip gold">${Pixl.esc(String(o).toUpperCase())}</span>`).join("");
+
+  if (isTrophy(selected)) {
+    const state = trophyState(selected);
+    const need = Number(selected.unlock_xp);
+    const pct = Math.max(0, Math.min(100, (xp / Math.max(1, need)) * 100));
+    $("detail-limited").innerHTML = `<span class="chip ${state === "locked" ? "" : "gold"}">🏆 LEVEL ${need} TROPHY — EARNED, NOT BOUGHT</span>`;
+    $("detail-price").innerHTML = state === "claimed" ? "CLAIMED ✓"
+      : state === "claimable" ? "READY TO CLAIM!" : `LOCKED — REACH ${need} XP`;
+    $("detail-price").classList.toggle("cant", state === "locked");
+    $("afford-fill").style.width = pct + "%";
+    $("afford-fill").style.background = pct >= 100 ? "var(--good)" : "var(--gold)";
+    $("afford-label").textContent = `YOU'RE AT ${Math.floor(xp)} / ${need} XP` + (pct >= 100 ? "  —  EARNED!" : `  ·  ${need - Math.floor(xp)} to go`);
+    $("buy-btn").textContent = state === "claimed" ? "CLAIMED ✓" : state === "claimable" ? "🏆 CLAIM" : "🔒 LOCKED";
+    $("buy-btn").disabled = state !== "claimable";
+    $("detail-overlay").classList.add("show");
+    say(state === "claimable" ? "YOU EARNED THAT ONE!" : state === "claimed" ? "A TRUE LEGEND." : "SHIP MORE TO EARN IT!", 4000);
+    return;
+  }
+
   $("detail-limited").innerHTML = selected.limited
     ? `<span class="chip red">LIMITED — ${Pixl.countdown(selected.limited_until)}</span>` : "";
   $("detail-price").innerHTML = `<img src="/img/pixel.png" style="width:20px;height:20px" alt="">${Number(selected.price)} PIXELS`;
   $("detail-price").classList.toggle("cant", !canAfford(selected));
-  $("detail-desc").innerHTML = Pixl.bbcode(selected.description || "");
-  const options = Array.isArray(selected.options) ? selected.options : [];
-  $("detail-options").innerHTML = options.map((o) => `<span class="chip gold">${Pixl.esc(String(o).toUpperCase())}</span>`).join("");
+  $("buy-btn").textContent = "BUY";
+  $("buy-btn").disabled = false;
   const have = wallet ? wallet.pixels : 0;
   const pct = Math.max(0, Math.min(100, (have / Math.max(1, selected.price)) * 100));
   $("afford-fill").style.width = pct + "%";
@@ -294,6 +408,10 @@ $("detail-overlay").addEventListener("click", (e) => { if (e.target === e.curren
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeDetail(); });
 
 $("buy-btn").addEventListener("click", () => {
+  if (selected && isTrophy(selected)) {
+    if (trophyState(selected) === "claimable") { closeDetail(); claimTrophy(selected.id); }
+    return;
+  }
   Pixl.toast("NOT FOR SALE YET — COME BACK SOON!", true);
   say("NOT FOR SALE YET!\nCOME BACK SOON.", 3600);
   const k = $("keeper");
@@ -318,14 +436,16 @@ async function boot() {
   wallet = await Pixl.loadWallet();
   try {
     const data = await Pixl.api("/api/shop/items");
-    items = (data.items || []).map((i) => ({ ...i, id: Number(i.id), price: Number(i.price) }));
+    items = (data.items || []).map((i) => ({ ...i, id: Number(i.id), price: Number(i.price), unlock_xp: Number(i.unlock_xp || 0) }));
+    xp = Number(data.xp || 0);
+    claimedIds = new Set((data.claimed || []).map(Number));
   } catch (e) {
     if (e.message !== "unauthorized") Pixl.toast("Couldn't reach the shop server.", true);
   }
   $("loading").remove();
   render();
   tickLimited();
-  const names = items.map((i) => `${Pixl.esc(i.name)} · ${i.price} PX`).join("  ◆  ") || "THE SHELVES ARE BARE TODAY";
+  const names = items.filter((i) => !isTrophy(i)).map((i) => `${Pixl.esc(i.name)} · ${i.price} PX`).join("  ◆  ") || "THE SHELVES ARE BARE TODAY";
   $("marquee-inner").innerHTML = `<span>${names}  ◆  ${names}  ◆  </span>`;
   if (wallet) say(`HEY! YOU'VE GOT ${Math.round(wallet.pixels)} PX TO BURN.`, 5000);
 }
