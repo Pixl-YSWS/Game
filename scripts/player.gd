@@ -89,35 +89,29 @@ func player_movement(delta: float)-> void:
 		move_and_slide()
 		return
 	var before := global_position
-	if Input.is_action_pressed("move_right"):
-		current_dir = "right"
-		play_anim(1)
-		velocity.x = speed
-		velocity.y = 0
-	elif Input.is_action_pressed("move_left"):
-		current_dir = "left"
-		play_anim(1)
-		velocity.x = -speed
-		velocity.y = 0
-	elif Input.is_action_pressed("move_bottom"):
-		current_dir = "bottom"
-		play_anim(1)
-		velocity.y = speed
-		velocity.x = 0
-	elif Input.is_action_pressed("move_top"):
-		current_dir = "top"
-		play_anim(1)
-		velocity.y = -speed
-		velocity.x = 0
-	else:
-		play_anim(0)
-		velocity.x = 0
-		velocity.y = 0
 	if Input.is_action_pressed("run") && !is_on_stairs:
 		speed = 200
+	elif !is_on_stairs:
+		speed = 150
+	var input := Vector2(
+		Input.get_action_strength("move_right") - Input.get_action_strength("move_left"),
+		Input.get_action_strength("move_bottom") - Input.get_action_strength("move_top")
+	)
+	if input != Vector2.ZERO:
+		input = input.normalized()
+		if input.x > 0.0:
+			current_dir = "right"
+		elif input.x < 0.0:
+			current_dir = "left"
+		elif input.y > 0.0:
+			current_dir = "bottom"
+		else:
+			current_dir = "top"
+		play_anim(1)
+		velocity = input * speed
 	else:
-		if !is_on_stairs:
-			speed = 150
+		play_anim(0)
+		velocity = Vector2.ZERO
 	move_and_slide()
 
 	var max_step: float = speed * delta * 4.0

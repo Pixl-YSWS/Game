@@ -20,6 +20,22 @@ var _unread := 0
 var _line_style: StyleBoxFlat
 var _closing := false
 var _censor_regex := RegEx.create_from_string("([jJ])[oO]([bB])")
+# Strip [img]…[/img] from user chat so nobody can force-load arbitrary URLs.
+var _img_regex := RegEx.create_from_string("\\[img\\b[^\\]]*\\][\\s\\S]*?\\[/img\\]")
+# Match any bbcode tag, for measuring the rendered text width.
+var _tag_regex := RegEx.create_from_string("\\[/?[a-zA-Z][^\\]]*\\]")
+
+# Escape brackets so names / system text can't inject bbcode.
+func _bb_escape(s: String) -> String:
+	return s.replace("[", "[lb]").replace("]", "[rb]")
+
+# Keep formatting bbcode in a message but drop images.
+func _sanitize_bb(s: String) -> String:
+	return _img_regex.sub(s, "", true)
+
+# Plain text (tags removed) for width measurement.
+func _strip_bb(s: String) -> String:
+	return _tag_regex.sub(s, "", true).replace("[lb]", "[").replace("[rb]", "]")
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -72,7 +88,7 @@ func is_typing() -> bool:
 	return _input.has_focus()
 
 func add_system(text: String) -> void:
-	_add_line(text, COLOR_ACCENT, true)
+	_add_line(_bb_escape(text), COLOR_ACCENT, true)
 
 func _open_input() -> void:
 	_unread = 0
@@ -124,32 +140,41 @@ func _censor(text: String) -> String:
 	return _censor_regex.sub(text, "$1*$2", true)
 
 func _on_chat(user_id: String, display_name: String, text: String) -> void:
-	_add_line("%s: %s" % [display_name, _censor(text)], COLOR_TEXT, user_id == NetworkManager.user_id)
+	_add_line("%s: %s" % [_bb_escape(display_name), _sanitize_bb(_censor(text))], COLOR_TEXT, user_id == NetworkManager.user_id)
 
 func _on_dm(from_name: String, to_name: String, text: String, outgoing: bool) -> void:
 	var prefix := "to %s" % to_name if outgoing else "from %s" % from_name
-	_add_line("[%s] %s" % [prefix, _censor(text)], COLOR_DM, outgoing)
+	_add_line("[lb]%s[rb] %s" % [_bb_escape(prefix), _sanitize_bb(_censor(text))], COLOR_DM, outgoing)
 
 func _add_line(display: String, color: Color, own: bool) -> void:
 	var panel := PanelContainer.new()
 	panel.add_theme_stylebox_override("panel", _line_style)
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
-	var label := Label.new()
-	label.text = display
+	var label := RichTextLabel.new()
+	label.bbcode_enabled = true
+	label.fit_content = true
+	label.scroll_active = false
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	label.add_theme_color_override("font_color", color)
+	label.add_theme_color_override("default_color", color)
 	label.add_theme_color_override("font_outline_color", Color.BLACK)
 	label.add_theme_constant_override("outline_size", 3)
-	label.add_theme_font_size_override("font_size", 15)
+	label.add_theme_font_size_override("normal_font_size", 15)
+	label.add_theme_font_size_override("bold_font_size", 15)
+	label.add_theme_font_size_override("italics_font_size", 15)
+	label.add_theme_font_size_override("bold_italics_font_size", 15)
 
 	var font := _lines_box.get_theme_default_font()
-	var text_w := font.get_string_size(display, HORIZONTAL_ALIGNMENT_LEFT, -1, 15).x
+	var text_w := font.get_string_size(_strip_bb(display), HORIZONTAL_ALIGNMENT_LEFT, -1, 15).x
 	if text_w > WRAP_WIDTH:
 		label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		label.custom_minimum_size = Vector2(WRAP_WIDTH, 0)
 		panel.size_flags_horizontal = Control.SIZE_FILL
 	else:
+		label.autowrap_mode = TextServer.AUTOWRAP_OFF
+		label.custom_minimum_size = Vector2(text_w + 8.0, 0)
 		panel.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	label.text = display
 
 	panel.add_child(label)
 	_lines_box.add_child(panel)
