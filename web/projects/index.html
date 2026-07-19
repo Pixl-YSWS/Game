@@ -24,7 +24,6 @@
   .bar { height: 12px; border: 3px solid var(--stroke); background: var(--panel-deep); overflow: hidden; }
   .bar > div { height: 100%; background: repeating-linear-gradient(90deg, var(--gold) 0 10px, var(--gold-soft) 10px 20px); }
   .section-h { font-size: 20px; color: var(--gold); text-shadow: 2px 2px 0 var(--stroke); margin: 26px 0 16px; letter-spacing: 1px; }
-  .proj-card { display: flex; flex-direction: column; gap: 10px; }
   .proj-thumb {
     height: 140px; border: 3px solid var(--stroke);
     background: repeating-conic-gradient(rgba(255,209,102,.05) 0% 25%, transparent 0% 50%) 0 0 / 22px 22px, var(--panel-deep);
@@ -32,13 +31,34 @@
   }
   .proj-thumb img { width: 100%; height: 100%; object-fit: cover; }
   .proj-name { font-size: 17px; color: var(--ink); }
-  .proj-meta { font-size: 12px; color: var(--faint); display: flex; gap: 10px; flex-wrap: wrap; }
+  .proj-meta { font-size: 13px; color: var(--faint); display: flex; gap: 14px; flex-wrap: wrap; }
+  /* full-width project rows */
+  .proj-rows { display: flex; flex-direction: column; gap: 14px; }
+  .proj-row { display: flex; gap: 20px; align-items: stretch; padding: 16px 18px; width: 100%; }
+  .proj-row-thumb {
+    width: 200px; flex-shrink: 0; align-self: stretch; min-height: 120px;
+    border: 3px solid var(--stroke);
+    background: repeating-conic-gradient(rgba(255,209,102,.05) 0% 25%, transparent 0% 50%) 0 0 / 22px 22px, var(--panel-deep);
+    display: flex; align-items: center; justify-content: center; font-size: 44px; overflow: hidden;
+  }
+  .proj-row-thumb img { width: 100%; height: 100%; object-fit: cover; }
+  .proj-row-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 9px; }
+  .proj-row-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .proj-row-head .proj-name { font-size: 22px; }
+  .proj-row-arrow { align-self: center; color: var(--faint); font-size: 30px; flex-shrink: 0; }
+  .proj-row:hover .proj-row-arrow { color: var(--gold); }
+  .proj-row .note-strip { margin-top: 2px; }
+  @media (max-width: 560px) {
+    .proj-row { flex-direction: column; gap: 12px; }
+    .proj-row-thumb { width: 100%; height: 160px; }
+    .proj-row-arrow { display: none; }
+  }
   .note-strip {
     font-size: 12px; line-height: 1.5; padding: 8px 10px 7px;
     border: 2px solid var(--stroke); background: rgba(160,44,44,.25); color: #ffc9c9;
   }
   .note-strip.teal { background: rgba(112,217,217,.12); color: var(--teal); }
-  .editor { max-width: 900px; }
+  .editor { width: 100%; }
   .back-btn { margin-bottom: 18px; }
   .form-grid { display: flex; flex-direction: column; gap: 16px; padding: 24px; }
   .form-row { display: flex; flex-direction: column; gap: 7px; }
@@ -223,22 +243,28 @@ function renderList() {
   }
   view.innerHTML = `
     <div class="section-h">MY PROJECTS · ${projects.length}</div>
-    <div class="grid">
+    <div class="proj-rows">
       ${projects.map((p) => {
         const [label, cls] = statusInfo(p);
         const secs = linkedSeconds(p);
         return `
-        <a class="card panel proj-card" href="#p=${p.id}">
-          <div class="proj-thumb">${p.image_url ? `<img src="${Pixl.esc(p.image_url)}" alt="" loading="lazy" onerror="this.remove()">` : "🛠️"}</div>
-          <div class="proj-name">${Pixl.esc(p.name)}</div>
-          <div><span class="chip ${cls}">${label}</span> <span class="chip">${LEVELS[(p.level || 1) - 1][0]}</span></div>
-          <div class="proj-meta">
-            ${secs ? `<span class="teal">${Pixl.hours(secs)} coded</span>` : `<span>no hackatime linked</span>`}
-            ${p.pixels_earned ? `<span class="earned">+${Math.round(p.pixels_earned)} px earned</span>` : ""}
-            <span>${Pixl.timeAgo(p.created_at)}</span>
+        <a class="card panel proj-row" href="#p=${p.id}">
+          <div class="proj-row-thumb">${p.image_url ? `<img src="${Pixl.esc(p.image_url)}" alt="" loading="lazy" onerror="this.remove()">` : "🛠️"}</div>
+          <div class="proj-row-body">
+            <div class="proj-row-head">
+              <span class="proj-name">${Pixl.esc(p.name)}</span>
+              <span class="chip ${cls}">${label}</span>
+              <span class="chip">${LEVELS[(p.level || 1) - 1][0]}</span>
+            </div>
+            <div class="proj-meta">
+              ${secs ? `<span class="teal">${Pixl.hours(secs)} coded</span>` : `<span>no hackatime linked</span>`}
+              ${p.pixels_earned ? `<span class="earned">+${Math.round(p.pixels_earned)} px earned</span>` : ""}
+              <span>${Pixl.timeAgo(p.created_at)}</span>
+            </div>
+            ${p.status === "needs_changes" && p.review_note ? `<div class="note-strip">📝 ${Pixl.esc(p.review_note)}</div>` : ""}
+            ${p.rejected_at && p.reject_reason ? `<div class="note-strip">❌ ${Pixl.esc(p.reject_reason)}</div>` : ""}
           </div>
-          ${p.status === "needs_changes" && p.review_note ? `<div class="note-strip">📝 ${Pixl.esc(p.review_note)}</div>` : ""}
-          ${p.rejected_at && p.reject_reason ? `<div class="note-strip">❌ ${Pixl.esc(p.reject_reason)}</div>` : ""}
+          <div class="proj-row-arrow">›</div>
         </a>`;
       }).join("")}
     </div>`;
