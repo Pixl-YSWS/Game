@@ -19,6 +19,8 @@
   --good: #7bdc8b;
   --bad: #ff6b6b;
   --stroke: #17100a;
+  --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", sans-serif;
+  --pixel: "Monocraft", "Courier New", monospace;
   --sky-a: #2c2f63;
   --sky-b: #171a38;
 }
@@ -32,7 +34,9 @@ html[data-phase="night"] { --sky-a: #2c2f63; --sky-b: #12142c; }
 html { scrollbar-color: var(--panel) var(--bg0); }
 
 body {
-  font-family: "Monocraft", "Courier New", monospace;
+  font-family: var(--sans);
+  font-size: 16px;
+  line-height: 1.55;
   background: var(--bg0);
   color: var(--ink);
   min-height: 100vh;
@@ -79,6 +83,11 @@ img { image-rendering: pixelated; }
 a { color: var(--gold); text-decoration: none; }
 
 button, input, select, textarea { font-family: inherit; color: inherit; }
+
+/* Pixel font is for headers/chrome only — everything else uses the readable
+   sans so body text, data and shop content stay legible. */
+.logo, .nav a, .page-title, .section-h, .trophy-head,
+.hero .page-title, h1, h2, h3 { font-family: var(--pixel); }
 
 /* ---------- topbar ---------- */
 
@@ -218,9 +227,9 @@ button, input, select, textarea { font-family: inherit; color: inherit; }
 
 .chip {
   display: inline-block;
-  font-size: 12px;
-  letter-spacing: 1px;
-  padding: 4px 8px 3px;
+  font-size: 13px;
+  letter-spacing: 0.5px;
+  padding: 5px 9px 4px;
   border: 2px solid var(--stroke);
   background: var(--panel-deep);
   color: var(--dim);
@@ -234,7 +243,7 @@ button, input, select, textarea { font-family: inherit; color: inherit; }
 
 .chip.green { color: var(--good); }
 
-input.field, select.field {
+input.field, select.field, textarea.field {
   background: var(--panel-deep);
   border: 3px solid var(--stroke);
   box-shadow: inset 0 0 0 2px rgba(255, 209, 102, 0.18);
@@ -245,9 +254,11 @@ input.field, select.field {
   min-width: 0;
 }
 
-input.field:focus, select.field:focus { box-shadow: inset 0 0 0 2px var(--gold); }
+textarea.field { font-family: var(--sans); font-size: 14px; line-height: 1.6; }
 
-input.field::placeholder { color: var(--faint); }
+input.field:focus, select.field:focus, textarea.field:focus { box-shadow: inset 0 0 0 2px var(--gold); }
+
+input.field::placeholder, textarea.field::placeholder { color: var(--faint); }
 
 .page-title {
   font-size: 42px;
