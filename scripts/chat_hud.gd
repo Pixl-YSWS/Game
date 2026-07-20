@@ -28,6 +28,7 @@ var _line_style: StyleBoxFlat
 var _bold_font: FontVariation
 var _italic_font: FontVariation
 var _bold_italic_font: FontVariation
+var _paste_cb
 var _closing := false
 var _censor_regex := RegEx.create_from_string("([jJ])[oO]([bB])")
 # Strip [img]…[/img] from user chat so nobody can force-load arbitrary URLs.
@@ -57,6 +58,14 @@ func _ready() -> void:
 	_input.focus_exited.connect(_on_focus_exited)
 	_build_suggestions()
 	_build_open_bg()
+
+	# Desktop pastes via the OS clipboard fine; the web export can't (browser
+	# clipboard is async + permission-gated), so bridge Ctrl/Cmd+V to the real
+	# browser clipboard and insert the result ourselves.
+	if OS.has_feature("web"):
+		_paste_cb = JavaScriptBridge.create_callback(_on_js_paste)
+		JavaScriptBridge.get_interface("window").pixlPaste = _paste_cb
+		_input.gui_input.connect(_on_input_gui)
 
 	var input_bg := StyleBoxFlat.new()
 	input_bg.bg_color = Color(0, 0, 0, 0.72)
@@ -243,6 +252,21 @@ func _pick_command(cmd: String) -> void:
 func _on_focus_exited() -> void:
 	if _input.visible:
 		_close_input()
+
+func _on_input_gui(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and event.keycode == KEY_V \
+			and (event.ctrl_pressed or event.meta_pressed):
+		_input.accept_event()
+		JavaScriptBridge.eval(
+			"navigator.clipboard.readText().then(function(t){ if(window.pixlPaste) window.pixlPaste(t); }).catch(function(){});",
+			true,
+		)
+
+func _on_js_paste(args: Array) -> void:
+	if args.is_empty() or not _input.visible:
+		return
+	var text := String(args[0]).replace("\r", "").replace("\n", " ")
+	_input.insert_text_at_caret(text)
 
 func _on_submit(text: String) -> void:
 	var t := text.strip_edges()
