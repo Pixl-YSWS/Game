@@ -98,6 +98,7 @@ const Pixl = (() => {
     ["explore", "EXPLORE"],
     ["quests", "QUESTS"],
     ["projects", "PROJECTS"],
+    ["report", "REPORT"],
   ];
 
   function mountTopbar(active) {

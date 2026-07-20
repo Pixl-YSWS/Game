@@ -59,6 +59,17 @@
     border: 2px solid var(--stroke); background: rgba(160,44,44,.25); color: #ffc9c9;
   }
   .note-strip.teal { background: rgba(112,217,217,.12); color: var(--teal); }
+  .tl-list { display: flex; flex-direction: column; margin-top: 6px; }
+  .tl-item { position: relative; padding: 0 0 16px 26px; }
+  .tl-item::before { content: ""; position: absolute; left: 8px; top: 6px; bottom: -2px; width: 2px; background: var(--stroke); }
+  .tl-item:last-child::before { display: none; }
+  .tl-dot { position: absolute; left: -2px; top: 0; font-size: 17px; line-height: 1; }
+  .tl-head { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+  .tl-title { font-family: var(--sans); font-weight: 700; font-size: 14.5px; color: var(--ink); }
+  .tl-time { font-family: var(--sans); font-size: 12px; color: var(--faint); }
+  .tl-hours { font-family: var(--sans); font-size: 13px; color: var(--teal); margin-top: 2px; }
+  .tl-cut { color: var(--bad); }
+  .tl-note { font-family: var(--sans); font-size: 13.5px; line-height: 1.6; margin-top: 6px; padding: 8px 11px; border: 2px solid var(--stroke); background: var(--panel-deep); color: var(--ink); white-space: pre-wrap; word-break: break-word; }
   .editor { width: 100%; }
   .back-btn { margin-bottom: 18px; }
   .form-grid { display: flex; flex-direction: column; gap: 16px; padding: 24px; }
@@ -503,6 +514,9 @@ async function renderProject(id) {
         </div>`}
       </div>
 
+      <div class="section-h">TIMELINE</div>
+      <div id="tl-list" class="tl-list"><div class="spin"></div></div>
+
       <div class="section-h">DEVLOG</div>
       <div class="composer panel">
         <textarea class="field" id="j-content" maxlength="5000" placeholder="What did you build today? Markdown supported — **bold**, # headings, - lists, links, code blocks. Paste an image to attach it."></textarea>
@@ -550,6 +564,7 @@ async function renderProject(id) {
   $("p-delete").addEventListener("click", () => deleteProject(p));
   $("j-content").addEventListener("input", updateJournalHint);
   $("j-hours").addEventListener("input", updateJournalHint);
+  loadTimeline(p.id);
   updateJournalHint();
   loadJournal(p.id);
 }
@@ -614,6 +629,51 @@ async function ship(p, isUpdate) {
   Pixl.toast("🚢 SHIPPED! It's in the review queue.");
   await loadProjects();
   renderProject(p.id);
+}
+
+const VERDICTS = {
+  approved: ["✅", "Approved"],
+  first_pass_approved: ["🔎", "Passed first review"],
+  needs_changes: ["📝", "Sent back for changes"],
+  rejected: ["❌", "Rejected"],
+};
+
+function tlItem(icon, title, at, extra, note) {
+  return `<div class="tl-item">
+    <span class="tl-dot">${icon}</span>
+    <div class="tl-content">
+      <div class="tl-head"><span class="tl-title">${title}</span><span class="tl-time">${Pixl.timeAgo(at)}</span></div>
+      ${extra || ""}${note || ""}
+    </div>
+  </div>`;
+}
+
+function tlRow(e) {
+  if (e.kind === "created") return tlItem("🌱", "Project created", e.at, "", "");
+  if (e.kind === "shipped") return tlItem("🚀", "Shipped for review", e.at, "", "");
+  const [icon, title] = VERDICTS[e.verdict] || ["📋", "Reviewed"];
+  let hours = "";
+  if (e.approvedHours != null) {
+    const claimed = Number(e.claimedHours || 0);
+    const appr = Number(e.approvedHours);
+    const cut = Math.round((claimed - appr) * 10) / 10;
+    hours = `<div class="tl-hours">Credited ${appr}h${claimed > appr ? ` of ${claimed}h claimed <span class="tl-cut">(−${cut}h)</span>` : ""}</div>`;
+  }
+  const note = e.note ? `<div class="tl-note">📝 ${Pixl.esc(e.note)}</div>` : "";
+  return tlItem(icon, title, e.at, hours, note);
+}
+
+async function loadTimeline(id) {
+  let events = [];
+  try {
+    const d = await Pixl.api(`/api/projects/${id}/timeline`);
+    events = d.events || [];
+  } catch {}
+  const list = $("tl-list");
+  if (!list) return;
+  list.innerHTML = events.length === 0
+    ? `<div class="faint" style="font-size:13px;padding:8px">No history yet — ship it to start the timeline.</div>`
+    : events.map(tlRow).join("");
 }
 
 async function loadJournal(id) {
