@@ -18,8 +18,11 @@ var _prev_pos: Vector2 = Vector2.INF
 var _base_frames: SpriteFrames
 
 const BUBBLE_FONT := preload("res://assets/fonts/Monocraft.ttf")
-var _bubble: Label
+const BUBBLE_MAX_WIDTH := 300.0
+var _bubble: RichTextLabel
 var _bubble_token: int = 0
+var _bubble_img_regex := RegEx.create_from_string("\\[img\\b[^\\]]*\\][\\s\\S]*?\\[/img\\]")
+var _bubble_tag_regex := RegEx.create_from_string("\\[/?[a-zA-Z][^\\]]*\\]")
 
 func _ready() -> void:
 	_base_frames = $AnimatedSprite2D.sprite_frames
@@ -201,28 +204,42 @@ func _bubble_zoom() -> float:
 
 func show_chat_bubble(text: String) -> void:
 	if _bubble == null:
-		_bubble = Label.new()
+		_bubble = RichTextLabel.new()
+		_bubble.bbcode_enabled = true
+		_bubble.scroll_active = false
+		_bubble.fit_content = true
 		_bubble.z_index = 22
 		_bubble.scale = Vector2.ONE / _bubble_zoom()
-		_bubble.add_theme_font_override("font", BUBBLE_FONT)
-		_bubble.add_theme_font_size_override("font_size", 24)
-		_bubble.add_theme_color_override("font_color", Color(1, 1, 1))
+		_bubble.add_theme_font_override("normal_font", BUBBLE_FONT)
+		_bubble.add_theme_font_override("bold_font", BUBBLE_FONT)
+		_bubble.add_theme_font_override("italics_font", BUBBLE_FONT)
+		_bubble.add_theme_font_size_override("normal_font_size", 24)
+		_bubble.add_theme_font_size_override("bold_font_size", 24)
+		_bubble.add_theme_font_size_override("italics_font_size", 24)
+		_bubble.add_theme_color_override("default_color", Color(1, 1, 1))
 		var bg := StyleBoxFlat.new()
 		bg.bg_color = Color(0.05, 0.04, 0.03, 0.88)
 		bg.content_margin_left = 10
 		bg.content_margin_right = 10
 		bg.content_margin_top = 6
 		bg.content_margin_bottom = 6
-		bg.corner_radius_top_left = 8
-		bg.corner_radius_top_right = 8
-		bg.corner_radius_bottom_left = 8
-		bg.corner_radius_bottom_right = 8
+		bg.set_corner_radius_all(8)
 		_bubble.add_theme_stylebox_override("normal", bg)
 		add_child(_bubble)
-	_bubble.text = text
+	var msg := _bubble_img_regex.sub(text, "", true)
+	var plain := _bubble_tag_regex.sub(msg, "", true).replace("[lb]", "[").replace("[rb]", "]")
+	var natural := BUBBLE_FONT.get_string_size(plain, HORIZONTAL_ALIGNMENT_LEFT, -1, 24).x + 24.0
+	if natural > BUBBLE_MAX_WIDTH:
+		_bubble.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_bubble.custom_minimum_size.x = BUBBLE_MAX_WIDTH
+	else:
+		_bubble.autowrap_mode = TextServer.AUTOWRAP_OFF
+		_bubble.custom_minimum_size.x = 0.0
+	_bubble.text = msg
 	_bubble.visible = true
 	_bubble_token += 1
 	var token := _bubble_token
+	await get_tree().process_frame
 	if token == _bubble_token and is_instance_valid(_bubble):
 		var s := Vector2.ONE / _bubble_zoom()
 		var ms := _bubble.get_minimum_size()
