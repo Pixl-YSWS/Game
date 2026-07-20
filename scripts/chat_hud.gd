@@ -25,6 +25,9 @@ var _suggest_list: VBoxContainer
 var _open_bg: ColorRect
 var _unread := 0
 var _line_style: StyleBoxFlat
+var _bold_font: FontVariation
+var _italic_font: FontVariation
+var _bold_italic_font: FontVariation
 var _closing := false
 var _censor_regex := RegEx.create_from_string("([jJ])[oO]([bB])")
 # Strip [img]…[/img] from user chat so nobody can force-load arbitrary URLs.
@@ -80,6 +83,21 @@ func _ready() -> void:
 	_line_style.content_margin_top = 1.0
 	_line_style.content_margin_bottom = 2.0
 	_line_style.anti_aliasing = false
+
+	# The pixel font has no bold/italic files, so [b]/[i] have nothing to switch
+	# to. Synthesize them: fake-bold via embolden, italic via a shear transform.
+	var base_font := _lines_box.get_theme_default_font()
+	var italic_shear := Transform2D(Vector2(1.0, 0.0), Vector2(0.22, 1.0), Vector2.ZERO)
+	_bold_font = FontVariation.new()
+	_bold_font.base_font = base_font
+	_bold_font.variation_embolden = 1.0
+	_italic_font = FontVariation.new()
+	_italic_font.base_font = base_font
+	_italic_font.variation_transform = italic_shear
+	_bold_italic_font = FontVariation.new()
+	_bold_italic_font.base_font = base_font
+	_bold_italic_font.variation_embolden = 1.0
+	_bold_italic_font.variation_transform = italic_shear
 
 	_hint.add_theme_color_override("font_outline_color", Color.BLACK)
 	_hint.add_theme_constant_override("outline_size", 3)
@@ -262,6 +280,9 @@ func _add_line(display: String, color: Color, own: bool) -> void:
 	label.add_theme_color_override("default_color", color)
 	label.add_theme_color_override("font_outline_color", Color.BLACK)
 	label.add_theme_constant_override("outline_size", 3)
+	label.add_theme_font_override("bold_font", _bold_font)
+	label.add_theme_font_override("italics_font", _italic_font)
+	label.add_theme_font_override("bold_italics_font", _bold_italic_font)
 	label.add_theme_font_size_override("normal_font_size", LINE_FONT_SIZE)
 	label.add_theme_font_size_override("bold_font_size", LINE_FONT_SIZE)
 	label.add_theme_font_size_override("italics_font_size", LINE_FONT_SIZE)

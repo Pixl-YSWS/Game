@@ -210,9 +210,21 @@ func show_chat_bubble(text: String) -> void:
 		_bubble.fit_content = true
 		_bubble.z_index = 22
 		_bubble.scale = Vector2.ONE / _bubble_zoom()
+		var italic_shear := Transform2D(Vector2(1.0, 0.0), Vector2(0.22, 1.0), Vector2.ZERO)
+		var bold_font := FontVariation.new()
+		bold_font.base_font = BUBBLE_FONT
+		bold_font.variation_embolden = 1.0
+		var italic_font := FontVariation.new()
+		italic_font.base_font = BUBBLE_FONT
+		italic_font.variation_transform = italic_shear
+		var bold_italic_font := FontVariation.new()
+		bold_italic_font.base_font = BUBBLE_FONT
+		bold_italic_font.variation_embolden = 1.0
+		bold_italic_font.variation_transform = italic_shear
 		_bubble.add_theme_font_override("normal_font", BUBBLE_FONT)
-		_bubble.add_theme_font_override("bold_font", BUBBLE_FONT)
-		_bubble.add_theme_font_override("italics_font", BUBBLE_FONT)
+		_bubble.add_theme_font_override("bold_font", bold_font)
+		_bubble.add_theme_font_override("italics_font", italic_font)
+		_bubble.add_theme_font_override("bold_italics_font", bold_italic_font)
 		_bubble.add_theme_font_size_override("normal_font_size", 24)
 		_bubble.add_theme_font_size_override("bold_font_size", 24)
 		_bubble.add_theme_font_size_override("italics_font_size", 24)
