@@ -1,10 +1,10 @@
 extends CanvasLayer
 
 const GAMEPLAY_SCENES := ["village", "open_world", "house_interior", "shop_interior"]
-const MAX_LINES := 9
+const MAX_LINES := 16
 const LINE_TTL := 11.0
 const FADE_TIME := 0.6
-const WRAP_WIDTH := 460.0
+const WRAP_WIDTH := 520.0
 
 const COLOR_TEXT := Color(0.956863, 0.890196, 0.760784)
 const COLOR_DIM := Color(0.788235, 0.694118, 0.54902)
@@ -21,6 +21,7 @@ const COMMANDS := [
 ]
 var _suggest: PanelContainer
 var _suggest_list: VBoxContainer
+var _open_bg: ColorRect
 var _unread := 0
 var _line_style: StyleBoxFlat
 var _closing := false
@@ -51,6 +52,21 @@ func _ready() -> void:
 	_input.text_changed.connect(_on_text_changed)
 	_input.focus_exited.connect(_on_focus_exited)
 	_build_suggestions()
+	_build_open_bg()
+
+	var input_bg := StyleBoxFlat.new()
+	input_bg.bg_color = Color(0, 0, 0, 0.72)
+	input_bg.set_border_width_all(2)
+	input_bg.border_color = Color(1, 1, 1, 0.18)
+	input_bg.content_margin_left = 8.0
+	input_bg.content_margin_right = 8.0
+	input_bg.content_margin_top = 5.0
+	input_bg.content_margin_bottom = 5.0
+	input_bg.anti_aliasing = false
+	_input.add_theme_stylebox_override("normal", input_bg)
+	_input.add_theme_stylebox_override("focus", input_bg)
+	_input.offset_right = 528.0
+	_input.add_theme_font_size_override("font_size", 16)
 
 	_line_style = StyleBoxFlat.new()
 	_line_style.bg_color = Color(0, 0, 0, 0.6)
@@ -101,6 +117,8 @@ func _open_input() -> void:
 	_unread = 0
 	_update_hint()
 	_hint.visible = false
+	if _open_bg:
+		_open_bg.visible = true
 	_input.clear()
 	_input.visible = true
 	_input.grab_focus()
@@ -127,6 +145,24 @@ func _close_input() -> void:
 	_closing = false
 	if _suggest:
 		_suggest.visible = false
+	if _open_bg:
+		_open_bg.visible = false
+
+func _build_open_bg() -> void:
+	_open_bg = ColorRect.new()
+	_open_bg.color = Color(0, 0, 0, 0.5)
+	_open_bg.visible = false
+	_open_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var root := _input.get_parent()
+	root.add_child(_open_bg)
+	root.move_child(_open_bg, 0)
+	_open_bg.anchor_top = 1.0
+	_open_bg.anchor_bottom = 1.0
+	_open_bg.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	_open_bg.offset_left = 8.0
+	_open_bg.offset_right = 532.0
+	_open_bg.offset_top = -360.0
+	_open_bg.offset_bottom = -50.0
 
 func _build_suggestions() -> void:
 	_suggest = PanelContainer.new()
