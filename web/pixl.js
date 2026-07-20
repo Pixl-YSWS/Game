@@ -89,7 +89,11 @@ const Pixl = (() => {
       body: file,
     });
     const json = await res.json().catch(() => null);
-    if (!json || !json.ok || !json.url) throw new Error((json && json.error) || "upload_failed");
+    if (!json || !json.ok || !json.url) {
+      if (json && json.error === "image_rejected")
+        throw new Error("That image was rejected: " + (json.reason || "inappropriate for Pixl") + ".");
+      throw new Error((json && json.error) || "upload_failed");
+    }
     return json.url;
   }
 

@@ -9,6 +9,7 @@ var _portrait: TextureRect
 var _name_label: Label
 var _info_label: Label
 var _action_button: Button
+var _block_button: Button
 var _open := false
 var _user_id := ""
 var _friend_status := "none"
@@ -46,6 +47,7 @@ func open(user_id: String) -> void:
 	_name_label.text = "Loading"
 	_info_label.text = ""
 	_action_button.visible = false
+	_block_button.visible = false
 	_api(HTTPClient.METHOD_GET, "/api/players/profile", {"userId": user_id}, _on_profile)
 
 func close() -> void:
@@ -143,6 +145,14 @@ func _build_ui() -> void:
 	_action_button.pressed.connect(_on_action)
 	body.add_child(_action_button)
 
+	_block_button = Button.new()
+	_block_button.theme_type_variation = &"GreyButton"
+	_block_button.visible = false
+	_block_button.pressed.connect(_on_block)
+	body.add_child(_block_button)
+	if not NetworkManager.blocks_updated.is_connected(_refresh_block_button):
+		NetworkManager.blocks_updated.connect(_refresh_block_button)
+
 	var close_button := Button.new()
 	close_button.theme_type_variation = &"GreyButton"
 	close_button.text = "Close"
@@ -179,6 +189,19 @@ func _on_profile(code: int, json: Variant) -> void:
 			_action_button.disabled = false
 		_:
 			_action_button.visible = false
+	_refresh_block_button()
+
+func _refresh_block_button(_ids: Array = []) -> void:
+	if not _open or _user_id == "":
+		return
+	_block_button.visible = true
+	_block_button.text = "Unblock" if NetworkManager.is_blocked(_user_id) else "Block"
+
+func _on_block() -> void:
+	if NetworkManager.is_blocked(_user_id):
+		NetworkManager.send_unblock(_user_id)
+	else:
+		NetworkManager.send_block(_user_id)
 
 func _on_action() -> void:
 	var path := ""

@@ -11,6 +11,7 @@ signal chat_message(user_id: String, display_name: String, text: String)
 signal dm_received(from_name: String, to_name: String, text: String, outgoing: bool)
 signal dm_error(reason: String)
 signal emote_received(user_id: String, key: String)
+signal blocks_updated(ids: Array)
 signal npc_init(scene: String, npcs: Array)
 signal lobby_list_received(lobbies: Array)
 signal lobby_joined(lobby: Dictionary)
@@ -30,6 +31,7 @@ const SERVER_WS_URL = PROD_WS_URL if USE_PROD else DEV_WS_URL
 var session_token: String = ""
 var user_id: String = ""
 var display_name: String = ""
+var _blocked: Dictionary = {}
 var is_new_account: bool = false
 var ban_message: String = ""
 var local_skin: String = "cvc:1"
@@ -281,6 +283,8 @@ func _handle_message(raw: String) -> void:
 			emit_signal("dm_error", String(json.get("reason", "")))
 		"emote":
 			emit_signal("emote_received", json["userId"], String(json.get("key", "")))
+		"blocks":
+			_set_blocks(json.get("ids", []))
 		"npc_init":
 			var npcs: Array = []
 			for n in json.get("npcs", []):
@@ -365,6 +369,25 @@ func send_dm(to_name: String, text: String) -> void:
 	if not _is_socket_open():
 		return
 	_socket.send_text(JSON.stringify({"type": "dm", "to": to_name, "text": text}))
+
+func send_block(target_id: String) -> void:
+	if not _is_socket_open() or target_id == "" or target_id == user_id:
+		return
+	_socket.send_text(JSON.stringify({"type": "block", "userId": target_id}))
+
+func send_unblock(target_id: String) -> void:
+	if not _is_socket_open() or target_id == "":
+		return
+	_socket.send_text(JSON.stringify({"type": "unblock", "userId": target_id}))
+
+func is_blocked(target_id: String) -> bool:
+	return _blocked.has(target_id)
+
+func _set_blocks(ids: Array) -> void:
+	_blocked.clear()
+	for id in ids:
+		_blocked[String(id)] = true
+	emit_signal("blocks_updated", ids)
 
 func send_join_friend(friend_user_id: String) -> void:
 	if not _is_socket_open():
