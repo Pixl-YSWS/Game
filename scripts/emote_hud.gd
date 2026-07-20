@@ -23,8 +23,6 @@ const QUICK := ["heart", "laugh", "happy", "sad", "star", "music"]
 
 var _root: Control
 var _quick: Control
-var _mic_btn: TextureButton
-var _mic_circle: StyleBoxFlat
 var _open := false
 
 func _ready() -> void:
@@ -126,29 +124,6 @@ func _build_quick_bar() -> void:
 	bar.offset_bottom = -12
 	_quick.add_child(bar)
 
-	_mic_circle = StyleBoxFlat.new()
-	_mic_circle.bg_color = Color(0.168627, 0.113725, 0.070588)
-	_mic_circle.set_border_width_all(3)
-	_mic_circle.border_color = Color(0.090196, 0.062745, 0.039216)
-	_mic_circle.set_corner_radius_all(24)
-
-	var mic_panel := PanelContainer.new()
-	mic_panel.add_theme_stylebox_override("panel", _mic_circle)
-	mic_panel.custom_minimum_size = Vector2(48, 48)
-	mic_panel.size_flags_vertical = Control.SIZE_SHRINK_END
-	bar.add_child(mic_panel)
-
-	_mic_btn = TextureButton.new()
-	_mic_btn.ignore_texture_size = true
-	_mic_btn.stretch_mode = TextureButton.STRETCH_KEEP_ASPECT_CENTERED
-	_mic_btn.custom_minimum_size = Vector2(30, 30)
-	_mic_btn.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	_mic_btn.tooltip_text = "Toggle voice (hold V to talk)"
-	_mic_btn.pressed.connect(_toggle_mic)
-	_hoverify(_mic_btn, 0.85)
-	mic_panel.add_child(_mic_btn)
-	_update_mic()
-
 	var panel := PanelContainer.new()
 	panel.theme_type_variation = &"HudPanel"
 	panel.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
@@ -182,42 +157,6 @@ func _build_quick_bar() -> void:
 		_root.visible = true)
 	_hoverify(more, 0.85)
 	row.add_child(more)
-
-func _toggle_mic() -> void:
-	Settings.set_voice_enabled(not Settings.voice_enabled)
-	_update_mic()
-
-func _update_mic() -> void:
-	if _mic_btn:
-		_mic_btn.texture_normal = _mic_texture(not Settings.voice_enabled)
-
-func _mic_texture(muted: bool) -> ImageTexture:
-	var img := Image.create(15, 15, false, Image.FORMAT_RGBA8)
-	img.fill(Color(0, 0, 0, 0))
-	var col := Color(0.55, 0.55, 0.55) if muted else Color(0.96, 0.96, 0.96)
-	for y in range(2, 9):
-		for x in range(5, 10):
-			img.set_pixelv(Vector2i(x, y), col)
-	img.set_pixelv(Vector2i(5, 2), Color(0, 0, 0, 0))
-	img.set_pixelv(Vector2i(9, 2), Color(0, 0, 0, 0))
-	img.set_pixelv(Vector2i(5, 8), Color(0, 0, 0, 0))
-	img.set_pixelv(Vector2i(9, 8), Color(0, 0, 0, 0))
-	for y in range(7, 10):
-		img.set_pixelv(Vector2i(3, y), col)
-		img.set_pixelv(Vector2i(11, y), col)
-	for x in range(4, 11):
-		img.set_pixelv(Vector2i(x, 10), col)
-	img.set_pixelv(Vector2i(7, 11), col)
-	img.set_pixelv(Vector2i(7, 12), col)
-	for x in range(4, 11):
-		img.set_pixelv(Vector2i(x, 13), col)
-	if muted:
-		var red := Color(0.92, 0.23, 0.23)
-		for i in range(15):
-			img.set_pixelv(Vector2i(i, i), red)
-			if i + 1 < 15:
-				img.set_pixelv(Vector2i(i + 1, i), red)
-	return ImageTexture.create_from_image(img)
 
 func _pick(key: String) -> void:
 	_close()

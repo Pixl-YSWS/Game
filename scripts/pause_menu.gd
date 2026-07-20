@@ -158,12 +158,6 @@ func _build_settings_ui() -> void:
 	vol.value_changed.connect(Settings.set_music_volume)
 	body.add_child(vol)
 
-	var voice_check := CheckButton.new()
-	voice_check.text = "Voice chat"
-	voice_check.button_pressed = Settings.voice_enabled
-	voice_check.toggled.connect(Settings.set_voice_enabled)
-	body.add_child(voice_check)
-
 	var font_label := Label.new()
 	font_label.text = "UI font size  (%d%%)" % int(round(Settings.font_scale * 100))
 	font_label.theme_type_variation = &"InfoText"

@@ -11,7 +11,6 @@ signal chat_message(user_id: String, display_name: String, text: String)
 signal dm_received(from_name: String, to_name: String, text: String, outgoing: bool)
 signal dm_error(reason: String)
 signal emote_received(user_id: String, key: String)
-signal voice_received(user_id: String, payload: PackedByteArray)
 signal npc_init(scene: String, npcs: Array)
 signal lobby_list_received(lobbies: Array)
 signal lobby_joined(lobby: Dictionary)
@@ -112,8 +111,6 @@ func _process(_delta: float) -> void:
 			var pkt := _socket.get_packet()
 			if _socket.was_string_packet():
 				_handle_message(pkt.get_string_from_utf8())
-			else:
-				_handle_voice_packet(pkt)
 	elif state == WebSocketPeer.STATE_CLOSED:
 		var was_connected := _connected
 		_connected = false
@@ -311,24 +308,10 @@ func send_emote(key: String) -> void:
 		return
 	_socket.send_text(JSON.stringify({"type": "emote", "key": key}))
 
-func send_voice(payload: PackedByteArray) -> void:
-	if not _is_socket_open():
-		return
-	_socket.send(payload, WebSocketPeer.WRITE_MODE_BINARY)
-
 func send_save_npcs(scene_name: String, npcs: Array) -> void:
 	if not _is_socket_open() or npcs.is_empty():
 		return
 	_socket.send_text(JSON.stringify({"type": "save_npcs", "scene": scene_name, "npcs": npcs}))
-
-func _handle_voice_packet(pkt: PackedByteArray) -> void:
-	if pkt.size() < 2:
-		return
-	var ulen := int(pkt.decode_u16(0))
-	if pkt.size() < 2 + ulen:
-		return
-	var uid := pkt.slice(2, 2 + ulen).get_string_from_utf8()
-	emit_signal("voice_received", uid, pkt.slice(2 + ulen))
 
 func send_move(pos: Vector2, direction: String) -> void:
 	if not _is_socket_open():

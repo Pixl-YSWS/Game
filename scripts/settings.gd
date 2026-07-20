@@ -7,7 +7,6 @@ const PATH := "user://settings.json"
 
 var music_enabled := true
 var music_volume := 0.6
-var voice_enabled := true
 var font_scale := 1.0
 var zoom_level := 1.0
 
@@ -26,7 +25,6 @@ func _load() -> void:
 		return
 	music_enabled = bool(data.get("music_enabled", music_enabled))
 	music_volume = float(data.get("music_volume", music_volume))
-	voice_enabled = bool(data.get("voice_enabled", voice_enabled))
 	font_scale = clampf(float(data.get("font_scale", font_scale)), 1.0, 1.6)
 	zoom_level = clampf(float(data.get("zoom_level", zoom_level)), 0.6, 1.4)
 
@@ -37,7 +35,6 @@ func save() -> void:
 	f.store_string(JSON.stringify({
 		"music_enabled": music_enabled,
 		"music_volume": music_volume,
-		"voice_enabled": voice_enabled,
 		"font_scale": font_scale,
 		"zoom_level": zoom_level,
 	}))
@@ -52,10 +49,6 @@ func set_music_volume(v: float) -> void:
 	music_volume = clampf(v, 0.0, 1.0)
 	save()
 	Music.apply_settings()
-
-func set_voice_enabled(on: bool) -> void:
-	voice_enabled = on
-	save()
 
 func set_font_scale(v: float) -> void:
 	font_scale = clampf(v, 1.0, 1.6)

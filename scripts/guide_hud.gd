@@ -227,7 +227,6 @@ func _build_pages() -> void:
 	_pages.append(_page_body([
 		_row("Enter", "Chat with everyone in your world"),
 		_row("T  /  1-5", "Open reactions, or fire a quick one"),
-		_row("V", "Hold to talk with your voice"),
 		_row("Tab", "See who's online"),
 		_spacer(),
 		_hint("Lobbies from the main menu get you a private world with its own code.")
