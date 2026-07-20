@@ -51,6 +51,7 @@
 [ext_resource type="Texture2D" uid="uid://cuscxsk2agqh" path="res://assets/cozy-towns/Housing/Exterior/Shop_software.png" id="42_80neg"]
 [ext_resource type="Script" uid="uid://c6o1bgj0ub2mo" path="res://scripts/door_trigger.gd" id="43_bj576"]
 [ext_resource type="Texture2D" uid="uid://chv3nraghds8d" path="res://assets/oak-cabin-v2.png" id="43_tqi37"]
+[ext_resource type="Texture2D" uid="uid://dvnxaia2teipd" path="res://assets/jail-office.png" id="44_g54le"]
 [ext_resource type="PackedScene" uid="uid://bnpcpixl00001" path="res://scenes/npc.tscn" id="44_npcs"]
 [ext_resource type="Texture2D" uid="uid://d2f8a38bbbb51" path="res://assets/sheriff-cabin.png" id="47_7s717"]
 
@@ -2343,6 +2344,9 @@ sources/26 = SubResource("TileSetAtlasSource_w45ei")
 sources/27 = SubResource("TileSetAtlasSource_6jou3")
 sources/28 = SubResource("TileSetAtlasSource_c00nj")
 
+[sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_smide"]
+texture = ExtResource("44_g54le")
+
 [sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_audcb"]
 texture = ExtResource("43_tqi37")
 0:0/size_in_atlas = Vector2i(6, 6)
@@ -2643,6 +2647,13 @@ texture = ExtResource("47_7s717")
 0:0/0/y_sort_origin = 20
 0:0/0/physics_layer_0/polygon_0/points = PackedVector2Array(-45.72238, -6.7736893, 43.464493, -5.080265, 46.851334, 44.593437, 26.530273, 38.948692, 25.965797, 29.352638, 20.885536, 23.707901, 3.9513168, 23.707901, 0, 41.20659, -6.2092094, 45.157906, -12.982899, 42.33554, -36.126328, 42.33554, -42.33554, 44.593437, -46.286858, 39.51317)
 
+[sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_j2ux3"]
+texture = ExtResource("47_7s717")
+0:0/size_in_atlas = Vector2i(6, 6)
+0:0/0 = 0
+0:0/0/y_sort_origin = 18
+0:0/0/physics_layer_0/polygon_0/points = PackedVector2Array(-39.325405, -12.337383, 0.38554382, -18.12053, 38.168777, -14.265097, 40.288357, 2.6978812, 38.376656, 43.351406, 36.65072, 43.655983, 36.752247, 47.209377, 32.285122, 47.513954, 31.980545, 44.975815, 18.071547, 44.468185, 17.766972, 48.224632, 12.99527, 48.123108, 12.8937435, 45.07734, 8.633219, 31.29542, -8.992937, 31.655136, -13.096796, 44.46819, -12.589168, 47.818535, -18.071548, 48.224632, -18.376123, 45.58497, -32.5897, 44.36666, -32.488174, 47.81853, -38.07208, 48.021584, -38.446354, 41.60633, -41.90708, 1.7985878)
+
 [sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_l2l0j"]
 texture = ExtResource("40_ow7pp")
 0:0/size_in_atlas = Vector2i(6, 6)
@@ -2726,6 +2737,8 @@ sources/11 = SubResource("TileSetAtlasSource_dem61")
 sources/12 = SubResource("TileSetAtlasSource_0kgfl")
 sources/1 = SubResource("TileSetAtlasSource_audcb")
 sources/2 = SubResource("TileSetAtlasSource_vqnrw")
+sources/0 = SubResource("TileSetAtlasSource_smide")
+sources/3 = SubResource("TileSetAtlasSource_j2ux3")
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_xa5xf"]
 size = Vector2(21, 26)
@@ -2917,8 +2930,8 @@ tile_set = SubResource("TileSet_1knqj")
 [node name="Houses2" type="TileMapLayer" parent="." unique_id=936163881]
 z_index = 10
 y_sort_enabled = true
-position = Vector2(10, 3)
-tile_map_data = PackedByteArray("AADR//D/AgAAAAAAAAA=")
+position = Vector2(10, 4)
+tile_map_data = PackedByteArray("AADR/+//AwAAAAAAAAA=")
 tile_set = SubResource("TileSet_1knqj")
 
 [node name="DoorTrigger" type="Area2D" parent="." unique_id=1872262273]
