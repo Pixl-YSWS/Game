@@ -16,10 +16,11 @@ const COLOR_DM := Color(0.85, 0.72, 1)
 @onready var _input: LineEdit = %Input
 
 var _lines: Array[Dictionary] = []
-const RECENT_MAX := 20
-const REPORT_COOLDOWN := 8.0
-var _recent: Array[Dictionary] = []
-var _last_report := -1000.0
+const COMMANDS := [
+	["/w", "/w <name> <message>", "whisper someone privately"],
+]
+var _suggest: PanelContainer
+var _suggest_list: VBoxContainer
 var _unread := 0
 var _line_style: StyleBoxFlat
 var _closing := false
@@ -46,9 +47,10 @@ func _ready() -> void:
 	NetworkManager.chat_message.connect(_on_chat)
 	NetworkManager.dm_received.connect(_on_dm)
 	NetworkManager.dm_error.connect(add_system)
-	NetworkManager.report_result.connect(_on_report_result)
 	_input.text_submitted.connect(_on_submit)
+	_input.text_changed.connect(_on_text_changed)
 	_input.focus_exited.connect(_on_focus_exited)
+	_build_suggestions()
 
 	_line_style = StyleBoxFlat.new()
 	_line_style.bg_color = Color(0, 0, 0, 0.6)
@@ -123,6 +125,62 @@ func _close_input() -> void:
 		line["expire"] = now + LINE_TTL
 		line["panel"].modulate.a = 1.0
 	_closing = false
+	if _suggest:
+		_suggest.visible = false
+
+func _build_suggestions() -> void:
+	_suggest = PanelContainer.new()
+	_suggest.visible = false
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.05, 0.04, 0.03, 0.92)
+	sb.set_border_width_all(1)
+	sb.border_color = Color(1, 1, 1, 0.12)
+	sb.set_corner_radius_all(6)
+	sb.content_margin_left = 4
+	sb.content_margin_right = 4
+	sb.content_margin_top = 4
+	sb.content_margin_bottom = 4
+	_suggest.add_theme_stylebox_override("panel", sb)
+	_suggest_list = VBoxContainer.new()
+	_suggest_list.add_theme_constant_override("separation", 2)
+	_suggest.add_child(_suggest_list)
+	var root := _input.get_parent()
+	root.add_child(_suggest)
+	_suggest.anchor_top = 1.0
+	_suggest.anchor_bottom = 1.0
+	_suggest.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	_suggest.offset_left = 12.0
+	_suggest.offset_right = 452.0
+	_suggest.offset_bottom = -56.0
+
+func _on_text_changed(new_text: String) -> void:
+	var t := new_text.strip_edges()
+	if not t.begins_with("/") or t.find(" ") != -1:
+		_suggest.visible = false
+		return
+	var prefix := t.to_lower()
+	for child in _suggest_list.get_children():
+		child.queue_free()
+	var any := false
+	for c in COMMANDS:
+		if prefix == "/" or String(c[0]).to_lower().begins_with(prefix):
+			var b := Button.new()
+			b.text = "%s   %s" % [c[1], c[2]]
+			b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+			b.flat = true
+			b.focus_mode = Control.FOCUS_NONE
+			b.add_theme_font_size_override("font_size", 13)
+			b.add_theme_color_override("font_color", COLOR_DIM)
+			b.pressed.connect(_pick_command.bind(String(c[0])))
+			_suggest_list.add_child(b)
+			any = true
+	_suggest.visible = any
+
+func _pick_command(cmd: String) -> void:
+	_input.text = cmd + " "
+	_input.caret_column = _input.text.length()
+	_input.grab_focus()
+	_suggest.visible = false
 
 func _on_focus_exited() -> void:
 	if _input.visible:
@@ -137,51 +195,14 @@ func _on_submit(text: String) -> void:
 			add_system("Usage: /w <name> <message>")
 		else:
 			NetworkManager.send_dm(rest.substr(0, space), rest.substr(space + 1).strip_edges())
-	elif t.begins_with("/report "):
-		_do_report(t.substr(8).strip_edges())
 	elif t != "":
 		NetworkManager.send_chat(t)
 	_close_input()
-
-func _do_report(arg: String) -> void:
-	var space := arg.find(" ")
-	var target_name := (arg if space < 0 else arg.substr(0, space)).strip_edges()
-	var reason := "" if space < 0 else arg.substr(space + 1).strip_edges()
-	if target_name == "":
-		add_system("Usage: /report <name> [reason]")
-		return
-	var now := Time.get_ticks_msec() / 1000.0
-	var wait := REPORT_COOLDOWN - (now - _last_report)
-	if wait > 0.0:
-		add_system("Hold on — you can report again in %ds." % ceili(wait))
-		return
-	var target_id := ""
-	var lname := target_name.to_lower()
-	for i in range(_recent.size() - 1, -1, -1):
-		var e: Dictionary = _recent[i]
-		if e["id"] != NetworkManager.user_id and String(e["name"]).to_lower() == lname:
-			target_id = e["id"]
-			break
-	if target_id == "":
-		add_system("No recent messages from \"%s\" here to report." % target_name)
-		return
-	var context: Array = []
-	for e in _recent:
-		context.append({ "name": e["name"], "text": e["text"] })
-	_last_report = now
-	NetworkManager.send_report(target_id, reason, context)
-	add_system("Reporting %s…" % target_name)
-
-func _on_report_result(_ok: bool, text: String) -> void:
-	add_system(text)
 
 func _censor(text: String) -> String:
 	return _censor_regex.sub(text, "$1*$2", true)
 
 func _on_chat(user_id: String, display_name: String, text: String) -> void:
-	_recent.append({ "id": user_id, "name": display_name, "text": text })
-	if _recent.size() > RECENT_MAX:
-		_recent.pop_front()
 	_add_line("%s: %s" % [_bb_escape(display_name), _sanitize_bb(_censor(text))], COLOR_TEXT, user_id == NetworkManager.user_id)
 
 func _on_dm(from_name: String, to_name: String, text: String, outgoing: bool) -> void:
