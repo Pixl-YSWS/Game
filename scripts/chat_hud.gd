@@ -1,10 +1,11 @@
 extends CanvasLayer
 
 const GAMEPLAY_SCENES := ["village", "open_world", "house_interior", "shop_interior"]
-const MAX_LINES := 16
+const MAX_LINES := 14
 const LINE_TTL := 11.0
 const FADE_TIME := 0.6
-const WRAP_WIDTH := 520.0
+const WRAP_WIDTH := 620.0
+const LINE_FONT_SIZE := 22
 
 const COLOR_TEXT := Color(0.956863, 0.890196, 0.760784)
 const COLOR_DIM := Color(0.788235, 0.694118, 0.54902)
@@ -65,8 +66,10 @@ func _ready() -> void:
 	input_bg.anti_aliasing = false
 	_input.add_theme_stylebox_override("normal", input_bg)
 	_input.add_theme_stylebox_override("focus", input_bg)
-	_input.offset_right = 528.0
-	_input.add_theme_font_size_override("font_size", 16)
+	_input.offset_right = 636.0
+	_input.add_theme_font_size_override("font_size", 20)
+	_lines_box.offset_right = 636.0
+	_lines_box.add_theme_constant_override("separation", 3)
 
 	_line_style = StyleBoxFlat.new()
 	_line_style.bg_color = Color(0, 0, 0, 0.6)
@@ -80,6 +83,7 @@ func _ready() -> void:
 
 	_hint.add_theme_color_override("font_outline_color", Color.BLACK)
 	_hint.add_theme_constant_override("outline_size", 3)
+	_hint.add_theme_font_size_override("font_size", 18)
 	_update_hint()
 
 func _process(_delta: float) -> void:
@@ -160,8 +164,8 @@ func _build_open_bg() -> void:
 	_open_bg.anchor_bottom = 1.0
 	_open_bg.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	_open_bg.offset_left = 8.0
-	_open_bg.offset_right = 532.0
-	_open_bg.offset_top = -360.0
+	_open_bg.offset_right = 640.0
+	_open_bg.offset_top = -480.0
 	_open_bg.offset_bottom = -50.0
 
 func _build_suggestions() -> void:
@@ -258,13 +262,13 @@ func _add_line(display: String, color: Color, own: bool) -> void:
 	label.add_theme_color_override("default_color", color)
 	label.add_theme_color_override("font_outline_color", Color.BLACK)
 	label.add_theme_constant_override("outline_size", 3)
-	label.add_theme_font_size_override("normal_font_size", 15)
-	label.add_theme_font_size_override("bold_font_size", 15)
-	label.add_theme_font_size_override("italics_font_size", 15)
-	label.add_theme_font_size_override("bold_italics_font_size", 15)
+	label.add_theme_font_size_override("normal_font_size", LINE_FONT_SIZE)
+	label.add_theme_font_size_override("bold_font_size", LINE_FONT_SIZE)
+	label.add_theme_font_size_override("italics_font_size", LINE_FONT_SIZE)
+	label.add_theme_font_size_override("bold_italics_font_size", LINE_FONT_SIZE)
 
 	var font := _lines_box.get_theme_default_font()
-	var text_w := font.get_string_size(_strip_bb(display), HORIZONTAL_ALIGNMENT_LEFT, -1, 15).x
+	var text_w := font.get_string_size(_strip_bb(display), HORIZONTAL_ALIGNMENT_LEFT, -1, LINE_FONT_SIZE).x
 	if text_w > WRAP_WIDTH:
 		label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		label.custom_minimum_size = Vector2(WRAP_WIDTH, 0)
