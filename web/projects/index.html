@@ -79,6 +79,7 @@
   .open-link:hover { color: var(--gold); }
   .form-row input.field, .form-row textarea.field { font-size: 15.5px; }
   .form-row textarea.field { resize: vertical; min-height: 80px; line-height: 1.6; }
+  #j-content { min-height: 150px; resize: none; overflow: hidden; line-height: 1.6; }
   .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
   @media (max-width: 640px) { .two-col { grid-template-columns: 1fr; } }
   .level-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
@@ -557,15 +558,18 @@ async function renderProject(id) {
     try {
       const url = await Pixl.upload(f);
       $("j-content").value += ($("j-content").value ? "\n" : "") + `![](${url})`;
+      autoGrow($("j-content"));
       Pixl.toast("Image attached!");
     } catch (e) { Pixl.toast(err(e.message), true); }
   });
   $("j-post").addEventListener("click", () => postJournal(p.id));
   $("p-delete").addEventListener("click", () => deleteProject(p));
   $("j-content").addEventListener("input", updateJournalHint);
+  $("j-content").addEventListener("input", () => autoGrow($("j-content")));
   $("j-hours").addEventListener("input", updateJournalHint);
   loadTimeline(p.id);
   updateJournalHint();
+  autoGrow($("j-content"));
   loadJournal(p.id);
 }
 
@@ -663,6 +667,12 @@ function tlRow(e) {
   return tlItem(icon, title, e.at, hours, note);
 }
 
+function autoGrow(el) {
+  if (!el) return;
+  el.style.height = "auto";
+  el.style.height = el.scrollHeight + "px";
+}
+
 async function loadTimeline(id) {
   let events = [];
   try {
@@ -720,6 +730,7 @@ async function postJournal(id) {
   }
   $("j-content").value = "";
   $("j-hours").value = "0";
+  autoGrow($("j-content"));
   Pixl.toast("Entry posted!");
   loadJournal(id);
 }
@@ -743,6 +754,7 @@ document.addEventListener("paste", (e) => {
     e.preventDefault();
     Pixl.upload(file).then((url) => {
       $("j-content").value += ($("j-content").value ? "\n" : "") + `![](${url})`;
+      autoGrow($("j-content"));
       Pixl.toast("Image attached!");
     }).catch((x) => Pixl.toast(err(x.message), true));
   } else if ($("f-thumb-preview")) {
