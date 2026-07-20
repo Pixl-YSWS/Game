@@ -10,6 +10,7 @@ signal player_skin_changed(user_id: String, skin: String)
 signal chat_message(user_id: String, display_name: String, text: String)
 signal dm_received(from_name: String, to_name: String, text: String, outgoing: bool)
 signal dm_error(reason: String)
+signal report_result(ok: bool, text: String)
 signal emote_received(user_id: String, key: String)
 signal voice_received(user_id: String, payload: PackedByteArray)
 signal npc_init(scene: String, npcs: Array)
@@ -282,6 +283,8 @@ func _handle_message(raw: String) -> void:
 			)
 		"dm_error":
 			emit_signal("dm_error", String(json.get("reason", "")))
+		"report_ack":
+			emit_signal("report_result", bool(json.get("ok", false)), String(json.get("text", "")))
 		"emote":
 			emit_signal("emote_received", json["userId"], String(json.get("key", "")))
 		"npc_init":
@@ -382,6 +385,16 @@ func send_dm(to_name: String, text: String) -> void:
 	if not _is_socket_open():
 		return
 	_socket.send_text(JSON.stringify({"type": "dm", "to": to_name, "text": text}))
+
+func send_report(target_id: String, reason: String, context: Array) -> void:
+	if not _is_socket_open():
+		return
+	_socket.send_text(JSON.stringify({
+		"type": "report",
+		"targetId": target_id,
+		"reason": reason,
+		"context": context,
+	}))
 
 func send_join_friend(friend_user_id: String) -> void:
 	if not _is_socket_open():
