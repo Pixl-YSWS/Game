@@ -234,7 +234,7 @@ func _build_pages() -> void:
 	]))
 	_pages.append(_page_body([
 		_para("Ship projects, earn pixels. Press H to open your Projects page in a browser tab — create a project, link your Hackatime, journal as you build, then Ship it for review."),
-		_para("Approved hours pay out in pixels at $4-7/hr — your rate climbs as you level up (1 hour approved = 1 XP, level shows in the top-left)."),
+		_para("Approved hours pay out in pixels at $4-6/hr — a flat $4/hr base plus a bonus that climbs as you level up (1 hour approved = 1 XP = 1 level, up to level 100; level shows in the top-left)."),
 		_spacer(),
 		_row("H  /  Pip", "Open Projects (new tab)"),
 		_spacer(),
