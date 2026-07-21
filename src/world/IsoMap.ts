@@ -117,7 +117,7 @@ export class IsoMap {
     }
   }
 
-  private stampWaterTile(wx: number, wy: number) {
+  private stampWaterTile(wx: number, wy: number, depth = 0) {
     const key = TS.water;
     const texture = this.scene.textures.get(key);
     const frames: string[] = [];
@@ -129,7 +129,7 @@ export class IsoMap {
     }
     const img = this.scene.add.image(wx, wy, key, frames[0]).setOrigin(0, 0);
     img.setScale(TILE_W / SRC_TILE, TILE_H / SRC_TILE);
-    img.setDepth(0);
+    img.setDepth(depth);
     this.stamps.push(img);
     this.waterStamps.push({ img, frames });
   }
@@ -236,10 +236,17 @@ export class IsoMap {
           if (!best || t.firstgid > best.firstgid) best = t;
       if (!best) return null;
       const local = gid - best.firstgid;
+      const localRow = Math.floor(local / best.columns);
       return {
         key: best.key,
         sx: (local % best.columns) * T,
-        sy: Math.floor(local / best.columns) * T,
+        sy: localRow * T,
+        flat: best.flat ?? false,
+        // Rows between this tile and its sprite's base row (0 for the base
+        // itself), or undefined when the tileset has no sprite grid metadata.
+        baseOffset: best.spriteRows
+          ? best.spriteRows - 1 - (localRow % best.spriteRows)
+          : undefined,
       };
     };
 
@@ -249,6 +256,9 @@ export class IsoMap {
     const GID_MASK = 0x1fffffff;
 
     for (const layer of baked.layers) {
+      const runBase = layer.perRow
+        ? verticalRunBases(layer.data, cols)
+        : undefined;
       for (let i = 0; i < layer.data.length; i++) {
         const raw = layer.data[i];
         if (!raw) continue;
@@ -260,7 +270,20 @@ export class IsoMap {
         const src = resolve(gid);
         if (!src) continue;
         const { x, y } = cartToIso(col, row);
-        const depth = layer.perRow ? row + 1 : layer.depth;
+        // Depth for object layers:
+        //  - flat tilesets (grass patches / ground skirts) go under entities;
+        //  - tall-sprite tiles sort by their sprite's base row, so the player
+        //    goes behind/in front of the whole tree or house at once;
+        //  - anything else (props, fences) sorts by the bottom of its vertical
+        //    tile run — a stacked post/lamp sorts as one object, a fence line
+        //    stays per-tile.
+        const depth = !layer.perRow
+          ? layer.depth
+          : src.flat
+            ? 0.45
+            : src.baseOffset !== undefined
+              ? row + src.baseOffset + 1
+              : (runBase?.[i] ?? row) + 1;
 
         if (layer.animateWater) {
           this.stampBakedWater(src.key, src.sy, x, y, depth);
@@ -270,7 +293,34 @@ export class IsoMap {
       }
     }
 
+    this.stampPaintedCells();
+
     for (const obj of this.mapDef.objects ?? []) this.stampObject(obj);
+  }
+
+  // Editor overrides on a baked map: the GID layers above render the original
+  // art, so repainted cells stamp their logical tile on top (ground above the
+  // baked ground/path bands, deco per the usual cozy rules). SOLID stays
+  // invisible, exactly like the cozy render path.
+  private stampPaintedCells() {
+    const painted = this.mapDef.painted;
+    if (!painted || painted.size === 0) return;
+    const { groundLayer, decoLayer, flatDeco } = this.mapDef;
+    for (const key of painted) {
+      const [layer, coords] = key.split(":");
+      const [c, r] = coords.split(",").map(Number);
+      if (!Number.isFinite(c) || !Number.isFinite(r)) continue;
+      const { x, y } = cartToIso(c, r);
+      if (layer === "ground") {
+        const g = groundLayer[r]?.[c] ?? -1;
+        if (g === WATER) this.stampWaterTile(x, y, 0.3);
+        else if (g >= 0) this.stampTile(g, x, y, 0.3);
+      } else {
+        const d = decoLayer[r]?.[c] ?? -1;
+        if (d >= 0 && d !== SOLID)
+          this.stampTile(d, x, y, flatDeco.has(d) ? 0.5 : r + 1);
+      }
+    }
   }
 
   // A water tile shimmers through the four columns of its own row.
@@ -356,4 +406,26 @@ export class IsoMap {
   get centre(): { x: number; y: number } {
     return { x: this.boundsW / 2, y: this.boundsH / 2 };
   }
+}
+
+// For each non-empty cell of a flat row-major GID array: the bottom row of
+// the contiguous vertical run of non-empty cells it belongs to. Single tiles
+// map to their own row, a stacked column of tiles maps to the stack's base.
+function verticalRunBases(data: readonly number[], cols: number): Int32Array {
+  const rows = Math.ceil(data.length / cols);
+  const bases = new Int32Array(data.length);
+  for (let c = 0; c < cols; c++) {
+    let r = 0;
+    while (r < rows) {
+      if (!data[r * cols + c]) {
+        r++;
+        continue;
+      }
+      let end = r;
+      while (end + 1 < rows && data[(end + 1) * cols + c]) end++;
+      for (let rr = r; rr <= end; rr++) bases[rr * cols + c] = end;
+      r = end + 1;
+    }
+  }
+  return bases;
 }

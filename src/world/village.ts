@@ -75,7 +75,7 @@ export function villageMap(): MapDef {
   };
 
   injectExtras(m);
-  trimHouseRoofs(m);
+  matchCollisionToSprites(m);
   m.bridgeTiles = computeBridgeTiles(m);
 
   // Blahaj — only where the spot is actually open water on the current map.
@@ -87,77 +87,62 @@ export function villageMap(): MapDef {
   return m;
 }
 
-// Buildings (houses/barn/tents) are drawn full-height including their roofs, but
-// the baked collision marks the whole sprite solid — so players get blocked a
-// couple tiles above the building and can't walk behind the roof peak. Clear
-// just the top roof rows of each building's collision (so you can slip behind
-// the peak) while keeping the bulk of the body solid.
-const ROOF_CLEAR_ROWS = 1;
-const BUILDING_TILESETS = new Set(["vt-houses", "vt-barn", "vt-tents_big"]);
+// Tall sprites (trees, houses, barn, tents) are drawn full-height but the
+// baked collision marks their whole footprint solid — so players get blocked
+// by canopies and roof peaks tiles above the actual body. Each tall tileset
+// declares `spriteRows` (sprite height in tile rows) and `solidRows` (how many
+// bottom rows are the physical body: trunk, walls). A tile's local row within
+// its tileset tells how far above the sprite's base it sits, so we can clear
+// the painted collision on every cell whose stamped tiles are all
+// canopy/roof — collision then matches what's actually drawn there.
 const GID_MASK = 0x1fffffff;
 
-function trimHouseRoofs(m: MapDef) {
+function matchCollisionToSprites(m: MapDef) {
   const baked = m.baked;
   if (!baked) return;
   const { cols, rows } = m;
 
-  const isBuildingGid = (gid: number) => {
-    const g = gid & GID_MASK;
+  // true → this tile's art physically stands on the ground here (per the
+  // tileset's pixel-derived solidLocals). Tilesets without the metadata
+  // (fences/props/bridges) keep whatever collision was painted; flat
+  // ground-decor tilesets (grass patches) never want collision.
+  const solidSets = new Map<string, Set<number>>();
+  for (const t of baked.tilesets)
+    if (t.solidLocals) solidSets.set(t.key, new Set(t.solidLocals));
+
+  const wantsCollision = (gidRaw: number): boolean => {
+    const gid = gidRaw & GID_MASK;
+    let best: (typeof baked.tilesets)[number] | undefined;
     for (const t of baked.tilesets)
-      if (g >= t.firstgid && g < t.firstgid + t.count)
-        return BUILDING_TILESETS.has(t.key);
-    return false;
+      if (gid >= t.firstgid && gid < t.firstgid + t.count)
+        if (!best || t.firstgid > best.firstgid) best = t;
+    if (!best) return true;
+    if (best.flat) return false;
+    const solids = solidSets.get(best.key);
+    if (!solids) return true;
+    return solids.has(gid - best.firstgid);
   };
 
-  // Cells that are a building sprite AND currently solid.
-  const solid: boolean[] = new Array(cols * rows).fill(false);
   for (let i = 0; i < cols * rows; i++) {
     const c = i % cols;
     const r = (i / cols) | 0;
     if (m.decoLayer[r][c] !== 99) continue;
-    if (baked.layers.some((l) => l.data[i] && isBuildingGid(l.data[i])))
-      solid[i] = true;
-  }
-
-  // Flood-fill each building footprint and clear all but its bottom two rows.
-  const seen = new Array(cols * rows).fill(false);
-  for (let start = 0; start < cols * rows; start++) {
-    if (!solid[start] || seen[start]) continue;
-    const comp: number[] = [];
-    const stack = [start];
-    seen[start] = true;
-    let minRow = rows;
-    let maxRow = 0;
-    while (stack.length) {
-      const i = stack.pop()!;
-      comp.push(i);
-      const c = i % cols;
-      const r = (i / cols) | 0;
-      if (r > maxRow) maxRow = r;
-      if (r < minRow) minRow = r;
-      for (const [dc, dr] of [
-        [1, 0],
-        [-1, 0],
-        [0, 1],
-        [0, -1],
-      ]) {
-        const nc = c + dc;
-        const nr = r + dr;
-        if (nc < 0 || nr < 0 || nc >= cols || nr >= rows) continue;
-        const ni = nr * cols + nc;
-        if (solid[ni] && !seen[ni]) {
-          seen[ni] = true;
-          stack.push(ni);
-        }
+    // Only object layers vote: flat layers (ground/water/bridge) drive
+    // walkability via groundLayer, and hand-painted blockers with no object
+    // tile (e.g. invisible walls along water) must stay.
+    let hasObjectTile = false;
+    let keep = false;
+    for (const l of baked.layers) {
+      if (!l.perRow) continue;
+      const raw = l.data[i];
+      if (!raw) continue;
+      hasObjectTile = true;
+      if (wantsCollision(raw)) {
+        keep = true;
+        break;
       }
     }
-    // Clear the top roof rows, but always keep at least the bottom two rows solid.
-    const height = maxRow - minRow + 1;
-    const clearN = Math.max(0, Math.min(ROOF_CLEAR_ROWS, height - 2));
-    for (const i of comp) {
-      const r = (i / cols) | 0;
-      if (r < minRow + clearN) m.decoLayer[r][i % cols] = -1;
-    }
+    if (hasObjectTile && !keep) m.decoLayer[r][c] = -1;
   }
 }
 

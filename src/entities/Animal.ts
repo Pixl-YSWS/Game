@@ -273,7 +273,7 @@ export class Animal extends Phaser.GameObjects.Container {
       duration: dur,
       ease: "Linear",
       onUpdate: () => {
-        this.setDepth(this.bodyDepth(Math.floor(this.y / TILE_H)));
+        this.setDepth(this.bodyDepth(this.y / TILE_H));
       },
       onComplete: () => {
         const keep = new Set(newFoot);

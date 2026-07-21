@@ -468,6 +468,8 @@ export class WorldScene extends Phaser.Scene {
         delta,
         this.touchDir,
       );
+    } else {
+      this.localPlayer.idle();
     }
 
     const { cx, cy } = this.localPlayer;
@@ -987,14 +989,36 @@ export class WorldScene extends Phaser.Scene {
     this.scene.pause();
     this.scene.launch("InteriorScene", {
       returnTo: { cx: doorCx, cy: doorCy },
+      houseSeed: this.houseSeedFor(doorCx, doorCy),
       char: this.myChar,
       skin: this.mySkin,
       verified: this.myVerified,
     });
   }
 
+  // Stable per-house interior seed: the door tile plus the world identity, so
+  // every house gets its own room and different owners' villages differ too.
+  private houseSeedFor(doorCx: number, doorCy: number): number {
+    const key =
+      this.world.kind === "village"
+        ? `village:${this.world.ownerPlayerId}`
+        : this.world.kind;
+    let h = 0x811c9dc5;
+    for (let i = 0; i < key.length; i++) {
+      h ^= key.charCodeAt(i);
+      h = Math.imul(h, 0x01000193);
+    }
+    h ^= doorCx * 0x9e3779b1;
+    h = Math.imul(h, 0x01000193);
+    h ^= doorCy * 0x85ebca6b;
+    return h >>> 0;
+  }
+
   private syncDepth(player: Player) {
-    const d = Math.floor(player.y / TILE_H) + 1.5;
+    // Continuous Y-sort: depth tracks the sprite's pixel position every frame
+    // (rather than snapping per tile row), so the player never pops under
+    // deco tiles mid-step. At rest this equals the old cy + 1.5.
+    const d = player.y / TILE_H + 1;
     if (player.depth !== d) player.setDepth(d);
   }
 
@@ -1100,6 +1124,18 @@ export class WorldScene extends Phaser.Scene {
     this.mapDef.decoLayer = this.baseDeco.map((r) => [...r]);
     applyMapOverrides(this.mapDef, this.overrides);
     applyMapOverrides(this.mapDef, [...this.pendingEdits.values()]);
+    this.syncPaintedCells();
+  }
+
+  // Baked maps render their GID art verbatim, so IsoMap needs to know which
+  // cells the editor has repainted to stamp the logical tiles on top.
+  private syncPaintedCells() {
+    if (!this.mapDef?.baked) return;
+    const s = new Set<string>();
+    for (const e of this.overrides) s.add(editKey(e.layer, e.cx, e.cy));
+    for (const e of this.pendingEdits.values())
+      s.add(editKey(e.layer, e.cx, e.cy));
+    this.mapDef.painted = s;
   }
 
   private rebuildNpcLayers() {
@@ -1205,6 +1241,7 @@ export class WorldScene extends Phaser.Scene {
     this.pendingEdits.set(key, { layer, cx, cy, tile });
     if (layer === "ground") this.mapDef.groundLayer[cy][cx] = tile;
     else this.mapDef.decoLayer[cy][cx] = tile;
+    this.syncPaintedCells();
     this.repaintQueued = true;
     this.events.emit("map:pendingChanged", this.getPendingEditCount());
   }
@@ -1287,6 +1324,7 @@ export class WorldScene extends Phaser.Scene {
     this.baseNpcs = this.mapDef.npcs.map((n) => ({ ...n }));
     applyMapOverrides(this.mapDef, this.overrides);
     this.mapDef.npcs = applyNpcEdits(this.baseNpcs, this.npcEdits);
+    this.syncPaintedCells();
 
     const animalObjects = this.extractAnimals();
     const sharkObjects = this.extractSharks();

@@ -2,105 +2,17 @@ import Phaser from "phaser";
 import { IsoMap } from "../world/IsoMap";
 import { Player } from "../entities/Player";
 import { cartToIso, TILE_H, TILE_W } from "../utils/IsoUtils";
-import type { MapDef, MapObject } from "../types/map";
+import type { MapDef } from "../types/map";
 import { getKeybinds } from "../data/Settings";
 import { gameSocket } from "../network/socket";
-import {
-  IFLOOR,
-  IWALL,
-  SOLID,
-  IPROPS,
-  interiorPropObject,
-  type InteriorProp,
-} from "../world/tileset";
-
-const COLS = 32;
-const ROWS = 18;
-const ROOM_COLS = 18;
-const ROOM_ROWS = 12;
-const ROOM_X = Math.floor((COLS - ROOM_COLS) / 2);
-const ROOM_Y = Math.floor((ROWS - ROOM_ROWS) / 2);
-const ROOM_X1 = ROOM_X + ROOM_COLS - 1;
-const ROOM_Y1 = ROOM_Y + ROOM_ROWS - 1;
-const DOOR_COL = ROOM_X + Math.floor(ROOM_COLS / 2);
-const DOOR_ROW = ROOM_Y1;
-
-function makeInteriorMap(): MapDef {
-  const ground = Array.from({ length: ROWS }, () => new Array(COLS).fill(-1));
-  const deco = Array.from({ length: ROWS }, () => new Array(COLS).fill(-1));
-
-  // Wood floor across the whole room.
-  for (let r = ROOM_Y; r <= ROOM_Y1; r++)
-    for (let c = ROOM_X; c <= ROOM_X1; c++) ground[r][c] = IFLOOR;
-
-  // Wallpaper walls: a 2-tile-tall back wall plus a 1-tile border on the other
-  // sides, with a doorway gap at the bottom centre.
-  for (let c = ROOM_X; c <= ROOM_X1; c++) {
-    deco[ROOM_Y][c] = IWALL;
-    deco[ROOM_Y + 1][c] = IWALL;
-    if (c !== DOOR_COL) deco[ROOM_Y1][c] = IWALL;
-  }
-  for (let r = ROOM_Y; r <= ROOM_Y1; r++) {
-    deco[r][ROOM_X] = IWALL;
-    deco[r][ROOM_X1] = IWALL;
-  }
-
-  const objects: MapObject[] = [];
-  const place = (
-    prop: InteriorProp,
-    cx: number,
-    cy: number,
-    opts: { flat?: boolean; solid?: boolean } = {},
-  ) => {
-    objects.push(interiorPropObject(prop, cx, cy, opts.flat));
-    if (opts.solid) {
-      const tw = Math.max(1, Math.round(prop.w / 16));
-      const th = Math.max(1, Math.round(prop.h / 16));
-      for (let r = 0; r < th; r++)
-        for (let c = 0; c < tw; c++) {
-          const gc = cx + c;
-          const gr = cy + r;
-          if (gr > ROOM_Y + 1 && gr < ROOM_Y1 && gc > ROOM_X && gc < ROOM_X1)
-            deco[gr][gc] = SOLID;
-        }
-    }
-  };
-
-  // Wall decorations (sit on the back wall, no collision needed).
-  place(IPROPS.window, ROOM_X + 3, ROOM_Y);
-  place(IPROPS.picture, ROOM_X + 8, ROOM_Y);
-  place(IPROPS.window, ROOM_X + 13, ROOM_Y);
-
-  // Furniture.
-  place(IPROPS.bookshelf, ROOM_X + 1, ROOM_Y + 2, { solid: true });
-  place(IPROPS.wardrobe, ROOM_X + 4, ROOM_Y + 2, { solid: true });
-  place(IPROPS.bedDouble, ROOM_X + 13, ROOM_Y + 2, { solid: true });
-  place(IPROPS.rug, ROOM_X + 6, ROOM_Y + 7, { flat: true });
-  place(IPROPS.table, ROOM_X + 7, ROOM_Y + 6, { solid: true });
-  place(IPROPS.sofa, ROOM_X + 12, ROOM_Y + 8, { solid: true });
-  place(IPROPS.lamp, ROOM_X + 1, ROOM_Y + 9, { solid: true });
-
-  return {
-    key: "interior_default",
-    cols: COLS,
-    rows: ROWS,
-    tilesetKey: "tiles-town",
-    tilesetCols: 12,
-    cozy: true,
-    objects,
-    groundLayer: ground,
-    decoLayer: deco,
-    walkableGround: new Set([IFLOOR]),
-    solidDeco: new Set([SOLID, IWALL]),
-    flatDeco: new Set(),
-    spawnPoint: { cx: DOOR_COL, cy: DOOR_ROW - 1 },
-    doors: [],
-    npcs: [],
-  };
-}
+import { makeInteriorMap } from "../world/interior";
 
 interface InteriorInitData {
   returnTo: { cx: number; cy: number };
+
+  // Per-house seed (derived from the door tile + world) — picks this house's
+  // room size, colour theme and furniture. Falls back to a fixed default.
+  houseSeed?: number;
 
   char?: number;
   skin?: string;
@@ -120,6 +32,7 @@ export class InteriorScene extends Phaser.Scene {
   ];
   private localPlayer?: Player;
   private mapDef?: MapDef;
+  private houseSeed = 0;
   private returnTo!: { cx: number; cy: number };
   private appearance: { char?: number; skin?: string; verified?: boolean } = {};
   private exitTile!: { cx: number; cy: number };
@@ -141,6 +54,7 @@ export class InteriorScene extends Phaser.Scene {
 
   init(data: InteriorInitData) {
     this.returnTo = data.returnTo;
+    this.houseSeed = data.houseSeed ?? 0x1a7e1;
     this.appearance = {
       char: data.char,
       skin: data.skin,
@@ -162,7 +76,8 @@ export class InteriorScene extends Phaser.Scene {
     // everyone else in the village/open world; undone on any exit path.
     gameSocket.setInterior(true);
 
-    this.mapDef = makeInteriorMap();
+    const layout = makeInteriorMap(this.houseSeed);
+    this.mapDef = layout.map;
     const isoMap = new IsoMap(this, this.mapDef);
     isoMap.build();
 
@@ -170,8 +85,8 @@ export class InteriorScene extends Phaser.Scene {
     // interior fills the screen, and hide the world scene rendering behind
     // the transparent tiles with an opaque backdrop.
     const roomCentre = cartToIso(
-      ROOM_X + ROOM_COLS / 2 - 0.5,
-      ROOM_Y + ROOM_ROWS / 2 - 0.5,
+      layout.roomX + layout.roomCols / 2 - 0.5,
+      layout.roomY + layout.roomRows / 2 - 0.5,
     );
     this.add
       .rectangle(roomCentre.x, roomCentre.y, 4096, 4096, 0x0d0d0d)
@@ -179,8 +94,8 @@ export class InteriorScene extends Phaser.Scene {
     const cam = this.cameras.main;
     cam.setZoom(
       Math.min(
-        this.scale.width / ((ROOM_COLS + 2) * TILE_W),
-        this.scale.height / ((ROOM_ROWS + 2) * TILE_H),
+        this.scale.width / ((layout.roomCols + 2) * TILE_W),
+        this.scale.height / ((layout.roomRows + 2) * TILE_H),
       ),
     );
     cam.centerOn(roomCentre.x, roomCentre.y);
@@ -200,7 +115,7 @@ export class InteriorScene extends Phaser.Scene {
       true,
       this.mapDef,
     );
-    this.exitTile = { cx: DOOR_COL, cy: DOOR_ROW };
+    this.exitTile = { cx: layout.doorCol, cy: layout.doorRow };
 
     this.input.keyboard!.on("keydown-ESC", () => {
       if (this.scene.isActive("PauseScene")) return;
@@ -254,9 +169,11 @@ export class InteriorScene extends Phaser.Scene {
     if (this.input.keyboard) this.input.keyboard.enabled = !overlay;
     if (!overlay) {
       this.localPlayer.handleInput(this.cursors, this.wasd, delta, this.touchDir);
+    } else {
+      this.localPlayer.idle();
     }
 
-    const d = Math.floor(this.localPlayer.y / TILE_H) + 1.5;
+    const d = this.localPlayer.y / TILE_H + 1;
     if (this.localPlayer.depth !== d) this.localPlayer.setDepth(d);
 
     if (this.exiting) return;

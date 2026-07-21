@@ -14,8 +14,11 @@ import {
   WATER,
   SOLID,
   FLOWER_A,
+  FLOWER_B,
   FLOWER_C,
+  FLOWER_D,
   ROCK_A,
+  ROCK_B,
 } from "../world/tileset";
 
 interface PaletteEntry {
@@ -34,8 +37,11 @@ const GROUND_PALETTE: PaletteEntry[] = [
 const DECO_PALETTE: PaletteEntry[] = [
   { label: "Erase", layer: "deco", tile: -1 },
   { label: "Flower", layer: "deco", tile: FLOWER_A },
+  { label: "Tulip", layer: "deco", tile: FLOWER_B },
   { label: "Bloom", layer: "deco", tile: FLOWER_C },
+  { label: "Daisy", layer: "deco", tile: FLOWER_D },
   { label: "Rock", layer: "deco", tile: ROCK_A },
+  { label: "Stone", layer: "deco", tile: ROCK_B },
   { label: "Wall", layer: "deco", tile: SOLID },
 ];
 

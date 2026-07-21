@@ -238,7 +238,7 @@ export class Npc extends Phaser.GameObjects.Container {
       duration: 220 + Math.random() * 80,
       ease: "Linear",
       onUpdate: () => {
-        this.setDepth(Math.floor(this.y / TILE_H) + 1.5);
+        this.setDepth(this.y / TILE_H + 1);
       },
       onComplete: () => {
         this.occupied.delete(oldKey);

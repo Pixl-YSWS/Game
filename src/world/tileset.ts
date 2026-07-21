@@ -48,6 +48,38 @@ export const worldSheetSpecs: SheetSpec[] = [
   { key: TS.iprops, path: `${HOUSING}/Props/Base/BaseProps_white.png` },
 ];
 
+// Interior colour themes — every Housing sheet (floors/walls/props) exists in
+// each colour, so a house interior can be re-skinned by swapping texture keys.
+export const INTERIOR_COLORS = [
+  "white",
+  "red",
+  "blue",
+  "green",
+  "pink",
+  "yellow",
+  "black",
+] as const;
+export type InteriorColor = (typeof INTERIOR_COLORS)[number];
+
+export const interiorFloorKey = (c: InteriorColor) =>
+  c === "white" ? TS.ifloor : `cv-ifloor-${c}`;
+export const interiorWallKey = (c: InteriorColor) =>
+  c === "white" ? TS.iwall : `cv-iwall-${c}`;
+export const interiorPropsKey = (c: InteriorColor) =>
+  c === "white" ? TS.iprops : `cv-iprops-${c}`;
+
+for (const c of INTERIOR_COLORS) {
+  if (c === "white") continue;
+  worldSheetSpecs.push(
+    { key: interiorFloorKey(c), path: `${HOUSING}/Interior/Floors_${c}.png` },
+    { key: interiorWallKey(c), path: `${HOUSING}/Interior/Walls_${c}.png` },
+    {
+      key: interiorPropsKey(c),
+      path: `${HOUSING}/Props/Base/BaseProps_${c}.png`,
+    },
+  );
+}
+
 export const GRASS = 1;
 export const GRASS_DARK = 2;
 export const PATH = 3;
@@ -86,6 +118,21 @@ export const TILE_SRC: Record<number, TileSrc> = {
   [IFLOOR]: { key: TS.ifloor, fx: 2, fy: 0 },
   [IWALL]: { key: TS.iwall, fx: 0, fy: 0 },
 };
+
+// Per-colour interior floor/wall tile ids (the white theme reuses
+// IFLOOR/IWALL). Registered into TILE_SRC so IsoMap can stamp them.
+export const IFLOOR_COLOR_IDS = {} as Record<InteriorColor, number>;
+export const IWALL_COLOR_IDS = {} as Record<InteriorColor, number>;
+INTERIOR_COLORS.forEach((c, i) => {
+  const fid = c === "white" ? IFLOOR : 130 + i;
+  const wid = c === "white" ? IWALL : 140 + i;
+  IFLOOR_COLOR_IDS[c] = fid;
+  IWALL_COLOR_IDS[c] = wid;
+  if (c !== "white") {
+    TILE_SRC[fid] = { key: interiorFloorKey(c), fx: 2, fy: 0 };
+    TILE_SRC[wid] = { key: interiorWallKey(c), fx: 0, fy: 0 };
+  }
+});
 
 export const WALKABLE_GROUND: ReadonlySet<number> = new Set([
   GRASS,
@@ -138,10 +185,15 @@ export function houseDoorCells(cx: number, cy: number): [number, number][] {
   ];
 }
 
+// Top rows of the house sprite that are roof (per the art, the walls only
+// occupy the bottom 3 tile rows): no collision there, so players can walk
+// behind the roof (the house Y-sorts over them by its base row).
+const HOUSE_ROOF_ROWS = 3;
+
 export function houseSolidCells(cx: number, cy: number): [number, number][] {
   const doors = new Set(houseDoorCells(cx, cy).map(([c, r]) => `${c},${r}`));
   const cells: [number, number][] = [];
-  for (let r = 0; r < HOUSE_H; r++) {
+  for (let r = HOUSE_ROOF_ROWS; r < HOUSE_H; r++) {
     for (let c = 0; c < HOUSE_W; c++) {
       const cc = cx + c;
       const rr = cy + r;
@@ -329,8 +381,9 @@ export function interiorPropObject(
   cx: number,
   cy: number,
   flat = false,
+  key: string = TS.iprops,
 ): MapObject {
-  return { key: TS.iprops, sx: p.sx, sy: p.sy, w: p.w, h: p.h, cx, cy, flat };
+  return { key, sx: p.sx, sy: p.sy, w: p.w, h: p.h, cx, cy, flat };
 }
 
 // Fish_big.png is a 3×2 grid of distinct 32×16 fish, not an animation strip.

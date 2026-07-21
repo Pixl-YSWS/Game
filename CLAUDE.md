@@ -14,8 +14,8 @@ bun run server
 # Type-check / production build
 bun run build          # tsc && vite build
 
-# Maps are now hand-maintained (no generator). Edit src/data/MapData.ts (TOWN_MAP,
-# open world) or src/data/villageMaps.ts (VILLAGE, baked) directly.
+# Maps are hand-maintained (no generator). Edit src/data/villageMaps.ts (VILLAGE,
+# baked; collision as ASCII grids) directly; open world is procedural (MapGen.ts).
 
 # Offline admin CLI (requires ADMIN_SECRET in env)
 bun server/admin-cli.ts <password> <command> [args]
@@ -57,14 +57,12 @@ Despite the name `IsoUtils`/`cartToIso`, the renderer is **top-down orthographic
 
 - **`IsoMap`** (`src/world/IsoMap.ts`): Stamps `Phaser.GameObjects.Image` objects directly onto the scene for each tile in a `MapDef`'s `groundLayer` and `decoLayer`. Ground tiles at depth 0; deco tiles at `row + 1`.
 - **`IsoUtils.ts`** (`src/utils/IsoUtils.ts`): `cartToIso(cx, cy)` converts tile column/row to world pixel coordinates. `TILE_W` and `TILE_H` are both 16.
-- **`MapData.ts`** (`src/data/MapData.ts`): Exports `TOWN_MAP` (a `MapDef`) — the single hand-authored map used as the base preset. Hand-edited (`WALKABLE_GROUND` / `SOLID_DECO` control collision).
 - **`villageMaps.ts`** (`src/data/villageMaps.ts`): Exports `VILLAGE`, the hand-maintained baked village map (`main_hub` + `home_town`). Collision is `groundLayer` (walkableGround) + `decoLayer` (solidDeco=99); the `baked` block is the verbatim multi-tileset render. Edit collision/doors directly — there is no generator.
 
 ### Procedural world generation
 
-Every player's private village is generated from a seed with `generateMap(seed)` (`src/world/MapGen.ts`). The shared open world uses the fixed seed `0xC0FFEE`. `MapGen` takes a `VillagePreset` from `src/world/presets.ts` (which strips houses from `TOWN_MAP` and declares slot bounding boxes), then stamps randomly-chosen house templates into the slots, connects them to the path network, places NPCs, and optionally adds a world-switch portal.
+The shared open world / lobby is generated from a seed with `generateMap(seed)` (`src/world/MapGen.ts`) — border trees, an optional shared house, flowers/rocks, NPCs and a world-switch portal.
 
-- **`presets.ts`** (`src/world/presets.ts`): `TOWN_PRESET` is derived from `TOWN_MAP` with houses stripped out and `HouseSlot[]` defined.
 - **`HouseMap.ts`** (`src/world/HouseMap.ts`): Builds the shared interior `MapDef` for `WorldRef = { kind: "house" }`.
 
 ### World system (`WorldRef`)
@@ -120,7 +118,10 @@ Offline moderation tool that directly edits the SQLite DB. Requires `ADMIN_SECRE
 
 Maps are hand-maintained — there is **no** map-generation script (the old `sync-map`/`sync-maps` pipeline was removed). Edit the map source files directly:
 
-- `src/data/MapData.ts` — `TOWN_MAP` (open world). Tune collision via `WALKABLE_GROUND` / `SOLID_DECO`.
-- `src/data/villageMaps.ts` — `VILLAGE` (baked village). Set `decoLayer[row][col]` to `99` to block a tile or `-1` to clear it; add a door by pushing `{ cx, cy }` to `doors` and clearing that cell.
+- `src/data/villageMaps.ts` — `VILLAGE` (baked village). `groundLayer`/`decoLayer` are ASCII grids parsed by `src/world/asciiMap.ts` (ground: `~` water, `.` grass, `,` dark grass, `:` path; deco: `.` open, `#` solid). Block a tile with `#`, clear with `.`; add a door by pushing `{ cx, cy }` to `doors` and clearing that cell.
+
+Tall-sprite tilesets in `VILLAGE.baked.tilesets` carry two knobs: `spriteRows` (tile rows one sprite spans — lets `IsoMap.buildBaked` Y-sort every tile by its sprite's *base* row so players walk behind/in front of whole trees and houses) and `solidRows` (bottom rows of each sprite that keep collision; `matchCollisionToSprites` in `src/world/village.ts` clears painted `99`s on canopy/roof cells at load). Player/NPC/animal depth is continuous (`y / TILE_H + 1`), updated per frame — never snap it back to per-tile.
+
+House interiors (village doors) are generated per house by `makeInteriorMap(seed)` in `src/world/interior.ts` — seeded from the door tile + world in `WorldScene.houseSeedFor`, varying room size, colour theme (all 7 Housing colour sheets are loaded) and furniture; generation re-rolls until fully walkable.
 
 The Tiled project files and `maps/*.json` remain in the repo as historical reference only; nothing reads them at build time.

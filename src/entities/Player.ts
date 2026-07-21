@@ -6,6 +6,7 @@ import { FONT_CHAT, COLORS, EMOTE_ATLAS } from "../ui/theme";
 import { emoteFrame } from "../ui/emotes";
 import { CozyAvatar } from "./CozyAvatar";
 import { WATER } from "../world/tileset";
+import { CollisionMap } from "../world/collision";
 import {
   PRESET_OUTFITS,
   defaultOutfitIndex,
@@ -20,6 +21,17 @@ export type { PlayerState };
 
 const STEP_MS = 120;
 const RUN_STEP_MS = 72;
+
+// Free-movement speeds, matching the old tile-step cadence (16px per step).
+const WALK_SPEED = (TILE_W * 1000) / STEP_MS; // ≈133 px/s
+const RUN_SPEED = (TILE_W * 1000) / RUN_STEP_MS; // ≈222 px/s
+
+// Feet hitbox (relative to the container centre): a small box around the
+// avatar's feet so the body/head may overlap walls and canopies visually
+// while the feet collide with the art-tight rects.
+const FEET_OFF_Y = 4;
+const FEET_HW = 4.5;
+const FEET_HH = 3;
 
 const AVATAR_FOOT_Y = TILE_H / 2 + 3;
 
@@ -46,6 +58,13 @@ export class Player extends Phaser.GameObjects.Container {
   private nameTag: Phaser.GameObjects.Text;
   private shadow: Phaser.GameObjects.Ellipse;
   private mapDef: MapDef;
+  private collision: CollisionMap;
+
+  private walking = false;
+  private walkBob?: Phaser.Tweens.Tween;
+  private vaulting = false;
+  private dustDist = 0;
+  private animKey = "";
 
   public cx: number;
   public cy: number;
@@ -94,6 +113,7 @@ export class Player extends Phaser.GameObjects.Container {
     this.cy = state.cy;
     this.isLocal = isLocal;
     this.mapDef = mapDef;
+    this.collision = new CollisionMap(mapDef);
 
     this.shadow = scene.add.ellipse(
       0,
@@ -178,47 +198,7 @@ export class Player extends Phaser.GameObjects.Container {
 
   setMap(mapDef: MapDef) {
     this.mapDef = mapDef;
-  }
-
-  moveToTile(cx: number, cy: number): boolean {
-    if (this.isMoving) return false;
-    if (!this.canMoveToTile(cx, cy)) return false;
-
-    const dx = cx - this.cx;
-    const dy = cy - this.cy;
-    this.cx = cx;
-    this.cy = cy;
-    this.isMoving = true;
-    this.updateSwimState();
-
-    const diag = dx !== 0 && dy !== 0 ? Math.SQRT2 : 1;
-    const swim = this.isSwimming ? SWIM_SPEED_MUL : 1;
-    const dur =
-      ((this.running ? RUN_STEP_MS : STEP_MS) * diag) / (this.speedMul * swim);
-    this.startStepAnim(dx, dy, dur);
-
-    const { x, y } = cartToIso(cx, cy);
-
-    this.scene.tweens.add({
-      targets: this,
-      x: x + TILE_W / 2,
-      y: y + TILE_H / 2,
-      duration: dur,
-      ease: "Linear",
-      onComplete: () => {
-        if (!this.scene) return;
-        this.isMoving = false;
-
-        const { dx: hx, dy: hy } = this.inputDir;
-        if (hx !== 0 || hy !== 0) {
-          if (!this.attemptStep(hx, hy)) this.returnToIdle();
-        } else {
-          this.returnToIdle();
-        }
-      },
-    });
-
-    return true;
+    this.collision = new CollisionMap(mapDef);
   }
 
   private setDirection(dx: number, dy: number) {
@@ -234,6 +214,7 @@ export class Player extends Phaser.GameObjects.Container {
 
   private startStepAnim(dx: number, dy: number, dur: number) {
     this.setDirection(dx, dy);
+    this.animKey = `walk:${this.dir}:${this.facingLeft}`;
     this.avatar.setAnim("walk", this.dir, this.facingLeft);
     this.stopIdleBob();
     this.scene.tweens.killTweensOf(this.avatar);
@@ -250,6 +231,7 @@ export class Player extends Phaser.GameObjects.Container {
   private returnToIdle() {
     if (!this.scene) return;
     this.scene.tweens.killTweensOf(this.avatar);
+    this.animKey = `idle:${this.dir}:${this.facingLeft}`;
     this.avatar.setAnim("idle", this.dir, this.facingLeft);
     this.startIdleBob();
   }
@@ -290,27 +272,12 @@ export class Player extends Phaser.GameObjects.Container {
     });
   }
 
-  private attemptStep(dx: number, dy: number): boolean {
-    if (dx === 0 && dy === 0) return false;
-    if (dx !== 0 && dy !== 0) {
-      if (this.canMoveToTile(this.cx + dx, this.cy + dy)) {
-        return this.moveToTile(this.cx + dx, this.cy + dy);
-      }
-      if (this.canMoveToTile(this.cx + dx, this.cy))
-        return this.moveToTile(this.cx + dx, this.cy);
-      if (this.canMoveToTile(this.cx, this.cy + dy))
-        return this.moveToTile(this.cx, this.cy + dy);
-      return false;
-    }
-    return this.moveToTile(this.cx + dx, this.cy + dy);
-  }
-
   /**
    * Vault over a single blocking tile (e.g. a fence) in the facing/held
    * direction, FPS-style, landing on the open tile two cells away.
    */
   tryJump(): boolean {
-    if (this.isMoving) return false;
+    if (this.vaulting) return false;
 
     let dx = this.inputDir.dx;
     let dy = this.inputDir.dy;
@@ -326,10 +293,11 @@ export class Player extends Phaser.GameObjects.Container {
     const mid = { cx: this.cx + dx, cy: this.cy + dy };
     const land = { cx: this.cx + 2 * dx, cy: this.cy + 2 * dy };
     // Only vault when something blocks the next tile and the far tile is clear.
-    if (this.canMoveToTile(mid.cx, mid.cy)) return false;
-    if (!this.canMoveToTile(land.cx, land.cy)) return false;
+    if (!this.collision.isBlocked(mid.cx, mid.cy)) return false;
+    if (this.collision.isBlocked(land.cx, land.cy)) return false;
 
     this.setDirection(dx, dy);
+    this.vaulting = true;
     this.isMoving = true;
     this.cx = land.cx;
     this.cy = land.cy;
@@ -337,8 +305,11 @@ export class Player extends Phaser.GameObjects.Container {
     const { x, y } = cartToIso(land.cx, land.cy);
     const dur = 320;
 
-    this.avatar.setAnim("walk", this.dir, this.facingLeft);
+    this.applyAnim("walk");
     this.stopIdleBob();
+    this.walkBob?.stop();
+    this.walkBob = undefined;
+    this.walking = false;
     this.scene.tweens.killTweensOf(this.avatar);
     // Arc the avatar up and back down for a hop.
     this.scene.tweens.add({
@@ -360,14 +331,11 @@ export class Player extends Phaser.GameObjects.Container {
       ease: "Linear",
       onComplete: () => {
         if (!this.scene) return;
+        this.vaulting = false;
         this.isMoving = false;
+        this.updateSwimState();
         this.spawnDust();
-        const { dx: hx, dy: hy } = this.inputDir;
-        if (hx !== 0 || hy !== 0) {
-          if (!this.attemptStep(hx, hy)) this.returnToIdle();
-        } else {
-          this.returnToIdle();
-        }
+        this.returnToIdle();
       },
     });
 
@@ -383,28 +351,16 @@ export class Player extends Phaser.GameObjects.Container {
     if (cx < 0 || cy < 0 || cx >= cols || cy >= rows) return false;
     this.scene?.tweens.killTweensOf(this);
     this.isMoving = false;
+    this.vaulting = false;
+    this.walkBob?.stop();
+    this.walkBob = undefined;
+    this.walking = false;
     this.cx = cx;
     this.cy = cy;
     const { x, y } = cartToIso(cx, cy);
     this.setPosition(x + TILE_W / 2, y + TILE_H / 2);
     this.returnToIdle();
     this.updateSwimState();
-    return true;
-  }
-
-  private canMoveToTile(cx: number, cy: number): boolean {
-    const { cols, rows, groundLayer, decoLayer, walkableGround, solidDeco } =
-      this.mapDef;
-    if (cx < 0 || cy < 0 || cx >= cols || cy >= rows) return false;
-    const groundIdx = groundLayer[cy]?.[cx];
-    if (groundIdx === undefined) return false;
-    // Water is enterable too — the player swims across it — unless the map
-    // opts out of swimming (e.g. the village, where you stay on the bridges).
-    const canSwim = groundIdx === WATER && !this.mapDef.noSwim;
-    if (!walkableGround.has(groundIdx) && !canSwim) return false;
-    const decoIdx = decoLayer[cy]?.[cx];
-    if (decoIdx !== undefined && decoIdx >= 0 && solidDeco.has(decoIdx))
-      return false;
     return true;
   }
 
@@ -448,7 +404,7 @@ export class Player extends Phaser.GameObjects.Container {
       S: Phaser.Input.Keyboard.Key;
       D: Phaser.Input.Keyboard.Key;
     },
-    _delta: number,
+    delta: number,
 
     touch?: { dx: number; dy: number },
   ): boolean {
@@ -468,9 +424,97 @@ export class Player extends Phaser.GameObjects.Container {
 
     this.inputDir = { dx, dy };
 
-    if (this.isMoving || (dx === 0 && dy === 0)) return false;
+    if (this.vaulting) return false;
 
-    return this.attemptStep(dx, dy);
+    if (dx === 0 && dy === 0) {
+      this.stopWalking();
+      return false;
+    }
+
+    // Free movement: velocity scaled by the frame delta, collided against
+    // the map's art-tight hitboxes (axis-separated → wall sliding for free).
+    const swim = this.isSwimming ? SWIM_SPEED_MUL : 1;
+    const speed =
+      (this.running ? RUN_SPEED : WALK_SPEED) * this.speedMul * swim;
+    const mag = Math.hypot(dx, dy);
+    const step = (speed * Math.min(delta, 100)) / 1000;
+    const vx = (dx / mag) * step;
+    const vy = (dy / mag) * step;
+
+    const feetY = this.y + FEET_OFF_Y;
+    const moved = this.collision.moveBox(
+      this.x,
+      feetY,
+      FEET_HW,
+      FEET_HH,
+      vx,
+      vy,
+    );
+    const nx = moved.x;
+    const ny = moved.y - FEET_OFF_Y;
+    const dist = Math.hypot(nx - this.x, ny - this.y);
+    this.setPosition(nx, ny);
+
+    this.setDirection(dx, dy);
+    this.startWalking();
+
+    const tcx = Math.floor(this.x / TILE_W);
+    const tcy = Math.floor(this.y / TILE_H);
+    if (tcx !== this.cx || tcy !== this.cy) {
+      this.cx = tcx;
+      this.cy = tcy;
+      this.updateSwimState();
+    }
+
+    this.dustDist += dist;
+    if (this.dustDist >= TILE_W * 1.5) {
+      this.dustDist = 0;
+      this.spawnDust();
+    }
+
+    this.isMoving = dist > 0.01;
+    return this.isMoving;
+  }
+
+  // Continuous walk animation: swap to the walk anim (guarded so direction
+  // changes don't restart it needlessly) and run a looping foot bob.
+  private startWalking() {
+    this.applyAnim("walk");
+    if (this.walking) return;
+    this.walking = true;
+    this.stopIdleBob();
+    this.scene.tweens.killTweensOf(this.avatar);
+    this.avatar.y = AVATAR_FOOT_Y;
+    this.walkBob = this.scene.tweens.add({
+      targets: this.avatar,
+      y: AVATAR_FOOT_Y - 1.5,
+      duration: 110,
+      ease: "Sine.easeInOut",
+      yoyo: true,
+      repeat: -1,
+    });
+  }
+
+  private stopWalking() {
+    if (!this.walking) return;
+    this.walking = false;
+    this.isMoving = false;
+    this.walkBob?.stop();
+    this.walkBob = undefined;
+    this.returnToIdle();
+  }
+
+  /** Drop to the idle anim (e.g. when a menu opens mid-walk). */
+  idle() {
+    if (!this.vaulting) this.stopWalking();
+  }
+
+  /** Apply an avatar anim only when (anim, dir, facing) actually changed. */
+  private applyAnim(anim: "walk" | "idle") {
+    const key = `${anim}:${this.dir}:${this.facingLeft}`;
+    if (key === this.animKey) return;
+    this.animKey = key;
+    this.avatar.setAnim(anim, this.dir, this.facingLeft);
   }
 
   showSpeaking(ms = 1600) {
