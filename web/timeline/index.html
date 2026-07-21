@@ -52,6 +52,7 @@
   .node.op .seal { background: linear-gradient(var(--gold-soft), var(--gold)); transform: rotate(45deg); }
   .node.op .seal span { transform: rotate(-45deg); }
   .node.prologue .seal { background: linear-gradient(#9775fa, #7048e8); border-radius: 4px; }
+  .node.locked .seal { background: linear-gradient(#8b8f9c, #565b6b); font-size: 22px; }
 
   /* connector arm from spine to card */
   .node::after {
@@ -68,6 +69,10 @@
   .node.chapter .card-bar { background: linear-gradient(#127c74, #0e5f59); color: #dffaf7; }
   .node.op .card-bar { background: linear-gradient(var(--gold-soft), var(--gold)); color: #fff; }
   .node.prologue .card-bar { background: linear-gradient(#7048e8, #5a35c0); color: #e5dbff; }
+  .node.locked .card-bar { background: linear-gradient(#565b6b, #3d4150); color: #e7e9ef; }
+  .node.locked .card { border-style: dashed; }
+  .node.locked .card-body h2 { color: var(--faint); }
+  .node.locked .card:hover { transform: none; box-shadow: 3px 3px 0 var(--stroke); }
   .dur { margin-left: auto; font-size: 11px; color: rgba(255,255,255,.7); border: 2px solid rgba(0,0,0,.45); padding: 3px 8px 2px; letter-spacing: 1px; }
   .card-body { padding: 16px 20px 20px; }
   .card-body h2 { font-family: var(--pixel); font-size: 23px; color: var(--ink); margin: 0 0 10px; letter-spacing: 1px; }
@@ -101,7 +106,7 @@
     <section class="chron-hero">
       <div class="eyebrow">SEASON ONE</div>
       <h1 class="chron-title">THE CHRONICLE<span class="thin">OF PIXL</span></h1>
-      <p class="chron-intro">Origin was the greatest digital civilization ever built — until the Core overloaded and <b>The Great Static</b> shattered it into islands adrift in the Void. Builders were called across universes to rebuild it. Five Chapters of story, five Operations to power them.</p>
+      <p class="chron-intro">Origin was the greatest digital civilization ever built — until the Core overloaded and <b>The Great Static</b> shattered it into islands adrift in the Void. Builders were called across universes to rebuild it, one Chapter at a time. <b>The Chronicle writes itself as the season unfolds</b> — return each week to read what has been uncovered.</p>
       <div class="ornament"><span>◆</span></div>
     </section>
 
@@ -114,45 +119,72 @@
 Pixl.mountTopbar("timeline");
 Pixl.loadWallet();
 
+const REVEALED_THROUGH = "chapter-1";
+
 const NODES = [
-  { kind: "prologue", seal: "✦", tag: "PROLOGUE", dur: "", title: "The Fall of Pixl",
+  { id: "prologue", kind: "prologue", seal: "✦", tag: "PROLOGUE", dur: "", title: "The Fall of Pixl",
     body: "Origin has fallen. Centuries of every invention uploaded into the Core finally exceeded its limits — the overload became The Great Static, and the world crashed into pixelated fragments drifting in the Void. Unable to repair itself, the Core reaches into our universe and wakes the Builders." },
 
-  { kind: "chapter", seal: "I", tag: "CHAPTER I", dur: "3 WEEKS", title: "Rise of Pixl",
+  { id: "chapter-1", kind: "chapter", seal: "I", tag: "CHAPTER I", dur: "3 WEEKS", title: "Rise of Pixl",
     body: "Builders arrive in Pixl for the first time. They restore the Capital District, reactivate the Core, and help the first settlements recover from the Crash. Hope returns for the first time in centuries." },
-  { kind: "op", seal: "I", tag: "OPERATION I", dur: "1 WEEK", title: "Forge Weekend",
+  { id: "operation-1", kind: "op", seal: "I", tag: "OPERATION I", dur: "1 WEEK", title: "Forge Weekend",
     q: "The Capital is standing… but its workshops remain silent.", body: "A mini online hackathon focused on developer tools.",
     outcome: "The <b>Great Forge</b> is restored — Pixl can manufacture advanced technology once again." },
 
-  { kind: "chapter", seal: "II", tag: "CHAPTER II", dur: "3 WEEKS", title: "Echoes Beneath",
+  { id: "chapter-2", kind: "chapter", seal: "II", tag: "CHAPTER II", dur: "3 WEEKS", title: "Echoes Beneath",
     body: "Power restored to the Great Forge awakens Vault Zero, an underground research facility buried since before the Crash. Builders uncover forgotten technology and the first clues about what truly caused Pixl's downfall." },
-  { kind: "op", seal: "II", tag: "OPERATION II", dur: "1 WEEK", title: "Skybound Jam",
+  { id: "operation-2", kind: "op", seal: "II", tag: "OPERATION II", dur: "1 WEEK", title: "Skybound Jam",
     q: "The Sky Docks are almost ready.", body: "A week-long game jam.",
     outcome: "The first <b>airships</b> return to service, opening travel beyond the known lands." },
 
-  { kind: "chapter", seal: "III", tag: "CHAPTER III", dur: "3 WEEKS", title: "Beyond the Clouds",
+  { id: "chapter-3", kind: "chapter", seal: "III", tag: "CHAPTER III", dur: "3 WEEKS", title: "Beyond the Clouds",
     body: "Using the restored airships, Builders explore the floating Sky Isles. Ancient ruins, new allies, and strange relics hint that Pixl's history is far older than anyone believed." },
-  { kind: "op", seal: "III", tag: "OPERATION III", dur: "1 WEEK", title: "Core Intelligence",
+  { id: "operation-3", kind: "op", seal: "III", tag: "OPERATION III", dur: "1 WEEK", title: "Core Intelligence",
     q: "The Observatory requires new minds.", body: "Builders create AI projects.",
     outcome: "The <b>Observatory</b> is reactivated, letting the Core scan regions unreachable since the Crash." },
 
-  { kind: "chapter", seal: "IV", tag: "CHAPTER IV", dur: "3 WEEKS", title: "The Signal",
+  { id: "chapter-4", kind: "chapter", seal: "IV", tag: "CHAPTER IV", dur: "3 WEEKS", title: "The Signal",
     body: "The Observatory detects a mysterious transmission repeating from deep within the Void. As Builders investigate, they discover someone — or something — is trying to communicate with Pixl." },
-  { kind: "op", seal: "IV", tag: "OPERATION IV", dur: "1 WEEK", title: "Relay Protocol",
+  { id: "operation-4", kind: "op", seal: "IV", tag: "OPERATION IV", dur: "1 WEEK", title: "Relay Protocol",
     q: "The transmission is unstable.", body: "Builders create web apps, APIs, networking, or communication tools.",
     outcome: "The signal is decoded, revealing <b>coordinates to a forgotten civilization</b>." },
 
-  { kind: "chapter", seal: "V", tag: "CHAPTER V", dur: "3 WEEKS", title: "The Forgotten Frontier",
+  { id: "chapter-5", kind: "chapter", seal: "V", tag: "CHAPTER V", dur: "3 WEEKS", title: "The Forgotten Frontier",
     body: "Builders journey beyond Pixl's known borders and find the remnants of another civilization that survived the Crash in isolation. The chapter ends with an ancient gateway leading even farther into the unknown." },
-  { kind: "op", seal: "V", tag: "OPERATION V", dur: "1 WEEK", title: "Genesis Week",
+  { id: "operation-5", kind: "op", seal: "V", tag: "OPERATION V", dur: "1 WEEK", title: "Genesis Week",
     q: "A new frontier awaits.", body: "Builders can create any type of project to help establish the first outpost beyond Pixl.",
     outcome: "The <b>gateway is stabilized</b>, and the expedition into the unknown officially begins." },
 ];
 
 function kindClass(k) { return k === "operation" || k === "op" ? "op" : k === "prologue" ? "prologue" : "chapter"; }
 
+const LOCKED_CARD = `
+  <div class="node locked">
+    <div class="seal"><span>🔒</span></div>
+    <div class="card panel">
+      <div class="card-bar">SEALED<span class="dur">SOON</span></div>
+      <div class="card-body">
+        <h2>The story continues…</h2>
+        <p>The next page of the Chronicle has not been written yet. Return as the season unfolds — a new Chapter is revealed the moment it begins.</p>
+      </div>
+    </div>
+  </div>`;
+
+function revealCut(nodes) {
+  if (nodes.some(n => typeof n.revealed === "boolean")) {
+    let last = -1;
+    nodes.forEach((n, i) => { if (n.revealed !== false) last = i; });
+    return last;
+  }
+  const i = nodes.findIndex(n => n.id === REVEALED_THROUGH);
+  return i === -1 ? nodes.length - 1 : i;
+}
+
 function renderNodes(nodes) {
-  document.getElementById("rail").innerHTML = nodes.map((n, i) => `
+  const cut = revealCut(nodes);
+  const shown = nodes.slice(0, cut + 1);
+  const hasMore = cut + 1 < nodes.length;
+  const cards = shown.map((n, i) => `
     <div class="node ${kindClass(n.kind)}" style="animation-delay:${Math.min(i * 70, 700)}ms">
       <div class="seal"><span>${Pixl.esc(n.seal || "◆")}</span></div>
       <div class="card panel">
@@ -164,6 +196,7 @@ function renderNodes(nodes) {
         </div>
       </div>
     </div>`).join("");
+  document.getElementById("rail").innerHTML = cards + (hasMore ? LOCKED_CARD : "");
 }
 
 // Load the Chronicle from the dashboard-authored table; fall back to the seed

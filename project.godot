@@ -13,8 +13,11 @@ config_version=5
 config/name="Pixl: The Game"
 run/main_scene="uid://bko40f8bhcrgr"
 config/features=PackedStringArray("4.6", "Forward Plus")
-boot_splash/bg_color=Color(0.039216, 0.031373, 0.019608, 1)
-boot_splash/show_image=false
+boot_splash/bg_color=Color(0.960784, 0.933333, 0.823529, 1)
+boot_splash/show_image=true
+boot_splash/image="res://assets/ui/boot_splash.png"
+boot_splash/fullsize=false
+boot_splash/use_filter=false
 config/icon="res://icon.svg"
 
 [autoload]
