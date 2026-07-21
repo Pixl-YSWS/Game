@@ -8,6 +8,7 @@ const Pixl = (() => {
     try { localStorage.setItem("pixl_token", token); } catch {}
     params.delete("token");
     params.delete("name");
+    params.delete("embed");
     const qs = params.toString();
     history.replaceState({}, "", location.pathname + (qs ? "?" + qs : "") + location.hash);
   } else {
@@ -33,7 +34,7 @@ const Pixl = (() => {
     document.body.insertAdjacentHTML("beforeend", `
       <div class="gate">
         <div class="gate-card panel">
-          <div style="font-size:44px;margin-bottom:12px">🏘️</div>
+          <div style="font-size:44px;margin-bottom:12px"></div>
           <h1>PIXL</h1>
           <p>This page is part of the Pixl world — hop into the game and walk up to the shop, an NPC or press the shortcut key to open it with your account.</p>
           <a class="btn" href="${GAME}">ENTER THE GAME</a>

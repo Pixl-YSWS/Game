@@ -297,7 +297,7 @@ function renderList() {
   if (projects.length === 0) {
     view.innerHTML = `
       <div class="connect-card panel">
-        <div style="font-size:48px;margin-bottom:12px">🛠️</div>
+        <div style="font-size:48px;margin-bottom:12px"></div>
         <h2>NO PROJECTS YET</h2>
         <p>Log what you're building, link it to Hackatime, journal as you go, then ship it for review — approved hours pay out in pixels.</p>
         <a class="btn" href="#new">+ START YOUR FIRST PROJECT</a>
@@ -312,7 +312,7 @@ function renderList() {
         const secs = linkedSeconds(p);
         return `
         <a class="card panel proj-row" href="#p=${p.id}">
-          <div class="proj-row-thumb">${p.image_url ? `<img src="${Pixl.esc(p.image_url)}" alt="" loading="lazy" onerror="this.remove()">` : "🛠️"}</div>
+          <div class="proj-row-thumb">${p.image_url ? `<img src="${Pixl.esc(p.image_url)}" alt="" loading="lazy" onerror="this.remove()">` : ""}</div>
           <div class="proj-row-body">
             <div class="proj-row-head">
               <span class="proj-name">${Pixl.esc(p.name)}</span>
@@ -324,8 +324,8 @@ function renderList() {
               ${p.pixels_earned ? `<span class="earned">+${Math.round(p.pixels_earned)} px earned</span>` : ""}
               <span>${Pixl.timeAgo(p.created_at)}</span>
             </div>
-            ${p.status === "needs_changes" && p.review_note ? `<div class="note-strip">📝 ${Pixl.esc(p.review_note)}</div>` : ""}
-            ${p.rejected_at && p.reject_reason ? `<div class="note-strip">❌ ${Pixl.esc(p.reject_reason)}</div>` : ""}
+            ${p.status === "needs_changes" && p.review_note ? `<div class="note-strip">${Pixl.esc(p.review_note)}</div>` : ""}
+            ${p.rejected_at && p.reject_reason ? `<div class="note-strip">${Pixl.esc(p.reject_reason)}</div>` : ""}
           </div>
           <div class="proj-row-arrow">›</div>
         </a>`;
@@ -365,9 +365,9 @@ function formHtml(p) {
       <div class="form-row">
         <label>THUMBNAIL (required to ship)</label>
         <div class="thumb-box">
-          <div class="thumb-preview" id="f-thumb-preview">${p.image_url ? `<img src="${Pixl.esc(p.image_url)}" alt="">` : "🖼️"}</div>
+          <div class="thumb-preview" id="f-thumb-preview">${p.image_url ? `<img src="${Pixl.esc(p.image_url)}" alt="">` : ""}</div>
           <div style="display:flex;flex-direction:column;gap:8px">
-            <button class="btn dark" id="f-thumb-btn" type="button">📁 CHOOSE IMAGE</button>
+            <button class="btn dark" id="f-thumb-btn" type="button">CHOOSE IMAGE</button>
             <input type="file" id="f-thumb-file" accept="image/png,image/jpeg,image/webp,image/gif" hidden>
             <span class="faint" style="font-size:11px">or paste an image anywhere on this page</span>
           </div>
@@ -388,7 +388,7 @@ function formHtml(p) {
       <div class="disclosure update">
         <label class="disclosure-check">
           <input type="checkbox" id="f-update" checked>
-          🔄 This is an update to a shipped project
+          This is an update to a shipped project
         </label>
         <p class="disclosure-desc">You already shipped this project, so this counts as an update. Tell reviewers what you added or changed since the last approval — a description is required to ship, and they'll only credit the new work.</p>
         <div class="form-row" id="f-update-notes-row">
@@ -418,7 +418,7 @@ function formHtml(p) {
         </div>
       </div>
       <div style="display:flex;gap:10px;flex-wrap:wrap">
-        <button class="btn" id="f-save">${p.id ? "💾 SAVE" : "🚀 CREATE PROJECT"}</button>
+        <button class="btn" id="f-save">${p.id ? "SAVE" : "CREATE PROJECT"}</button>
         <a class="btn dark" href="#">CANCEL</a>
       </div>
     </div>`;
@@ -510,17 +510,17 @@ async function renderProject(id) {
         <span class="chip ${cls}">${label}</span>
         ${p.pixels_earned ? `<span class="chip gold">+${Math.round(p.pixels_earned)} PX EARNED</span>` : ""}
       </div>
-      ${p.status === "needs_changes" && p.review_note ? `<div class="note-strip" style="margin-bottom:14px">📝 REVIEWER: ${Pixl.esc(p.review_note)}</div>` : ""}
-      ${p.rejected_at ? `<div class="note-strip" style="margin-bottom:14px">❌ REJECTED${p.reject_reason ? ": " + Pixl.esc(p.reject_reason) : ""} — fix it up and ship again.</div>` : ""}
+      ${p.status === "needs_changes" && p.review_note ? `<div class="note-strip" style="margin-bottom:14px">REVIEWER: ${Pixl.esc(p.review_note)}</div>` : ""}
+      ${p.rejected_at ? `<div class="note-strip" style="margin-bottom:14px">REJECTED${p.reject_reason ? ": " + Pixl.esc(p.reject_reason) : ""} — fix it up and ship again.</div>` : ""}
       ${formHtml(p)}
 
       <div class="section-h">SHIP IT</div>
       <div class="form-grid panel">
         <div class="ship-list">
-          <div class="ship-item"><span class="${p.repo_url ? "ok" : "no"}">${p.repo_url ? "✔" : "✘"}</span> GitHub repo linked</div>
-          <div class="ship-item"><span class="${p.demo_url ? "ok" : "no"}">${p.demo_url ? "✔" : "✘"}</span> Demo link added</div>
-          <div class="ship-item"><span class="${p.image_url ? "ok" : "no"}">${p.image_url ? "✔" : "✘"}</span> Thumbnail uploaded</div>
-          <div class="ship-item"><span class="${secs >= 3600 ? "ok" : "no"}">${secs >= 3600 ? "✔" : "✘"}</span> ≥ 1h tracked on linked Hackatime projects <span class="teal">(${Pixl.hours(secs)})</span></div>
+          <div class="ship-item"><span class="${p.repo_url ? "ok" : "no"}">${p.repo_url ? "+" : "-"}</span> GitHub repo linked</div>
+          <div class="ship-item"><span class="${p.demo_url ? "ok" : "no"}">${p.demo_url ? "+" : "-"}</span> Demo link added</div>
+          <div class="ship-item"><span class="${p.image_url ? "ok" : "no"}">${p.image_url ? "+" : "-"}</span> Thumbnail uploaded</div>
+          <div class="ship-item"><span class="${secs >= 3600 ? "ok" : "no"}">${secs >= 3600 ? "+" : "-"}</span> ≥ 1h tracked on linked Hackatime projects <span class="teal">(${Pixl.hours(secs)})</span></div>
         </div>
         ${!isUpdate ? `
         <label class="check-row">
@@ -528,14 +528,14 @@ async function renderProject(id) {
           I already submitted this project to another Hack Club YSWS
         </label>` : ""}
         ${inReview ? `
-        <div class="note-strip teal">⏳ This project is in the review queue — you can't edit it until it's reviewed. Unship it if you need to make changes.</div>
+        <div class="note-strip teal">This project is in the review queue — you can't edit it until it's reviewed. Unship it if you need to make changes.</div>
         <div style="display:flex;gap:10px;flex-wrap:wrap">
-          <button class="btn dark" id="s-ship" disabled>⏳ IN REVIEW</button>
-          <button class="btn" id="s-unship">↩ UNSHIP TO EDIT</button>
+          <button class="btn dark" id="s-ship" disabled>IN REVIEW</button>
+          <button class="btn" id="s-unship">UNSHIP TO EDIT</button>
         </div>` : `
         <div>
           <button class="btn" id="s-ship">
-            ${isUpdate ? "🚢 SHIP UPDATE" : "🚢 SHIP FOR REVIEW"}
+            ${isUpdate ? "SHIP UPDATE" : "SHIP FOR REVIEW"}
           </button>
           <span class="faint" style="font-size:12px;margin-left:10px">Save your edits first — shipping uses what's saved.</span>
         </div>`}
@@ -555,10 +555,10 @@ async function renderProject(id) {
             <button type="button" class="md-btn" data-md="ul" title="Bullet list">•</button>
             <button type="button" class="md-btn" data-md="quote" title="Quote">&ldquo;</button>
             <button type="button" class="md-btn" data-md="code" title="Code">&lt;/&gt;</button>
-            <button type="button" class="md-btn" data-md="link" title="Link">🔗</button>
-            <button type="button" class="md-btn" data-md="image" title="Add image">🖼</button>
+            <button type="button" class="md-btn" data-md="link" title="Link">LINK</button>
+            <button type="button" class="md-btn" data-md="image" title="Add image">IMAGE</button>
             <span class="md-sep"></span>
-            <button type="button" class="md-btn" data-md="preview" id="j-preview-btn" title="Toggle preview">👁 PREVIEW</button>
+            <button type="button" class="md-btn" data-md="preview" id="j-preview-btn" title="Toggle preview">PREVIEW</button>
           </div>
           <textarea class="field" id="j-content" maxlength="5000" placeholder="What did you build today? Markdown supported — **bold**, # headings, - lists, links, code blocks. Paste an image to attach it."></textarea>
           <div class="md-preview" id="j-preview" hidden></div>
@@ -635,7 +635,7 @@ function lockForm() {
       if (el.id === "s-unship" || el.closest(".composer") || el.closest("#j-list") || el.closest(".danger-zone")) return;
       el.disabled = true;
     });
-  if ($("f-save")) $("f-save").textContent = "🔒 IN REVIEW — CAN'T EDIT";
+  if ($("f-save")) $("f-save").textContent = "IN REVIEW — CAN'T EDIT";
 }
 
 async function unship(p) {
@@ -671,16 +671,16 @@ async function ship(p, isUpdate) {
   const r = await Pixl.send("POST", `/api/projects/${p.id}/ship`, body);
   $("s-ship").disabled = false;
   if (!r.ok) return Pixl.toast(err(r.error), true);
-  Pixl.toast("🚢 SHIPPED! It's in the review queue.");
+  Pixl.toast("SHIPPED! It's in the review queue.");
   await loadProjects();
   renderProject(p.id);
 }
 
 const VERDICTS = {
-  approved: ["✅", "Approved"],
-  first_pass_approved: ["🔎", "Passed first review"],
-  needs_changes: ["📝", "Sent back for changes"],
-  rejected: ["❌", "Rejected"],
+  approved: ["APPROVED", "Approved"],
+  first_pass_approved: ["REVIEWED", "Passed first review"],
+  needs_changes: ["CHANGES", "Sent back for changes"],
+  rejected: ["REJECTED", "Rejected"],
 };
 
 function tlItem(icon, title, at, extra, note) {
@@ -694,9 +694,9 @@ function tlItem(icon, title, at, extra, note) {
 }
 
 function tlRow(e) {
-  if (e.kind === "created") return tlItem("🌱", "Project created", e.at, "", "");
-  if (e.kind === "shipped") return tlItem("🚀", "Shipped for review", e.at, "", "");
-  const [icon, title] = VERDICTS[e.verdict] || ["📋", "Reviewed"];
+  if (e.kind === "created") return tlItem("", "Project created", e.at, "", "");
+  if (e.kind === "shipped") return tlItem("", "Shipped for review", e.at, "", "");
+  const [icon, title] = VERDICTS[e.verdict] || ["REVIEWED", "Reviewed"];
   let hours = "";
   if (e.approvedHours != null) {
     const claimed = Number(e.claimedHours || 0);
@@ -704,7 +704,7 @@ function tlRow(e) {
     const cut = Math.round((claimed - appr) * 10) / 10;
     hours = `<div class="tl-hours">Credited ${appr}h${claimed > appr ? ` of ${claimed}h claimed <span class="tl-cut">(−${cut}h)</span>` : ""}</div>`;
   }
-  const note = e.note ? `<div class="tl-note">📝 ${Pixl.esc(e.note)}</div>` : "";
+  const note = e.note ? `<div class="tl-note">${Pixl.esc(e.note)}</div>` : "";
   return tlItem(icon, title, e.at, hours, note);
 }
 
@@ -807,7 +807,7 @@ async function loadJournal(id) {
         <div class="jmeta">
           <span>${Pixl.timeAgo(e.created_at)}</span>
           ${e.hours ? `<span class="teal">${Number(e.hours).toFixed(1)}h</span>` : ""}
-          <button class="jdel" data-id="${e.id}">✕ delete</button>
+          <button class="jdel" data-id="${e.id}">delete</button>
         </div>
         <div class="jbody md">${Pixl.markdown(e.content)}</div>
       </div>`).join("");

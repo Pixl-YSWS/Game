@@ -73,7 +73,7 @@
   <div class="empty-note" id="empty" hidden>NO SIDEQUESTS POSTED RIGHT NOW.<br>THE VILLAGERS ARE THINKING…</div>
 
   <div class="hint-box panel-deep" id="hint" hidden>
-    💡 Locked quests are unlocked by talking to the right NPC in the game — wander the village, chat with everyone, and their quests open up here.
+    Locked quests are unlocked by talking to the right NPC in the game — wander the village, chat with everyone, and their quests open up here.
   </div>
 </main>
 
@@ -82,7 +82,7 @@
 Pixl.mountTopbar("quests");
 Pixl.loadWallet();
 
-const ICONS = ["🗺️", "⚔️", "🔮", "🌾", "🏹", "🪓", "🧪", "📜", "🐔", "🎣"];
+const ICONS = ["MAP", "SWORD", "CRYSTAL", "WHEAT", "ARROW", "AXE", "POTION", "SCROLL", "CHICKEN", "FISH"];
 
 async function boot() {
   if (!Pixl.hasToken) return;
@@ -109,14 +109,14 @@ async function boot() {
   const sorted = [...quests].sort((a, b) => Number(b.unlocked) - Number(a.unlocked));
   document.getElementById("quests").innerHTML = sorted.map((q, i) => `
     <div class="quest panel ${q.unlocked ? "unlocked" : "locked"}" style="animation: toast-in .2s steps(4) both; animation-delay:${Math.min(i * 40, 500)}ms">
-      <div class="quest-icon">${q.unlocked ? ICONS[q.id % ICONS.length] : "🔒"}</div>
+      <div class="quest-icon">${q.unlocked ? ICONS[q.id % ICONS.length] : ""}</div>
       <div class="quest-main">
         <div class="quest-name">${Pixl.esc(q.name)}</div>
         <div class="quest-desc">${q.description ? Pixl.bbcode(q.description) : Pixl.esc(q.unlocked ? "" : "Find the right villager to learn more…")}</div>
         <div class="quest-meta">
-          ${q.region ? `<span class="chip">📍 ${Pixl.esc(q.region)}</span>` : ""}
-          ${q.npc ? `<span class="chip teal">🗣 ${Pixl.esc(q.npc)}</span>` : ""}
-          ${q.reward ? `<span class="chip reward-tag">🎁 ${Pixl.esc(q.reward)}</span>` : ""}
+          ${q.region ? `<span class="chip">${Pixl.esc(q.region)}</span>` : ""}
+          ${q.npc ? `<span class="chip teal">${Pixl.esc(q.npc)}</span>` : ""}
+          ${q.reward ? `<span class="chip reward-tag">${Pixl.esc(q.reward)}</span>` : ""}
         </div>
       </div>
       <div class="stamp ${q.unlocked ? "on" : "off"}">${q.unlocked ? "UNLOCKED" : "LOCKED"}</div>

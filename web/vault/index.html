@@ -49,8 +49,8 @@
   .chamber.on .ch-seal { background: linear-gradient(160deg, #7048e8, #5a35c0); color: #fff; }
   .chamber.on .ch-seal .lv-word { color: #e5dbff; }
   .chamber.off .ch-seal { background: var(--panel-deep); color: var(--faint); }
-  .chamber.on .ch-seal::after { content: "🔓"; font-family: var(--sans); font-size: 15px; }
-  .chamber.off .ch-seal::after { content: "🔒"; font-family: var(--sans); font-size: 15px; opacity: .8; }
+  .chamber.on .ch-seal::after { content: "UNLOCKED"; font-family: var(--sans); font-size: 15px; }
+  .chamber.off .ch-seal::after { content: "LOCKED"; font-family: var(--sans); font-size: 15px; opacity: .8; }
 
   .ch-body { flex: 1; min-width: 0; padding: 16px 20px; }
   .ch-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 7px; }
@@ -85,7 +85,7 @@
     </section>
 
     <section class="gauge">
-      <div class="gauge-eyebrow">⚡ RESTORATION ENERGY</div>
+      <div class="gauge-eyebrow">RESTORATION ENERGY</div>
       <div class="gauge-num" id="g-num">—<small id="g-sub">COMMUNITY TOTAL</small></div>
       <div class="gauge-next" id="g-next"></div>
       <div class="segbar" id="segbar"></div>
@@ -147,8 +147,8 @@ function render(data) {
         </div>
         <div class="ch-blurb">${Pixl.esc(l.blurb)}</div>
         <div class="rewards">
-          <span class="rw energy">⚡ ${fmt(l.energyRequired)}</span>
-          ${(l.rewards || []).map((r) => `<span class="rw">${Pixl.esc(r.icon || "🎁")} ${Pixl.esc(r.label || "")}</span>`).join("")}
+          <span class="rw energy">${fmt(l.energyRequired)}</span>
+          ${(l.rewards || []).map((r) => `<span class="rw">${Pixl.esc(r.icon || "")} ${Pixl.esc(r.label || "")}</span>`).join("")}
         </div>
         ${!l.unlocked ? `<div class="ch-need">◆ ${fmt(Math.max(0, l.energyRequired - energy))} more energy to recover</div>` : ""}
       </div>

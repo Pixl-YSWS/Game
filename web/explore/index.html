@@ -150,7 +150,7 @@ function statusChip(p) {
 function projCard(p) {
   return `
     <a class="card panel proj-card" href="#project=${p.id}">
-      <div class="proj-thumb">${p.image_url ? `<img src="${Pixl.esc(p.image_url)}" alt="" loading="lazy" onerror="this.remove()">` : "🛠️"}</div>
+      <div class="proj-thumb">${p.image_url ? `<img src="${Pixl.esc(p.image_url)}" alt="" loading="lazy" onerror="this.remove()">` : ""}</div>
       <div class="proj-name">${Pixl.esc(p.name)}</div>
       <div class="proj-meta">
         <span>by ${Pixl.esc(p.owner_name || "?")}</span>
@@ -208,13 +208,13 @@ async function showLeaderboard() {
   const data = await Pixl.api("/api/explore/leaderboard");
   const rows = (data.players || []).map((p) => `
     <div class="board-row ${p.rank <= 3 ? "top" + p.rank : ""} ${p.you ? "you" : ""}">
-      <span class="rank">${p.rank <= 3 ? ["🥇", "🥈", "🥉"][p.rank - 1] : "#" + p.rank}</span>
+      <span class="rank">${p.rank <= 3 ? ["#1", "#2", "#3"][p.rank - 1] : "#" + p.rank}</span>
       <span class="bname">${Pixl.esc(p.display_name)}${p.you ? ' <span class="gold">← YOU</span>' : ""}</span>
       <span class="bpx"><img src="/img/pixel.png" alt="">${p.pixels.toLocaleString()} PX</span>
     </div>`).join("");
   const sprint = data.sprint ? `
     <div class="sprint-panel panel-deep">
-      <h3>⚡ ${Pixl.esc(data.sprint.name)}</h3>
+      <h3>${Pixl.esc(data.sprint.name)}</h3>
       <div class="faint" style="font-size:12px;margin-bottom:12px">Pixels earned during the event only · ${Pixl.countdown(data.sprint.ends_at)}</div>
       <div class="board">${(data.sprint.players || []).map((p) => `
         <div class="board-row ${p.you ? "you" : ""}">
@@ -274,7 +274,7 @@ async function showProject(id) {
   view.innerHTML = `
     <button class="btn dark back-btn" onclick="history.length > 1 ? history.back() : location.hash='#projects'">← BACK</button>
     <div class="profile-head panel">
-      <div class="proj-thumb" style="width:220px;height:160px;flex-shrink:0">${p.image_url ? `<img src="${Pixl.esc(p.image_url)}" alt="" onerror="this.remove()">` : "🛠️"}</div>
+      <div class="proj-thumb" style="width:220px;height:160px;flex-shrink:0">${p.image_url ? `<img src="${Pixl.esc(p.image_url)}" alt="" onerror="this.remove()">` : ""}</div>
       <div class="profile-info">
         <h2>${Pixl.esc(p.name)}</h2>
         <div>${statusChip(p)}

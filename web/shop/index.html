@@ -119,6 +119,11 @@
   #detail-name { font-size: 27px; color: var(--gold); text-shadow: 3px 3px 0 var(--stroke); }
   #detail-desc { font-size: 15px; line-height: 1.7; color: var(--ink); white-space: pre-wrap; }
   .options-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .opt-group { display: flex; flex-direction: column; gap: 6px; }
+  .opt-group-name { font-size: 12px; letter-spacing: 1px; color: var(--dim); }
+  .opt-choices { display: flex; gap: 8px; flex-wrap: wrap; }
+  .opt-choice { cursor: pointer; user-select: none; }
+  .opt-choice.on { color: var(--btn-ink); background: var(--gold); border-color: var(--stroke); }
   .afford-bar { height: 14px; border: 3px solid var(--stroke); background: var(--panel-deep); }
   .afford-bar > div { height: 100%; background: var(--gold); transition: width .3s steps(6); }
   .trophy-head {
@@ -189,7 +194,7 @@
   </div>
 
   <div class="limited-banner" id="limited-banner" hidden>
-    <span>⚡ MYSTERY MERCHANT IS IN TOWN —</span>
+    <span>MYSTERY MERCHANT IS IN TOWN —</span>
     <span class="tick" id="limited-tick"></span>
     <span>GRAB THE LIMITED GOODS BEFORE THEY VANISH!</span>
   </div>
@@ -236,6 +241,56 @@ let wallet = null;
 let selected = null;
 let xp = 0;
 let claimedIds = new Set();
+let buying = false;
+let optionPick = {};
+
+function optionGroups(item) {
+  const named = [];
+  const loose = [];
+  for (const raw of Array.isArray(item.options) ? item.options : []) {
+    const o = String(raw);
+    const idx = o.indexOf(":");
+    if (idx > 0) {
+      const name = o.slice(0, idx).trim();
+      const choices = o.slice(idx + 1).split(",").map((s) => s.trim()).filter(Boolean);
+      if (choices.length) named.push({ name, choices });
+    } else if (o.trim()) {
+      loose.push(o.trim());
+    }
+  }
+  if (loose.length) named.unshift({ name: "", choices: loose });
+  return named;
+}
+
+function optionSummary() {
+  if (!selected) return "";
+  return optionGroups(selected)
+    .map((g, gi) => {
+      const pick = optionPick[gi] ?? g.choices[0];
+      return g.name ? `${g.name}: ${pick}` : pick;
+    })
+    .join(" · ");
+}
+
+function renderOptions() {
+  const groups = optionGroups(selected);
+  $("detail-options").innerHTML = groups
+    .map((g, gi) => {
+      const pick = optionPick[gi] ?? g.choices[0];
+      const chips = g.choices
+        .map((c) => `<span class="chip opt-choice ${c === pick ? "on" : ""}" data-g="${gi}" data-c="${Pixl.esc(c)}">${Pixl.esc(c.toUpperCase())}</span>`)
+        .join("");
+      const label = g.name ? `<div class="opt-group-name">${Pixl.esc(g.name.toUpperCase())}</div>` : "";
+      return `<div class="opt-group">${label}<div class="opt-choices">${chips}</div></div>`;
+    })
+    .join("");
+  for (const chip of $("detail-options").querySelectorAll(".opt-choice")) {
+    chip.addEventListener("click", () => {
+      optionPick[Number(chip.dataset.g)] = chip.dataset.c;
+      renderOptions();
+    });
+  }
+}
 
 function isTrophy(item) { return Number(item.unlock_xp) > 0; }
 function trophyState(item) {
@@ -274,23 +329,23 @@ function canAfford(item) {
 
 function imgHtml(item, big = false) {
   const url = String(item.image_url || "");
-  if (!url) return `<span class="ph">🎁</span>`;
-  return `<img src="${Pixl.esc(url)}" alt="" loading="lazy" onerror="this.outerHTML='<span class=ph>🎁</span>'">`;
+  if (!url) return `<span class="ph"></span>`;
+  return `<img src="${Pixl.esc(url)}" alt="" loading="lazy" onerror="this.outerHTML='<span class=ph></span>'">`;
 }
 
 function trophyCard(item) {
   const state = trophyState(item);
   const need = Number(item.unlock_xp);
   const pct = Math.max(0, Math.min(100, (xp / Math.max(1, need)) * 100));
-  const badge = state === "claimed" ? `<div class="trophy-tag claimed">CLAIMED ✓</div>`
+  const badge = state === "claimed" ? `<div class="trophy-tag claimed">CLAIMED</div>`
     : state === "claimable" ? `<div class="trophy-tag ready">CLAIM ME!</div>`
-    : `<div class="trophy-tag">🔒 LEVEL ${need}</div>`;
+    : `<div class="trophy-tag">LEVEL ${need}</div>`;
   const foot = state === "locked"
     ? `<div class="trophy-progress"><div style="width:${pct}%"></div></div>
        <div class="trophy-need">${Math.floor(xp)} / ${need} XP · keep shipping!</div>`
     : state === "claimable"
-    ? `<button class="btn teal trophy-claim" data-claim="${item.id}">🏆 CLAIM</button>`
-    : `<div class="trophy-need earned">Yours forever. 🦈</div>`;
+    ? `<button class="btn teal trophy-claim" data-claim="${item.id}">CLAIM</button>`
+    : `<div class="trophy-need earned">Yours forever.</div>`;
   return `
     <div class="card panel trophy-card ${state}" data-id="${item.id}" title="Level ${need} trophy">
       ${badge}
@@ -313,7 +368,7 @@ function render() {
   else if (sort === "name") list = [...list].sort((a, b) => String(a.name).localeCompare(String(b.name)));
 
   $("trophies").innerHTML = trophies.length === 0 ? "" :
-    `<div class="trophy-head">🏆 TROPHIES · EARNED, NOT BOUGHT</div>
+    `<div class="trophy-head">TROPHIES — EARNED, NOT BOUGHT</div>
      <div class="grid">${trophies.map(trophyCard).join("")}</div>
      <div class="divider"></div>`;
 
@@ -365,33 +420,35 @@ function openDetail(id) {
   $("detail-img").innerHTML = imgHtml(selected, true);
   $("detail-name").textContent = selected.name;
   $("detail-desc").innerHTML = Pixl.bbcode(selected.description || "");
-  const options = Array.isArray(selected.options) ? selected.options : [];
-  $("detail-options").innerHTML = options.map((o) => `<span class="chip gold">${Pixl.esc(String(o).toUpperCase())}</span>`).join("");
 
   if (isTrophy(selected)) {
+    $("detail-options").innerHTML = optionGroups(selected)
+      .flatMap((g) => g.choices).map((o) => `<span class="chip gold">${Pixl.esc(o.toUpperCase())}</span>`).join("");
     const state = trophyState(selected);
     const need = Number(selected.unlock_xp);
     const pct = Math.max(0, Math.min(100, (xp / Math.max(1, need)) * 100));
-    $("detail-limited").innerHTML = `<span class="chip ${state === "locked" ? "" : "gold"}">🏆 LEVEL ${need} TROPHY — EARNED, NOT BOUGHT</span>`;
-    $("detail-price").innerHTML = state === "claimed" ? "CLAIMED ✓"
+    $("detail-limited").innerHTML = `<span class="chip ${state === "locked" ? "" : "gold"}">LEVEL ${need} TROPHY — EARNED, NOT BOUGHT</span>`;
+    $("detail-price").innerHTML = state === "claimed" ? "CLAIMED"
       : state === "claimable" ? "READY TO CLAIM!" : `LOCKED — REACH ${need} XP`;
     $("detail-price").classList.toggle("cant", state === "locked");
     $("afford-fill").style.width = pct + "%";
     $("afford-fill").style.background = pct >= 100 ? "var(--good)" : "var(--gold)";
     $("afford-label").textContent = `YOU'RE AT ${Math.floor(xp)} / ${need} XP` + (pct >= 100 ? "  —  EARNED!" : `  ·  ${need - Math.floor(xp)} to go`);
-    $("buy-btn").textContent = state === "claimed" ? "CLAIMED ✓" : state === "claimable" ? "🏆 CLAIM" : "🔒 LOCKED";
+    $("buy-btn").textContent = state === "claimed" ? "CLAIMED" : state === "claimable" ? "CLAIM" : "LOCKED";
     $("buy-btn").disabled = state !== "claimable";
     $("detail-overlay").classList.add("show");
     say(state === "claimable" ? "YOU EARNED THAT ONE!" : state === "claimed" ? "A TRUE LEGEND." : "SHIP MORE TO EARN IT!", 4000);
     return;
   }
 
+  optionPick = {};
+  renderOptions();
   $("detail-limited").innerHTML = selected.limited
     ? `<span class="chip red">LIMITED — ${Pixl.countdown(selected.limited_until)}</span>` : "";
   $("detail-price").innerHTML = `<img src="/img/pixel.png" style="width:20px;height:20px" alt="">${Number(selected.price)} PIXELS`;
   $("detail-price").classList.toggle("cant", !canAfford(selected));
   $("buy-btn").textContent = "BUY";
-  $("buy-btn").disabled = false;
+  $("buy-btn").disabled = !canAfford(selected);
   const have = wallet ? wallet.pixels : 0;
   const pct = Math.max(0, Math.min(100, (have / Math.max(1, selected.price)) * 100));
   $("afford-fill").style.width = pct + "%";
@@ -409,17 +466,57 @@ $("detail-overlay").addEventListener("click", (e) => { if (e.target === e.curren
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeDetail(); });
 
 $("buy-btn").addEventListener("click", () => {
-  if (selected && isTrophy(selected)) {
+  if (!selected) return;
+  if (isTrophy(selected)) {
     if (trophyState(selected) === "claimable") { closeDetail(); claimTrophy(selected.id); }
     return;
   }
-  Pixl.toast("NOT FOR SALE YET — COME BACK SOON!", true);
-  say("NOT FOR SALE YET!\nCOME BACK SOON.", 3600);
+  if (!canAfford(selected)) {
+    Pixl.toast("BIT PRICEY FOR YOU, FOR NOW.", true);
+    say("SHIP A FEW MORE PROJECTS\nAND COME BACK!", 3600);
+    nudgeKeeper();
+    return;
+  }
+  buyItem(selected.id);
+});
+
+function nudgeKeeper() {
   const k = $("keeper");
   k.style.animation = "none";
   void k.offsetWidth;
   k.style.animation = "";
-});
+}
+
+async function buyItem(id) {
+  if (buying) return;
+  buying = true;
+  $("buy-btn").disabled = true;
+  $("buy-btn").textContent = "BUYING...";
+  const option = optionSummary();
+  const r = await Pixl.send("POST", `/api/shop/buy/${id}`, { option });
+  buying = false;
+  if (r.ok) {
+    if (wallet && typeof r.balance === "number") wallet.pixels = r.balance;
+    const el = document.getElementById("pixl-wallet");
+    if (el && typeof r.balance === "number") el.querySelector(".px").textContent = Math.round(r.balance).toLocaleString();
+    closeDetail();
+    Pixl.toast("ORDER PLACED! The team will reach out.");
+    say("GREAT PICK! WE'LL BE IN TOUCH\nABOUT GETTING IT TO YOU.", 4500);
+    render();
+  } else if (r.error === "insufficient") {
+    Pixl.toast("Not enough pixels for that.", true);
+    $("buy-btn").disabled = false;
+    $("buy-btn").textContent = "BUY";
+  } else if (r.error === "not_for_sale") {
+    Pixl.toast("That one isn't for sale.", true);
+    $("buy-btn").disabled = false;
+    $("buy-btn").textContent = "BUY";
+  } else {
+    Pixl.toast("Couldn't place that order right now.", true);
+    $("buy-btn").disabled = false;
+    $("buy-btn").textContent = "BUY";
+  }
+}
 
 $("search").addEventListener("input", render);
 $("sort").addEventListener("change", render);
