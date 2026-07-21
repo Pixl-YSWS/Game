@@ -74,11 +74,13 @@
     height: 150px;
     display: flex; align-items: center; justify-content: center;
     background:
-      repeating-conic-gradient(rgba(255,209,102,.05) 0% 25%, transparent 0% 50%) 0 0 / 22px 22px,
-      var(--panel-deep);
+      radial-gradient(circle at 50% 34%, rgba(255,209,102,.09), transparent 62%),
+      linear-gradient(#231810, var(--panel-deep));
     border: 3px solid var(--stroke);
+    box-shadow: inset 2px 2px 0 rgba(255,238,205,.06), inset -2px -2px 0 rgba(0,0,0,.4);
     overflow: hidden;
   }
+  .item-img .ph { filter: drop-shadow(0 3px 0 rgba(0,0,0,.4)); opacity: .9; }
   .item-img img { max-width: 100%; max-height: 100%; }
   .item-img .ph { font-size: 44px; }
   .item-name { font-size: 19px; color: var(--ink); letter-spacing: .3px; }

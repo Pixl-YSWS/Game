@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en" data-phase="night">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pixl · The Chronicle</title>
+<link rel="icon" href="/index.icon.png">
+<link rel="stylesheet" href="/pixl.css">
+<style>
+  .chron { max-width: 940px; margin: 0 auto; }
+
+  /* ---- hero ---- */
+  .chron-hero { text-align: center; padding: 30px 20px 10px; position: relative; }
+  .eyebrow {
+    display: inline-block; font-family: var(--pixel); font-size: 13px; letter-spacing: 4px;
+    color: var(--teal); border: 3px solid var(--stroke); background: var(--panel-deep);
+    padding: 6px 14px 4px; box-shadow: 0 4px 0 var(--stroke); margin-bottom: 18px;
+  }
+  .chron-title {
+    font-family: var(--pixel); font-size: clamp(34px, 7vw, 62px); line-height: .95;
+    color: var(--gold); letter-spacing: 3px;
+    text-shadow: 4px 4px 0 var(--stroke), 0 0 26px rgba(255,209,102,.35);
+  }
+  .chron-title .thin { display: block; font-size: .42em; color: var(--ink); letter-spacing: 6px; margin-top: 12px; }
+  .chron-intro { max-width: 620px; margin: 20px auto 0; color: var(--dim); font-size: 16px; line-height: 1.75; }
+  .chron-intro b { color: var(--gold-soft); }
+  .ornament { display: flex; align-items: center; justify-content: center; gap: 12px; margin: 26px 0 6px; color: var(--faint); }
+  .ornament::before, .ornament::after { content: ""; height: 3px; width: 90px; background: repeating-linear-gradient(90deg, var(--faint) 0 6px, transparent 6px 12px); }
+  .ornament span { font-size: 18px; }
+
+  /* ---- the spine ---- */
+  .rail { position: relative; margin: 20px 0 60px; padding-left: 96px; }
+  .rail::before {
+    content: ""; position: absolute; left: 41px; top: 10px; bottom: 10px; width: 8px;
+    background: linear-gradient(var(--teal), var(--gold) 55%, #9a7bff);
+    box-shadow: 0 0 18px rgba(255,209,102,.25), inset 2px 0 0 rgba(255,255,255,.25), inset -2px 0 0 rgba(0,0,0,.4);
+  }
+
+  .node { position: relative; margin-bottom: 30px; animation: rise .45s steps(6) backwards; }
+  @keyframes rise { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+  @media (prefers-reduced-motion: reduce) { .node { animation: none; } }
+
+  /* seal that sits on the spine */
+  .seal {
+    position: absolute; left: -96px; top: 6px;
+    width: 66px; height: 66px; display: flex; align-items: center; justify-content: center;
+    font-family: var(--pixel); font-size: 26px; color: var(--panel-deep);
+    border: 4px solid var(--stroke); z-index: 2;
+    box-shadow: 0 5px 0 rgba(0,0,0,.5), inset 2px 2px 0 rgba(255,255,255,.4), inset -3px -3px 0 rgba(0,0,0,.28);
+  }
+  .node.chapter .seal { background: linear-gradient(#8fe4e4, #4fb9b9); }
+  .node.op .seal { background: linear-gradient(var(--gold-soft), #e0a93f); transform: rotate(45deg); }
+  .node.op .seal span { transform: rotate(-45deg); }
+  .node.prologue .seal { background: linear-gradient(#c9b3ff, #9a7bff); border-radius: 4px; }
+
+  /* connector arm from spine to card */
+  .node::after {
+    content: ""; position: absolute; left: -30px; top: 36px; width: 30px; height: 5px;
+    background: var(--stroke);
+  }
+
+  .card { padding: 0; overflow: hidden; }
+  .card-bar {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    padding: 11px 18px; border-bottom: 4px solid var(--stroke);
+    font-family: var(--pixel); font-size: 14px; letter-spacing: 2px;
+  }
+  .node.chapter .card-bar { background: linear-gradient(#1d5a5a, #123c3c); color: #b8f0f0; }
+  .node.op .card-bar { background: linear-gradient(#5a4416, #3d2d0e); color: var(--gold-soft); }
+  .node.prologue .card-bar { background: linear-gradient(#3a2c66, #241a44); color: #d9caff; }
+  .dur { margin-left: auto; font-size: 11px; color: rgba(255,255,255,.7); border: 2px solid rgba(0,0,0,.45); padding: 3px 8px 2px; letter-spacing: 1px; }
+  .card-body { padding: 16px 20px 20px; }
+  .card-body h2 { font-family: var(--pixel); font-size: 23px; color: var(--ink); margin: 0 0 10px; letter-spacing: 1px; }
+  .node.op .card-body h2 { color: var(--gold); }
+  .card-body p { font-size: 15px; color: var(--dim); line-height: 1.7; margin: 0; }
+  .card-body p .q { color: var(--faint); font-style: italic; }
+
+  .outcome {
+    margin: 14px 0 0; padding: 12px 15px; display: flex; gap: 11px; align-items: flex-start;
+    background: var(--panel-deep); border: 3px solid var(--stroke);
+    box-shadow: inset 0 0 0 2px rgba(255,209,102,.16);
+    font-size: 14.5px; color: var(--gold-soft); line-height: 1.6;
+  }
+  .outcome b { color: var(--gold); }
+  .outcome .lbl { font-family: var(--pixel); font-size: 11px; letter-spacing: 2px; color: var(--gold); flex-shrink: 0; padding-top: 2px; }
+
+  .card:hover { transform: translate(2px, -2px); }
+  .card:hover { box-shadow: inset 0 3px 0 rgba(255,232,178,.08), inset 0 -4px 0 rgba(0,0,0,.3), 8px 10px 0 rgba(0,0,0,.4), 0 0 0 2px var(--gold); }
+
+  @media (max-width: 640px) {
+    .rail { padding-left: 62px; }
+    .rail::before { left: 24px; }
+    .seal { left: -62px; width: 48px; height: 48px; font-size: 18px; }
+    .node::after { left: -20px; width: 20px; }
+  }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <div class="chron">
+    <section class="chron-hero">
+      <div class="eyebrow">SEASON ONE</div>
+      <h1 class="chron-title">THE CHRONICLE<span class="thin">OF PIXL</span></h1>
+      <p class="chron-intro">Origin was the greatest digital civilization ever built — until the Core overloaded and <b>The Great Static</b> shattered it into islands adrift in the Void. Builders were called across universes to rebuild it. Five Chapters of story, five Operations to power them.</p>
+      <div class="ornament"><span>◆</span></div>
+    </section>
+
+    <div class="rail" id="rail"></div>
+  </div>
+</main>
+
+<script src="/pixl.js"></script>
+<script>
+Pixl.mountTopbar("timeline");
+Pixl.loadWallet();
+
+const NODES = [
+  { kind: "prologue", seal: "✦", tag: "PROLOGUE", dur: "", title: "The Fall of Pixl",
+    body: "Origin has fallen. Centuries of every invention uploaded into the Core finally exceeded its limits — the overload became The Great Static, and the world crashed into pixelated fragments drifting in the Void. Unable to repair itself, the Core reaches into our universe and wakes the Builders." },
+
+  { kind: "chapter", seal: "I", tag: "CHAPTER I", dur: "3 WEEKS", title: "Rise of Pixl",
+    body: "Builders arrive in Pixl for the first time. They restore the Capital District, reactivate the Core, and help the first settlements recover from the Crash. Hope returns for the first time in centuries." },
+  { kind: "op", seal: "I", tag: "OPERATION I", dur: "1 WEEK", title: "Forge Weekend",
+    q: "The Capital is standing… but its workshops remain silent.", body: "A mini online hackathon focused on developer tools.",
+    outcome: "The <b>Great Forge</b> is restored — Pixl can manufacture advanced technology once again." },
+
+  { kind: "chapter", seal: "II", tag: "CHAPTER II", dur: "3 WEEKS", title: "Echoes Beneath",
+    body: "Power restored to the Great Forge awakens Vault Zero, an underground research facility buried since before the Crash. Builders uncover forgotten technology and the first clues about what truly caused Pixl's downfall." },
+  { kind: "op", seal: "II", tag: "OPERATION II", dur: "1 WEEK", title: "Skybound Jam",
+    q: "The Sky Docks are almost ready.", body: "A week-long game jam.",
+    outcome: "The first <b>airships</b> return to service, opening travel beyond the known lands." },
+
+  { kind: "chapter", seal: "III", tag: "CHAPTER III", dur: "3 WEEKS", title: "Beyond the Clouds",
+    body: "Using the restored airships, Builders explore the floating Sky Isles. Ancient ruins, new allies, and strange relics hint that Pixl's history is far older than anyone believed." },
+  { kind: "op", seal: "III", tag: "OPERATION III", dur: "1 WEEK", title: "Core Intelligence",
+    q: "The Observatory requires new minds.", body: "Builders create AI projects.",
+    outcome: "The <b>Observatory</b> is reactivated, letting the Core scan regions unreachable since the Crash." },
+
+  { kind: "chapter", seal: "IV", tag: "CHAPTER IV", dur: "3 WEEKS", title: "The Signal",
+    body: "The Observatory detects a mysterious transmission repeating from deep within the Void. As Builders investigate, they discover someone — or something — is trying to communicate with Pixl." },
+  { kind: "op", seal: "IV", tag: "OPERATION IV", dur: "1 WEEK", title: "Relay Protocol",
+    q: "The transmission is unstable.", body: "Builders create web apps, APIs, networking, or communication tools.",
+    outcome: "The signal is decoded, revealing <b>coordinates to a forgotten civilization</b>." },
+
+  { kind: "chapter", seal: "V", tag: "CHAPTER V", dur: "3 WEEKS", title: "The Forgotten Frontier",
+    body: "Builders journey beyond Pixl's known borders and find the remnants of another civilization that survived the Crash in isolation. The chapter ends with an ancient gateway leading even farther into the unknown." },
+  { kind: "op", seal: "V", tag: "OPERATION V", dur: "1 WEEK", title: "Genesis Week",
+    q: "A new frontier awaits.", body: "Builders can create any type of project to help establish the first outpost beyond Pixl.",
+    outcome: "The <b>gateway is stabilized</b>, and the expedition into the unknown officially begins." },
+];
+
+document.getElementById("rail").innerHTML = NODES.map((n, i) => `
+  <div class="node ${n.kind}" style="animation-delay:${Math.min(i * 70, 700)}ms">
+    <div class="seal"><span>${n.seal}</span></div>
+    <div class="card panel">
+      <div class="card-bar">${n.tag}${n.dur ? `<span class="dur">${n.dur}</span>` : ""}</div>
+      <div class="card-body">
+        <h2>${Pixl.esc(n.title)}</h2>
+        <p>${n.q ? `<span class="q">“${Pixl.esc(n.q)}”</span> ` : ""}${Pixl.esc(n.body)}</p>
+        ${n.outcome ? `<div class="outcome"><span class="lbl">OUTCOME</span><span>${n.outcome}</span></div>` : ""}
+      </div>
+    </div>
+  </div>`).join("");
+</script>
+</body>
+</html>

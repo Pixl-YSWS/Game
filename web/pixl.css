@@ -23,6 +23,12 @@
   --pixel: "Monocraft", "Courier New", monospace;
   --sky-a: #2c2f63;
   --sky-b: #171a38;
+  --violet: #9a7bff;
+  --violet-soft: #c9b3ff;
+  /* pixel-bevel: hard light top-left, hard dark bottom-right */
+  --bevel: inset 2px 2px 0 rgba(255, 238, 205, 0.14), inset -2px -2px 0 rgba(0, 0, 0, 0.42);
+  --drop: 0 6px 0 rgba(0, 0, 0, 0.5);
+  --glow-gold: 0 0 22px rgba(255, 209, 102, 0.3);
 }
 
 html[data-phase="day"] { --sky-a: #4a86c9; --sky-b: #2a5a9c; }
@@ -37,22 +43,22 @@ body {
   font-family: var(--sans);
   font-size: 16px;
   line-height: 1.55;
-  background: var(--bg0);
   color: var(--ink);
   min-height: 100vh;
   overflow-x: hidden;
-  background-image:
-    linear-gradient(rgba(255, 209, 102, 0.02) 2px, transparent 2px),
-    linear-gradient(90deg, rgba(255, 209, 102, 0.02) 2px, transparent 2px);
-  background-size: 28px 28px;
+  background:
+    linear-gradient(rgba(255, 209, 102, 0.018) 2px, transparent 2px) 0 0 / 30px 30px,
+    linear-gradient(90deg, rgba(255, 209, 102, 0.018) 2px, transparent 2px) 0 0 / 30px 30px,
+    linear-gradient(#1b1209, var(--bg0) 60%);
+  background-attachment: fixed;
 }
 
 body::before {
   content: "";
   position: absolute;
   top: 0; left: 0; right: 0;
-  height: 300px;
-  background: linear-gradient(var(--sky-b), var(--sky-a) 70%, var(--bg0));
+  height: 440px;
+  background: linear-gradient(var(--sky-b), var(--sky-a) 48%, transparent);
   z-index: -2;
 }
 
@@ -71,7 +77,9 @@ body::after {
   content: "";
   position: fixed;
   inset: 0;
-  background: repeating-linear-gradient(rgba(0, 0, 0, 0.05) 0 2px, transparent 2px 4px);
+  background:
+    radial-gradient(125% 120% at 50% 38%, transparent 58%, rgba(0, 0, 0, 0.5)),
+    repeating-linear-gradient(rgba(0, 0, 0, 0.045) 0 2px, transparent 2px 4px);
   pointer-events: none;
   z-index: 99;
 }
@@ -99,14 +107,15 @@ button, input, select, textarea { font-family: inherit; color: inherit; }
   gap: 18px;
   flex-wrap: wrap;
   max-width: 1180px;
-  margin: 0 auto;
-  padding: 22px 20px 10px;
+  margin: 0 auto 6px;
+  padding: 20px 20px 14px;
+  border-bottom: 3px solid rgba(255, 209, 102, 0.16);
 }
 
 .logo {
   font-size: 30px;
   color: var(--gold);
-  text-shadow: 3px 3px 0 var(--stroke);
+  text-shadow: 3px 3px 0 var(--stroke), 0 0 18px rgba(255, 209, 102, 0.35);
   letter-spacing: 2px;
   display: flex;
   align-items: center;
@@ -122,20 +131,21 @@ button, input, select, textarea { font-family: inherit; color: inherit; }
 }
 
 .nav a {
-  padding: 8px 12px 6px;
+  padding: 9px 13px 7px;
   font-size: 15px;
   color: var(--dim);
   border: 3px solid transparent;
   letter-spacing: 1px;
+  transition: color 0.1s steps(2), background 0.1s steps(2), transform 0.05s steps(2);
 }
 
-.nav a:hover { color: var(--ink); background: rgba(255, 209, 102, 0.08); }
+.nav a:hover { color: var(--ink); background: rgba(255, 209, 102, 0.08); transform: translateY(-1px); }
 
 .nav a.active {
   color: var(--gold);
   background: var(--panel-deep);
   border-color: var(--stroke);
-  box-shadow: inset 0 0 0 2px rgba(255, 209, 102, 0.35);
+  box-shadow: inset 0 0 0 2px rgba(255, 209, 102, 0.35), 0 4px 0 rgba(0, 0, 0, 0.4), 0 0 16px rgba(255, 209, 102, 0.16);
 }
 
 .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
@@ -170,9 +180,9 @@ button, input, select, textarea { font-family: inherit; color: inherit; }
   background: linear-gradient(var(--panel), var(--panel-2));
   border: 4px solid var(--stroke);
   box-shadow:
-    inset 0 3px 0 rgba(255, 232, 178, 0.08),
-    inset 0 -4px 0 rgba(0, 0, 0, 0.3),
-    0 7px 0 rgba(0, 0, 0, 0.45);
+    inset 2px 2px 0 rgba(255, 238, 205, 0.10),
+    inset -2px -3px 0 rgba(0, 0, 0, 0.32),
+    var(--drop);
 }
 
 .panel-deep {
@@ -195,16 +205,16 @@ button, input, select, textarea { font-family: inherit; color: inherit; }
   gap: 8px;
   cursor: pointer;
   border: 3px solid var(--stroke);
-  background: var(--gold);
+  background: linear-gradient(var(--gold-soft), var(--gold));
   color: #2b1d12;
   font-size: 16px;
   letter-spacing: 1px;
   padding: 10px 16px 8px;
-  box-shadow: 0 5px 0 var(--stroke);
-  transition: transform 0.05s steps(2), box-shadow 0.05s steps(2);
+  box-shadow: inset 1px 1px 0 rgba(255, 255, 255, 0.45), inset -2px -2px 0 rgba(0, 0, 0, 0.18), 0 5px 0 var(--stroke);
+  transition: transform 0.05s steps(2), box-shadow 0.05s steps(2), filter 0.1s steps(2);
 }
 
-.btn:hover { background: var(--gold-soft); }
+.btn:hover { filter: brightness(1.08); }
 
 .btn:active { transform: translateY(5px); box-shadow: 0 0 0 var(--stroke); }
 
@@ -263,7 +273,7 @@ input.field::placeholder, textarea.field::placeholder { color: var(--faint); }
 .page-title {
   font-size: 42px;
   color: var(--gold);
-  text-shadow: 4px 4px 0 var(--stroke);
+  text-shadow: 4px 4px 0 var(--stroke), 0 0 26px rgba(255, 209, 102, 0.28);
   letter-spacing: 3px;
   line-height: 1;
 }

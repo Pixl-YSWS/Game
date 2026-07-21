@@ -99,8 +99,10 @@ const Pixl = (() => {
 
   const PAGES = [
     ["shop", "SHOP"],
+    ["vault", "VAULT"],
     ["explore", "EXPLORE"],
     ["quests", "QUESTS"],
+    ["timeline", "STORY"],
     ["projects", "PROJECTS"],
     ["report", "REPORT"],
   ];
