@@ -149,18 +149,36 @@ const NODES = [
     outcome: "The <b>gateway is stabilized</b>, and the expedition into the unknown officially begins." },
 ];
 
-document.getElementById("rail").innerHTML = NODES.map((n, i) => `
-  <div class="node ${n.kind}" style="animation-delay:${Math.min(i * 70, 700)}ms">
-    <div class="seal"><span>${n.seal}</span></div>
-    <div class="card panel">
-      <div class="card-bar">${n.tag}${n.dur ? `<span class="dur">${n.dur}</span>` : ""}</div>
-      <div class="card-body">
-        <h2>${Pixl.esc(n.title)}</h2>
-        <p>${n.q ? `<span class="q">“${Pixl.esc(n.q)}”</span> ` : ""}${Pixl.esc(n.body)}</p>
-        ${n.outcome ? `<div class="outcome"><span class="lbl">OUTCOME</span><span>${n.outcome}</span></div>` : ""}
+function kindClass(k) { return k === "operation" || k === "op" ? "op" : k === "prologue" ? "prologue" : "chapter"; }
+
+function renderNodes(nodes) {
+  document.getElementById("rail").innerHTML = nodes.map((n, i) => `
+    <div class="node ${kindClass(n.kind)}" style="animation-delay:${Math.min(i * 70, 700)}ms">
+      <div class="seal"><span>${Pixl.esc(n.seal || "◆")}</span></div>
+      <div class="card panel">
+        <div class="card-bar">${Pixl.esc(n.tag || "")}${(n.duration || n.dur) ? `<span class="dur">${Pixl.esc(n.duration || n.dur)}</span>` : ""}</div>
+        <div class="card-body">
+          <h2>${Pixl.esc(n.title)}</h2>
+          <p>${(n.quote || n.q) ? `<span class="q">“${Pixl.esc(n.quote || n.q)}”</span> ` : ""}${Pixl.esc(n.body)}</p>
+          ${n.outcome ? `<div class="outcome"><span class="lbl">OUTCOME</span><span>${n.outcome}</span></div>` : ""}
+        </div>
       </div>
-    </div>
-  </div>`).join("");
+    </div>`).join("");
+}
+
+// Load the Chronicle from the dashboard-authored table; fall back to the seed
+// content above if the API is unreachable or empty.
+async function bootStory() {
+  let nodes = NODES;
+  if (Pixl.hasToken) {
+    try {
+      const d = await Pixl.api("/api/story");
+      if (d && Array.isArray(d.nodes) && d.nodes.length) nodes = d.nodes;
+    } catch (e) {}
+  }
+  renderNodes(nodes);
+}
+bootStory();
 </script>
 </body>
 </html>
