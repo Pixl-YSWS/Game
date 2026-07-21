@@ -17,7 +17,7 @@
     position: absolute;
     top: 0; left: 0; right: 0;
     height: 22px;
-    background: repeating-linear-gradient(90deg, #a02c2c 0 34px, #f4e3c2 34px 68px);
+    background: repeating-linear-gradient(90deg, var(--gold) 0 34px, #f4e3c2 34px 68px);
     border-bottom: 4px solid var(--stroke);
   }
   .shop-hero-inner { display: flex; gap: 26px; align-items: flex-end; flex-wrap: wrap; padding-top: 16px; }
@@ -61,23 +61,22 @@
     display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
     padding: 12px 18px 10px;
     margin-bottom: 18px;
-    background: linear-gradient(#5c1f1f, #451414);
-    border: 4px solid var(--stroke);
-    box-shadow: inset 0 0 0 2px rgba(255,107,107,.4), 0 6px 0 rgba(0,0,0,.45);
-    color: #ffd9d9;
+    background: #fff0f1;
+    border: 3px solid var(--stroke);
+    box-shadow: 4px 4px 0 var(--stroke);
+    color: var(--ink);
     font-size: 15px;
   }
-  .limited-banner .tick { color: var(--gold); }
+  .limited-banner .tick { color: var(--gold); font-weight: 700; }
   .item-card { display: flex; flex-direction: column; gap: 10px; }
-  .item-card.limited { box-shadow: inset 0 0 0 2px rgba(255,107,107,.55), inset 0 3px 0 rgba(255,232,178,.08), 0 7px 0 rgba(0,0,0,.45); }
+  .item-card.limited { box-shadow: inset 0 0 0 3px var(--gold), 5px 5px 0 var(--stroke); }
   .item-img {
     height: 150px;
     display: flex; align-items: center; justify-content: center;
     background:
-      radial-gradient(circle at 50% 34%, rgba(255,209,102,.09), transparent 62%),
-      linear-gradient(#231810, var(--panel-deep));
+      radial-gradient(circle at 50% 34%, rgba(236,55,80,.08), transparent 62%),
+      linear-gradient(#fffdf5, var(--panel-deep));
     border: 3px solid var(--stroke);
-    box-shadow: inset 2px 2px 0 rgba(255,238,205,.06), inset -2px -2px 0 rgba(0,0,0,.4);
     overflow: hidden;
   }
   .item-img .ph { filter: drop-shadow(0 3px 0 rgba(0,0,0,.4)); opacity: .9; }
@@ -95,13 +94,13 @@
   .price.cant { color: var(--bad); }
   .limited-tag {
     position: absolute; top: -12px; right: 10px;
-    background: #a02c2c; color: #fff;
+    background: var(--gold); color: #fff;
     border: 3px solid var(--stroke);
     font-size: 11px; letter-spacing: 1px;
     padding: 4px 8px 3px;
     animation: limited-blink 1s steps(2) infinite;
   }
-  @keyframes limited-blink { 50% { background: #c94040; } }
+  @keyframes limited-blink { 50% { background: var(--gold-soft); } }
   .afford-dot { width: 10px; height: 10px; border: 2px solid var(--stroke); }
   .afford-dot.yes { background: var(--good); }
   .afford-dot.no { background: var(--bad); }
@@ -109,7 +108,7 @@
     width: 240px; height: 240px; flex-shrink: 0;
     display: flex; align-items: center; justify-content: center;
     background:
-      repeating-conic-gradient(rgba(255,209,102,.05) 0% 25%, transparent 0% 50%) 0 0 / 26px 26px,
+      repeating-conic-gradient(rgba(22,22,30,.05) 0% 25%, transparent 0% 50%) 0 0 / 26px 26px,
       var(--panel-deep);
     border: 3px solid var(--stroke);
     overflow: hidden;
@@ -129,23 +128,23 @@
   .trophy-card { display: flex; flex-direction: column; gap: 10px; position: relative; overflow: hidden; }
   .trophy-card.locked { filter: saturate(.55) brightness(.82); }
   .trophy-card.claimable {
-    box-shadow: inset 0 0 0 2px var(--gold), inset 0 3px 0 rgba(255,232,178,.1), 0 7px 0 rgba(0,0,0,.45);
+    box-shadow: inset 0 0 0 3px var(--gold), 5px 5px 0 var(--stroke);
     animation: trophy-glow 1.4s steps(2) infinite;
   }
   @keyframes trophy-glow {
-    50% { box-shadow: inset 0 0 0 3px var(--gold-soft), 0 0 24px rgba(255,209,102,.35), 0 7px 0 rgba(0,0,0,.45); }
+    50% { box-shadow: inset 0 0 0 3px var(--gold-soft), 7px 7px 0 var(--stroke); }
   }
-  .trophy-card.claimed { box-shadow: inset 0 0 0 2px var(--good), inset 0 3px 0 rgba(255,232,178,.08), 0 7px 0 rgba(0,0,0,.45); }
+  .trophy-card.claimed { box-shadow: inset 0 0 0 3px var(--good), 5px 5px 0 var(--stroke); }
   .trophy-img { background:
-    repeating-conic-gradient(rgba(255,209,102,.08) 0% 25%, transparent 0% 50%) 0 0 / 22px 22px,
-    radial-gradient(circle at 50% 40%, #4a3416, var(--panel-deep)); }
+    repeating-conic-gradient(rgba(236,55,80,.07) 0% 25%, transparent 0% 50%) 0 0 / 22px 22px,
+    radial-gradient(circle at 50% 40%, #ffe9b0, var(--panel-deep)); }
   .trophy-tag {
     position: absolute; top: -10px; right: 10px;
     font-size: 11px; letter-spacing: 1px; padding: 4px 8px 3px;
     border: 3px solid var(--stroke); background: var(--panel-deep); color: var(--dim);
   }
-  .trophy-tag.ready { background: var(--gold); color: #2b1d12; animation: limited-blink 1s steps(2) infinite; }
-  .trophy-tag.claimed { background: #2f6b3a; color: #eafff0; }
+  .trophy-tag.ready { background: var(--gold); color: #fff; animation: limited-blink 1s steps(2) infinite; }
+  .trophy-tag.claimed { background: var(--good); color: #fff; }
   .trophy-foot { margin-top: auto; }
   .trophy-progress { height: 12px; border: 3px solid var(--stroke); background: var(--panel-deep); overflow: hidden; }
   .trophy-progress > div { height: 100%; background: repeating-linear-gradient(90deg, var(--gold) 0 8px, var(--gold-soft) 8px 16px); transition: width .5s steps(8); }

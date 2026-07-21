@@ -19,11 +19,11 @@
   .chron-title {
     font-family: var(--pixel); font-size: clamp(34px, 7vw, 62px); line-height: .95;
     color: var(--gold); letter-spacing: 3px;
-    text-shadow: 4px 4px 0 var(--stroke), 0 0 26px rgba(255,209,102,.35);
+    text-shadow: 4px 4px 0 var(--stroke);
   }
   .chron-title .thin { display: block; font-size: .42em; color: var(--ink); letter-spacing: 6px; margin-top: 12px; }
   .chron-intro { max-width: 620px; margin: 20px auto 0; color: var(--dim); font-size: 16px; line-height: 1.75; }
-  .chron-intro b { color: var(--gold-soft); }
+  .chron-intro b { color: var(--gold); }
   .ornament { display: flex; align-items: center; justify-content: center; gap: 12px; margin: 26px 0 6px; color: var(--faint); }
   .ornament::before, .ornament::after { content: ""; height: 3px; width: 90px; background: repeating-linear-gradient(90deg, var(--faint) 0 6px, transparent 6px 12px); }
   .ornament span { font-size: 18px; }
@@ -32,8 +32,8 @@
   .rail { position: relative; margin: 20px 0 60px; padding-left: 96px; }
   .rail::before {
     content: ""; position: absolute; left: 41px; top: 10px; bottom: 10px; width: 8px;
-    background: linear-gradient(var(--teal), var(--gold) 55%, #9a7bff);
-    box-shadow: 0 0 18px rgba(255,209,102,.25), inset 2px 0 0 rgba(255,255,255,.25), inset -2px 0 0 rgba(0,0,0,.4);
+    background: linear-gradient(var(--teal), var(--gold) 55%, var(--violet));
+    box-shadow: inset 2px 0 0 rgba(255,255,255,.25), inset -2px 0 0 rgba(0,0,0,.3);
   }
 
   .node { position: relative; margin-bottom: 30px; animation: rise .45s steps(6) backwards; }
@@ -44,14 +44,14 @@
   .seal {
     position: absolute; left: -96px; top: 6px;
     width: 66px; height: 66px; display: flex; align-items: center; justify-content: center;
-    font-family: var(--pixel); font-size: 26px; color: var(--panel-deep);
-    border: 4px solid var(--stroke); z-index: 2;
-    box-shadow: 0 5px 0 rgba(0,0,0,.5), inset 2px 2px 0 rgba(255,255,255,.4), inset -3px -3px 0 rgba(0,0,0,.28);
+    font-family: var(--pixel); font-size: 26px; color: #fff;
+    border: 3px solid var(--stroke); z-index: 2;
+    box-shadow: 0 4px 0 var(--stroke), inset 2px 2px 0 rgba(255,255,255,.4), inset -3px -3px 0 rgba(0,0,0,.22);
   }
-  .node.chapter .seal { background: linear-gradient(#8fe4e4, #4fb9b9); }
-  .node.op .seal { background: linear-gradient(var(--gold-soft), #e0a93f); transform: rotate(45deg); }
+  .node.chapter .seal { background: linear-gradient(#3fb3ac, #127c74); }
+  .node.op .seal { background: linear-gradient(var(--gold-soft), var(--gold)); transform: rotate(45deg); }
   .node.op .seal span { transform: rotate(-45deg); }
-  .node.prologue .seal { background: linear-gradient(#c9b3ff, #9a7bff); border-radius: 4px; }
+  .node.prologue .seal { background: linear-gradient(#9775fa, #7048e8); border-radius: 4px; }
 
   /* connector arm from spine to card */
   .node::after {
@@ -65,9 +65,9 @@
     padding: 11px 18px; border-bottom: 4px solid var(--stroke);
     font-family: var(--pixel); font-size: 14px; letter-spacing: 2px;
   }
-  .node.chapter .card-bar { background: linear-gradient(#1d5a5a, #123c3c); color: #b8f0f0; }
-  .node.op .card-bar { background: linear-gradient(#5a4416, #3d2d0e); color: var(--gold-soft); }
-  .node.prologue .card-bar { background: linear-gradient(#3a2c66, #241a44); color: #d9caff; }
+  .node.chapter .card-bar { background: linear-gradient(#127c74, #0e5f59); color: #dffaf7; }
+  .node.op .card-bar { background: linear-gradient(var(--gold-soft), var(--gold)); color: #fff; }
+  .node.prologue .card-bar { background: linear-gradient(#7048e8, #5a35c0); color: #e5dbff; }
   .dur { margin-left: auto; font-size: 11px; color: rgba(255,255,255,.7); border: 2px solid rgba(0,0,0,.45); padding: 3px 8px 2px; letter-spacing: 1px; }
   .card-body { padding: 16px 20px 20px; }
   .card-body h2 { font-family: var(--pixel); font-size: 23px; color: var(--ink); margin: 0 0 10px; letter-spacing: 1px; }
@@ -78,14 +78,14 @@
   .outcome {
     margin: 14px 0 0; padding: 12px 15px; display: flex; gap: 11px; align-items: flex-start;
     background: var(--panel-deep); border: 3px solid var(--stroke);
-    box-shadow: inset 0 0 0 2px rgba(255,209,102,.16);
-    font-size: 14.5px; color: var(--gold-soft); line-height: 1.6;
+    box-shadow: inset 0 0 0 2px rgba(236,55,80,.22);
+    font-size: 14.5px; color: var(--dim); line-height: 1.6;
   }
   .outcome b { color: var(--gold); }
   .outcome .lbl { font-family: var(--pixel); font-size: 11px; letter-spacing: 2px; color: var(--gold); flex-shrink: 0; padding-top: 2px; }
 
   .card:hover { transform: translate(2px, -2px); }
-  .card:hover { box-shadow: inset 0 3px 0 rgba(255,232,178,.08), inset 0 -4px 0 rgba(0,0,0,.3), 8px 10px 0 rgba(0,0,0,.4), 0 0 0 2px var(--gold); }
+  .card:hover { box-shadow: 8px 8px 0 var(--stroke), 0 0 0 2px var(--gold); }
 
   @media (max-width: 640px) {
     .rail { padding-left: 62px; }

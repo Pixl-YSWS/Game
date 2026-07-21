@@ -8,18 +8,18 @@
 <link rel="stylesheet" href="/pixl.css">
 <style>
   .wrap { max-width: 720px; }
-  .hero { padding: 24px 26px; margin-top: 8px; border: 4px solid var(--stroke);
-    background: repeating-linear-gradient(rgba(0,0,0,.14) 0 3px, transparent 3px 34px), linear-gradient(#8a3a3a, #6f2222);
-    box-shadow: inset 0 3px 0 rgba(255,232,178,.12), 0 7px 0 rgba(0,0,0,.45); }
+  .hero { padding: 24px 26px; margin-top: 8px; border: 3px solid var(--stroke);
+    background: radial-gradient(130% 150% at 12% -30%, rgba(236,55,80,.14), transparent 55%), linear-gradient(#fffdf5, var(--panel-2));
+    box-shadow: var(--drop); }
   .card { border: 3px solid var(--stroke); background: var(--panel); padding: 20px; margin-top: 22px; }
   .card-h { font-size: 16px; color: var(--gold); letter-spacing: 1px; margin-bottom: 14px; }
   .field { width: 100%; font: inherit; padding: 10px 12px; border: 2px solid var(--stroke); background: var(--panel-deep); color: var(--ink); }
   .search-wrap { position: relative; }
   .search-menu { position: absolute; z-index: 10; left: 0; right: 0; margin-top: 2px; border: 2px solid var(--stroke); background: var(--panel-deep); max-height: 220px; overflow-y: auto; }
   .search-menu button { display: block; width: 100%; text-align: left; padding: 9px 12px; background: none; border: 0; color: var(--ink); font: inherit; cursor: pointer; }
-  .search-menu button:hover { background: rgba(255,209,102,.15); }
+  .search-menu button:hover { background: rgba(236,55,80,.12); }
   .picked { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-size: 14px; }
-  .picked .chip { background: rgba(160,44,44,.25); color: #ffc9c9; border: 2px solid var(--stroke); padding: 3px 9px; }
+  .picked .chip { background: #fff0f1; color: #a01324; border: 2px solid var(--stroke); padding: 3px 9px; }
   .row { margin-top: 14px; }
   .lbl { font-size: 13px; color: var(--faint); margin-bottom: 6px; }
   .check-row { display: flex; gap: 9px; align-items: flex-start; margin-top: 14px; font-size: 13.5px; line-height: 1.5; }

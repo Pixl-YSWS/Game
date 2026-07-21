@@ -12,13 +12,13 @@
     margin-top: 8px;
     display: flex; align-items: flex-end; gap: 20px; flex-wrap: wrap;
     background:
-      repeating-linear-gradient(rgba(0,0,0,.14) 0 3px, transparent 3px 34px),
-      linear-gradient(#8a5a30, #6f4522);
-    border: 4px solid var(--stroke);
-    box-shadow: inset 0 3px 0 rgba(255,232,178,.15), 0 7px 0 rgba(0,0,0,.45);
+      repeating-linear-gradient(rgba(0,0,0,.10) 0 3px, transparent 3px 34px),
+      linear-gradient(#d59a53, #c07f38);
+    border: 3px solid var(--stroke);
+    box-shadow: inset 0 3px 0 rgba(255,246,224,.35), var(--drop);
   }
   .progress-box { margin-left: auto; text-align: right; }
-  .progress-label { font-size: 13px; color: #f0dcb4; margin-bottom: 7px; letter-spacing: 1px; }
+  .progress-label { font-size: 13px; color: #3a2410; margin-bottom: 7px; letter-spacing: 1px; }
   .progress-bar { width: 240px; max-width: 60vw; height: 18px; border: 3px solid var(--stroke); background: var(--panel-deep); }
   .progress-bar > div { height: 100%; background: var(--gold); transition: width .5s steps(10); }
   .quest-list { display: flex; flex-direction: column; gap: 16px; max-width: 860px; margin-top: 26px; }
@@ -27,8 +27,8 @@
     padding: 18px 20px;
     position: relative;
   }
-  .quest.locked { filter: saturate(.4) brightness(.75); }
-  .quest.unlocked { box-shadow: inset 0 0 0 2px rgba(255,209,102,.45), inset 0 3px 0 rgba(255,232,178,.08), inset 0 -4px 0 rgba(0,0,0,.3), 0 7px 0 rgba(0,0,0,.45); }
+  .quest.locked { filter: saturate(.6) brightness(.98); opacity: .72; }
+  .quest.unlocked { box-shadow: inset 0 0 0 3px var(--gold), 5px 5px 0 var(--stroke); }
   .quest-icon {
     width: 58px; height: 58px; flex-shrink: 0;
     border: 3px solid var(--stroke);
@@ -36,7 +36,7 @@
     display: flex; align-items: center; justify-content: center;
     font-size: 26px;
   }
-  .quest.unlocked .quest-icon { background: #4a3416; }
+  .quest.unlocked .quest-icon { background: #ffe9b0; }
   .quest-main { flex: 1; min-width: 0; }
   .quest-name { font-size: 19px; color: var(--ink); margin-bottom: 5px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
   .quest.unlocked .quest-name { color: var(--gold); }
