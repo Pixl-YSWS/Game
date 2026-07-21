@@ -113,7 +113,8 @@
   .disclosure.update > .disclosure-check:first-child { color: var(--gold); }
   .disclosure-check input { accent-color: var(--gold); width: 18px; height: 18px; flex-shrink: 0; }
   .disclosure-desc { font-size: 13.5px; line-height: 1.6; color: var(--faint); margin: -2px 0 2px; }
-  .ta-wrap { position: relative; }
+  .ta-wrap { position: relative; width: 100%; }
+  .ta-wrap textarea.field { display: block; width: 100%; box-sizing: border-box; }
   .ta-count {
     position: absolute; bottom: 8px; right: 12px;
     font-size: 11.5px; color: var(--faint); pointer-events: none; background: var(--panel-deep); padding: 0 3px;
@@ -130,6 +131,31 @@
   .journal-entry .jbody { font-size: 15.5px; word-break: break-word; }
   .jbody img, .jbody .bb-img { max-width: 100%; max-height: 260px; }
   .composer { padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+  .md-editor { display: flex; flex-direction: column; }
+  .md-bar {
+    display: flex; gap: 5px; align-items: center; flex-wrap: wrap;
+    padding: 7px 8px; background: var(--panel-deep);
+    border: 3px solid var(--stroke); border-bottom-width: 0;
+  }
+  .md-btn {
+    font-family: var(--pixel); font-size: 13px; line-height: 1;
+    min-width: 30px; height: 28px; padding: 0 9px;
+    display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+    background: var(--panel); color: var(--ink);
+    border: 2px solid var(--stroke); box-shadow: 2px 2px 0 var(--stroke);
+    cursor: pointer;
+  }
+  .md-btn:hover { background: var(--gold); color: #fff; transform: translate(-1px, -1px); box-shadow: 3px 3px 0 var(--stroke); }
+  .md-btn:active { transform: translate(1px, 1px); box-shadow: 1px 1px 0 var(--stroke); }
+  .md-btn.active { background: var(--gold); color: #fff; box-shadow: inset 2px 2px 0 rgba(0,0,0,.25); }
+  .md-btn i { font-style: italic; }
+  .md-sep { width: 2px; align-self: stretch; margin: 1px 3px; background: var(--stroke); opacity: .3; }
+  .md-preview {
+    border: 3px solid var(--stroke); border-top-width: 0; background: #fff;
+    padding: 12px 14px; min-height: 140px; font-size: 15.5px; line-height: 1.6; word-break: break-word;
+  }
+  .md-preview img { max-width: 100%; max-height: 260px; }
+  .md-preview .faint { font-size: 14px; }
   .composer-foot { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
   .j-hint { font-size: 12.5px; }
   .j-hint.bad { color: var(--bad); }
@@ -520,10 +546,25 @@ async function renderProject(id) {
 
       <div class="section-h">JOURNAL</div>
       <div class="composer panel">
-        <textarea class="field" id="j-content" maxlength="5000" placeholder="What did you build today? Markdown supported — **bold**, # headings, - lists, links, code blocks. Paste an image to attach it."></textarea>
+        <div class="md-editor">
+          <div class="md-bar" id="j-mdbar">
+            <button type="button" class="md-btn" data-md="bold" title="Bold (Ctrl+B)"><b>B</b></button>
+            <button type="button" class="md-btn" data-md="italic" title="Italic (Ctrl+I)"><i>I</i></button>
+            <span class="md-sep"></span>
+            <button type="button" class="md-btn" data-md="h" title="Heading">H</button>
+            <button type="button" class="md-btn" data-md="ul" title="Bullet list">•</button>
+            <button type="button" class="md-btn" data-md="quote" title="Quote">&ldquo;</button>
+            <button type="button" class="md-btn" data-md="code" title="Code">&lt;/&gt;</button>
+            <button type="button" class="md-btn" data-md="link" title="Link">🔗</button>
+            <button type="button" class="md-btn" data-md="image" title="Add image">🖼</button>
+            <span class="md-sep"></span>
+            <button type="button" class="md-btn" data-md="preview" id="j-preview-btn" title="Toggle preview">👁 PREVIEW</button>
+          </div>
+          <textarea class="field" id="j-content" maxlength="5000" placeholder="What did you build today? Markdown supported — **bold**, # headings, - lists, links, code blocks. Paste an image to attach it."></textarea>
+          <div class="md-preview" id="j-preview" hidden></div>
+        </div>
+        <input type="file" id="j-img-file" accept="image/png,image/jpeg,image/webp,image/gif" hidden>
         <div class="composer-foot">
-          <button class="btn dark" id="j-img" type="button">🖼 ADD IMAGE</button>
-          <input type="file" id="j-img-file" accept="image/png,image/jpeg,image/webp,image/gif" hidden>
           <span class="faint" style="font-size:12px">hours:</span>
           <input class="field" id="j-hours" type="number" min="0" max="100" step="0.5" value="0">
           <span class="j-hint faint" id="j-hint"></span>
@@ -550,7 +591,7 @@ async function renderProject(id) {
       ship(p, isUpdate);
     });
   if ($("s-unship")) $("s-unship").addEventListener("click", () => unship(p));
-  $("j-img").addEventListener("click", () => $("j-img-file").click());
+  initMdBar();
   $("j-img-file").addEventListener("change", async () => {
     const f = $("j-img-file").files[0];
     if (!f) return;
@@ -671,6 +712,71 @@ function autoGrow(el) {
   if (!el) return;
   el.style.height = "auto";
   el.style.height = el.scrollHeight + "px";
+}
+
+function mdApply(ta, action) {
+  const s = ta.selectionStart, e = ta.selectionEnd, val = ta.value, sel = val.slice(s, e);
+  const wrap = (before, after, ph) => {
+    const text = sel || ph;
+    ta.value = val.slice(0, s) + before + text + after + val.slice(e);
+    ta.selectionStart = s + before.length;
+    ta.selectionEnd = s + before.length + text.length;
+  };
+  const linePrefix = (pre) => {
+    const ls = val.lastIndexOf("\n", s - 1) + 1;
+    const nl = val.indexOf("\n", ls), le = nl === -1 ? val.length : nl;
+    const line = val.slice(ls, le);
+    const has = line.startsWith(pre);
+    const newLine = has ? line.slice(pre.length) : pre + line;
+    ta.value = val.slice(0, ls) + newLine + val.slice(le);
+    const caret = Math.max(ls, s + (has ? -pre.length : pre.length));
+    ta.selectionStart = ta.selectionEnd = caret;
+  };
+  switch (action) {
+    case "bold": wrap("**", "**", "bold text"); break;
+    case "italic": wrap("*", "*", "italic text"); break;
+    case "code": sel.includes("\n") ? wrap("```\n", "\n```", "code") : wrap("`", "`", "code"); break;
+    case "h": linePrefix("# "); break;
+    case "ul": linePrefix("- "); break;
+    case "quote": linePrefix("> "); break;
+    case "link": {
+      const text = sel || "text", ins = `[${text}](url)`;
+      ta.value = val.slice(0, s) + ins + val.slice(e);
+      const u = s + text.length + 3;
+      ta.selectionStart = u; ta.selectionEnd = u + 3;
+      break;
+    }
+  }
+  ta.focus();
+  ta.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+function togglePreview() {
+  const ta = $("j-content"), pv = $("j-preview"), btn = $("j-preview-btn");
+  if (!pv.hidden) { pv.hidden = true; ta.hidden = false; btn.classList.remove("active"); ta.focus(); return; }
+  const body = ta.value.trim();
+  pv.innerHTML = body ? Pixl.markdown(body) : `<span class="faint">Nothing to preview yet.</span>`;
+  pv.hidden = false; ta.hidden = true; btn.classList.add("active");
+}
+
+function initMdBar() {
+  const bar = $("j-mdbar");
+  if (!bar) return;
+  bar.addEventListener("click", (ev) => {
+    const b = ev.target.closest(".md-btn");
+    if (!b) return;
+    const a = b.dataset.md;
+    if (a === "image") return $("j-img-file").click();
+    if (a === "preview") return togglePreview();
+    if (!$("j-preview").hidden) togglePreview();
+    mdApply($("j-content"), a);
+  });
+  $("j-content").addEventListener("keydown", (ev) => {
+    if (!(ev.ctrlKey || ev.metaKey)) return;
+    const k = ev.key.toLowerCase();
+    if (k === "b") { ev.preventDefault(); mdApply($("j-content"), "bold"); }
+    else if (k === "i") { ev.preventDefault(); mdApply($("j-content"), "italic"); }
+  });
 }
 
 async function loadTimeline(id) {
