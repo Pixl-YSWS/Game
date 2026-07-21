@@ -11,7 +11,7 @@
     padding: 26px 30px; margin-top: 8px; display: flex; align-items: flex-end; gap: 20px; flex-wrap: wrap;
     background:
       radial-gradient(130% 150% at 12% -30%, rgba(18,124,116,.12), transparent 55%),
-      linear-gradient(#fffdf5, var(--panel-2));
+      linear-gradient(var(--panel), var(--panel-2));
     border: 3px solid var(--stroke);
     box-shadow: var(--drop);
   }
@@ -30,7 +30,7 @@
   .tab:hover { color: var(--gold); }
   .tab.active {
     background: var(--gold);
-    color: #fff;
+    color: var(--btn-ink);
     box-shadow: 3px 3px 0 var(--stroke);
   }
   .searchbar { display: flex; gap: 10px; margin-bottom: 18px; }
@@ -40,7 +40,7 @@
     width: 96px; height: 96px;
     border: 3px solid var(--stroke);
     background: var(--panel-deep);
-    box-shadow: inset 0 0 0 2px rgba(236,55,80,.25);
+    box-shadow: inset 0 0 0 2px rgba(255,209,102,.28);
     display: flex; align-items: center; justify-content: center;
     font-size: 40px; color: var(--gold);
     overflow: hidden;
@@ -54,7 +54,7 @@
     border: 3px solid var(--stroke);
     background:
       radial-gradient(circle at 50% 34%, rgba(18,124,116,.10), transparent 62%),
-      linear-gradient(#fffdf5, var(--panel-deep));
+      linear-gradient(var(--panel), var(--panel-deep));
     display: flex; align-items: center; justify-content: center;
     font-size: 40px;
     overflow: hidden;

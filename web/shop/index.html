@@ -61,7 +61,7 @@
     display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
     padding: 12px 18px 10px;
     margin-bottom: 18px;
-    background: #fff0f1;
+    background: rgba(255,209,102,.1);
     border: 3px solid var(--stroke);
     box-shadow: 4px 4px 0 var(--stroke);
     color: var(--ink);
@@ -74,8 +74,8 @@
     height: 150px;
     display: flex; align-items: center; justify-content: center;
     background:
-      radial-gradient(circle at 50% 34%, rgba(236,55,80,.08), transparent 62%),
-      linear-gradient(#fffdf5, var(--panel-deep));
+      radial-gradient(circle at 50% 34%, rgba(255,209,102,.08), transparent 62%),
+      linear-gradient(var(--panel), var(--panel-deep));
     border: 3px solid var(--stroke);
     overflow: hidden;
   }
@@ -94,7 +94,7 @@
   .price.cant { color: var(--bad); }
   .limited-tag {
     position: absolute; top: -12px; right: 10px;
-    background: var(--gold); color: #fff;
+    background: var(--gold); color: var(--btn-ink);
     border: 3px solid var(--stroke);
     font-size: 11px; letter-spacing: 1px;
     padding: 4px 8px 3px;
@@ -136,15 +136,15 @@
   }
   .trophy-card.claimed { box-shadow: inset 0 0 0 3px var(--good), 5px 5px 0 var(--stroke); }
   .trophy-img { background:
-    repeating-conic-gradient(rgba(236,55,80,.07) 0% 25%, transparent 0% 50%) 0 0 / 22px 22px,
+    repeating-conic-gradient(rgba(255,209,102,.07) 0% 25%, transparent 0% 50%) 0 0 / 22px 22px,
     radial-gradient(circle at 50% 40%, #ffe9b0, var(--panel-deep)); }
   .trophy-tag {
     position: absolute; top: -10px; right: 10px;
     font-size: 11px; letter-spacing: 1px; padding: 4px 8px 3px;
     border: 3px solid var(--stroke); background: var(--panel-deep); color: var(--dim);
   }
-  .trophy-tag.ready { background: var(--gold); color: #fff; animation: limited-blink 1s steps(2) infinite; }
-  .trophy-tag.claimed { background: var(--good); color: #fff; }
+  .trophy-tag.ready { background: var(--gold); color: var(--btn-ink); animation: limited-blink 1s steps(2) infinite; }
+  .trophy-tag.claimed { background: var(--good); color: var(--btn-ink); }
   .trophy-foot { margin-top: auto; }
   .trophy-progress { height: 12px; border: 3px solid var(--stroke); background: var(--panel-deep); overflow: hidden; }
   .trophy-progress > div { height: 100%; background: repeating-linear-gradient(90deg, var(--gold) 0 8px, var(--gold-soft) 8px 16px); transition: width .5s steps(8); }
